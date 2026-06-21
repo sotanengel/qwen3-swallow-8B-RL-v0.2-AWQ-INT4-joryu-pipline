@@ -1,0 +1,34 @@
+# 非推論モード向けプリセット。`uv run joryu-distill --config config.nothinking.yaml` で使う。
+# config.yaml との差分は model.mode のみ。
+model:
+  name: "Qwen3-Swallow-8B-RL-v0.2-AWQ-INT4"
+  num_ctx: 512
+  num_predict: 384
+  temperature: 0.6
+  top_p: 0.95
+  top_k: 20
+  repetition_penalty: 1.05
+  seed: 42
+  mode: "nothinking"
+
+vllm:
+  model_path: "tokyotech-llm/Qwen3-Swallow-8B-RL-v0.2-AWQ-INT4"
+  dtype: "bfloat16"
+  quantization: "awq_marlin"
+  gpu_memory_utilization: 0.85
+  enforce_eager: true
+
+distill:
+  prompt_bank: "data/prompts/training_prompts.jsonl"
+  out_dir: "data/distilled"
+  out_file: "responses.jsonl"
+  min_interval_sec: 0.5
+  system_prompt: |
+    あなたは丁寧で正確な日本語アシスタントです。
+    ユーザの質問に、根拠を示しながら自然な日本語で答えてください。
+
+export:
+  out_dir: "exports"
+  compression: "zstd"
+  level: 19
+  bundle_tar: false
