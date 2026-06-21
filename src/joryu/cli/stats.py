@@ -3,16 +3,14 @@
 from __future__ import annotations
 
 import argparse
-import json
 import sys
-from datetime import UTC, datetime
 from pathlib import Path
 
 from joryu.config import Config, load_config
-from joryu.stats import compute_stats
+from joryu.stats import DEFAULT_STATS_OUTPUT, write_stats_json
 
 DEFAULT_CONFIG = "config.yaml"
-DEFAULT_OUTPUT = "dashboard/public/stats.json"
+DEFAULT_OUTPUT = DEFAULT_STATS_OUTPUT
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -46,13 +44,7 @@ def main(argv: list[str] | None = None) -> int:
     src = Path(args.input) if args.input else Path(cfg.distill.out_dir) / cfg.distill.out_file
     out = Path(args.output)
 
-    stats = compute_stats(src)
-    stats["_meta"] = {
-        "source_path": str(src),
-        "generated_at": datetime.now(UTC).isoformat(),
-    }
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(stats, ensure_ascii=False, indent=2), encoding="utf-8")
+    stats = write_stats_json(src, out)
     print(f"[joryu-stats] wrote {out}  (total={stats['total']})", file=sys.stderr)
     return 0
 

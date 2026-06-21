@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { EMPTY_STATS, mergeStats, sortByCount } from "./stats";
+import { EMPTY_STATS, mergeStats, sortByCount, statsDataChanged } from "./stats";
 
 describe("EMPTY_STATS", () => {
   it("has total 0", () => {
@@ -35,5 +35,25 @@ describe("sortByCount", () => {
 
   it("handles empty map", () => {
     expect(sortByCount({})).toEqual([]);
+  });
+});
+
+describe("statsDataChanged", () => {
+  it("returns true when total changes", () => {
+    const prev = mergeStats({ total: 1 });
+    const next = mergeStats({ total: 2 });
+    expect(statsDataChanged(prev, next)).toBe(true);
+  });
+
+  it("returns true when generated_at changes", () => {
+    const prev = mergeStats({ total: 1, _meta: { generated_at: "t1" } });
+    const next = mergeStats({ total: 1, _meta: { generated_at: "t2" } });
+    expect(statsDataChanged(prev, next)).toBe(true);
+  });
+
+  it("returns false when unchanged", () => {
+    const prev = mergeStats({ total: 1, _meta: { generated_at: "t1" } });
+    const next = mergeStats({ total: 1, _meta: { generated_at: "t1" } });
+    expect(statsDataChanged(prev, next)).toBe(false);
   });
 });

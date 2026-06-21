@@ -40,8 +40,9 @@ services:
       - "3000:3000"
     volumes:
       # 蒸留 JSONL と stats.json をホストの dashboard/public/ に直接マウント。
-      # ホスト側で `joryu-stats` を実行すると自動反映される。
+      # stats.json は joryu-stats / 蒸留中 refresh で更新される。
       - ./dashboard/public:/app/public:ro
+      - ./data/distilled/responses.jsonl:/app/public/responses.jsonl:ro
     restart: "on-failure:3"
 
   api:

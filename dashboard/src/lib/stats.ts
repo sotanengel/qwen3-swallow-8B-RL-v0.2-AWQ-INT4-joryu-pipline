@@ -98,3 +98,9 @@ export async function loadStats(url = "/stats.json"): Promise<JoryuStats> {
     return EMPTY_STATS;
   }
 }
+
+/** ポーリング時に再描画が必要か (_meta.generated_at または total で判定)。 */
+export function statsDataChanged(prev: JoryuStats, next: JoryuStats): boolean {
+  if (prev.total !== next.total) return true;
+  return prev._meta?.generated_at !== next._meta?.generated_at;
+}

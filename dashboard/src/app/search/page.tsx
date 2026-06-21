@@ -1,25 +1,27 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
-import { DistilledRecord, loadJsonl, searchRecords } from "@/lib/jsonl";
+import { DistilledRecord, jsonlDataChanged, loadJsonl, searchRecords } from "@/lib/jsonl";
+import { useIntervalPoll } from "@/lib/useIntervalPoll";
 
 const PAGE_SIZE = 25;
 
 export default function SearchPage() {
-  const [records, setRecords] = useState<DistilledRecord[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const records = useIntervalPoll(
+    async () => {
+      const rows = await loadJsonl();
+      setLoaded(true);
+      return rows;
+    },
+    [] as DistilledRecord[],
+    { shouldUpdate: jsonlDataChanged },
+  );
   const [query, setQuery] = useState("");
   const [mode, setMode] = useState<"all" | "thinking" | "nothinking">("all");
   const [category, setCategory] = useState("");
   const [page, setPage] = useState(0);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    loadJsonl().then((r) => {
-      setRecords(r);
-      setLoading(false);
-    });
-  }, []);
 
   const categories = useMemo(() => {
     const set = new Set<string>();
@@ -81,7 +83,7 @@ export default function SearchPage() {
         </select>
       </section>
 
-      {loading ? (
+      {!loaded ? (
         <p style={{ color: "var(--muted)" }}>
           responses.jsonl を読み込み中…<br />
           (dashboard/public/responses.jsonl にシンボリックリンクまたはコピーを置いてください)

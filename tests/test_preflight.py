@@ -12,6 +12,7 @@ from joryu.preflight import (
     PreflightError,
     changed_services_from_git,
     check_disk_space,
+    ensure_dashboard_data_paths,
     path_affects_service,
     required_disk_gb,
     resolve_up_services,
@@ -148,6 +149,24 @@ def test_check_disk_space_skipped_with_force() -> None:
         force=True,
         disk_usage_fn=lambda _p: (100, 100, free_bytes),
     )
+
+
+def test_ensure_dashboard_data_paths_creates_jsonl_and_symlink(tmp_path: Path) -> None:
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text(
+        "distill:\n  out_dir: data/distilled\n  out_file: responses.jsonl\n",
+        encoding="utf-8",
+    )
+    ensure_dashboard_data_paths(tmp_path)
+    jsonl_path = tmp_path / "data" / "distilled" / "responses.jsonl"
+    public_jsonl = tmp_path / "dashboard" / "public" / "responses.jsonl"
+    assert jsonl_path.is_file()
+    if public_jsonl.is_symlink():
+        assert public_jsonl.resolve() == jsonl_path.resolve()
+    elif not public_jsonl.exists():
+        import platform
+
+        assert platform.system() == "Windows"
 
 
 class _GitResult:

@@ -1,9 +1,10 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
-import { EMPTY_STATS, JoryuStats, loadStats, sortByCount } from "@/lib/stats";
+import { EMPTY_STATS, loadStats, sortByCount, statsDataChanged } from "@/lib/stats";
+import { useIntervalPoll } from "@/lib/useIntervalPoll";
 
 const HistogramChart = dynamic(
   () =>
@@ -19,15 +20,16 @@ const HistogramChart = dynamic(
 );
 
 export default function DistributionsPage() {
-  const [stats, setStats] = useState<JoryuStats>(EMPTY_STATS);
   const [loaded, setLoaded] = useState(false);
-
-  useEffect(() => {
-    loadStats().then((data) => {
-      setStats(data);
+  const stats = useIntervalPoll(
+    async () => {
+      const data = await loadStats();
       setLoaded(true);
-    });
-  }, []);
+      return data;
+    },
+    EMPTY_STATS,
+    { shouldUpdate: statsDataChanged },
+  );
 
   const ansBins = stats.answer_length.bins.map((b) => ({
     name: `${b.lo}–${b.hi ?? "∞"}`,

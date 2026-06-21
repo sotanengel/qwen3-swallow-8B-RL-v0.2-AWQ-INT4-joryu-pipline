@@ -285,3 +285,50 @@ def test_logs_progress_messages(tmp_path: Path, capsys: pytest.CaptureFixture[st
     assert "P1" in err
     assert "ans" in err
     assert f"完了: 2 件 → {out}" in err
+
+
+def test_run_distill_calls_stats_refresher_after_writes(tmp_path: Path) -> None:
+    bank = tmp_path / "bank.jsonl"
+    _write_bank(bank, [{"prompt": "P1"}, {"prompt": "P2"}])
+    out = tmp_path / "out.jsonl"
+    cfg = Config()
+    client = FakeVllmClient(answer="A")
+    calls: list[Path] = []
+
+    run_distill(
+        cfg,
+        bank_path=bank,
+        out_path=out,
+        client=client,
+        stats_refresher=calls.append,
+    )
+
+    assert calls == [out, out]
+    assert len(_load_jsonl(out)) == 2
+
+
+def test_run_distill_stats_refresher_is_throttled(tmp_path: Path) -> None:
+    out = tmp_path / "out.jsonl"
+    calls: list[float] = []
+    tick = {"now": 0.0}
+
+    def time_fn() -> float:
+        return tick["now"]
+
+    def refresher(_out: Path) -> None:
+        calls.append(tick["now"])
+
+    from joryu.distill import _StatsRefreshThrottler
+
+    throttler = _StatsRefreshThrottler(
+        out,
+        refresher,
+        interval_sec=10.0,
+        time_fn=time_fn,
+    )
+    for _ in range(5):
+        throttler.maybe_refresh()
+        tick["now"] += 1.0
+    throttler.maybe_refresh(force=True)
+
+    assert calls == [0.0, 5.0]
