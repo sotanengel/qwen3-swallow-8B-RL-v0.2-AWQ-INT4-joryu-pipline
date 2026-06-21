@@ -1,7 +1,9 @@
 # joryu API コンテナ。vLLM なし軽量イメージ。
 FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
 
-WORKDIR /workspace
+# /app に venv を置き、ホストのリポジトリは /workspace にマウントする。
+# (.:/workspace だとイメージ内の .venv が隠れて joryu-api が見つからなくなる)
+WORKDIR /app
 
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
@@ -18,8 +20,7 @@ COPY docker-compose.yml ./docker-compose.yml
 COPY README.md ./README.md
 RUN uv sync --frozen --no-dev --extra api
 
-ENV PATH="/workspace/.venv/bin:$PATH" \
-    PYTHONPATH=/workspace/src \
+ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1
 
 EXPOSE 8000
