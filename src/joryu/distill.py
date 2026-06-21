@@ -64,6 +64,8 @@ def variant_run_key(variant: DistillVariant) -> str:
 def default_stats_refresher(out_path: Path) -> None:
     """dashboard/public/stats.json を蒸留 JSONL から更新する。"""
     dst = resolve_stats_output_path(out_path=out_path)
+    if dst is None:
+        return
     write_stats_json(out_path, dst)
 
 

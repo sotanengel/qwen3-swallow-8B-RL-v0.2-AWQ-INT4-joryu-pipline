@@ -243,6 +243,8 @@ def make_refresh_stats(repo_root: Path) -> Callable[[DistillJobSpec], int]:
 
         cfg = repo_root / spec.config
         out = resolve_stats_output_path(repo_root=repo_root)
+        if out is None:
+            return 1
         return stats_main(["--config", str(cfg), "--output", str(out)])
 
     return refresh_stats

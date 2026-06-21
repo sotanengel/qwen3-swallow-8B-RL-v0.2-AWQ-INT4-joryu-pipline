@@ -41,3 +41,8 @@ def test_resolve_stats_output_path_uses_joryu_repo_root_env(tmp_path: Path, monk
     monkeypatch.setenv("JORYU_REPO_ROOT", str(tmp_path))
     out = resolve_stats_output_path()
     assert out == tmp_path / "dashboard" / "public" / "stats.json"
+
+
+def test_resolve_repo_root_returns_none_for_custom_out_path(tmp_path: Path) -> None:
+    out = tmp_path / "custom" / "out.jsonl"
+    assert resolve_repo_root(out_path=out) is None

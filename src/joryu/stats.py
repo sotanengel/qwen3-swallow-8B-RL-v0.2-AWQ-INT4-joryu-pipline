@@ -140,8 +140,8 @@ def _empty_stats() -> dict[str, Any]:
     }
 
 
-def resolve_repo_root(*, out_path: Path | None = None) -> Path:
-    """stats.json 出力先を決めるリポジトリルートを返す。"""
+def resolve_repo_root(*, out_path: Path | None = None) -> Path | None:
+    """stats.json 出力先を決めるリポジトリルートを返す。特定できなければ None。"""
     env = os.environ.get("JORYU_REPO_ROOT", "").strip()
     if env:
         return Path(env).resolve()
@@ -149,16 +149,18 @@ def resolve_repo_root(*, out_path: Path | None = None) -> Path:
         resolved = out_path.resolve()
         if len(resolved.parts) >= 3 and resolved.parent.name == "distilled":
             return resolved.parent.parent.parent
-    return Path.cwd().resolve()
+    return None
 
 
 def resolve_stats_output_path(
     *,
     out_path: Path | None = None,
     repo_root: Path | None = None,
-) -> Path:
-    """dashboard/public/stats.json の絶対パスを返す。"""
+) -> Path | None:
+    """dashboard/public/stats.json の絶対パスを返す。特定できなければ None。"""
     root = repo_root or resolve_repo_root(out_path=out_path)
+    if root is None:
+        return None
     return root / DEFAULT_STATS_OUTPUT
 
 

@@ -92,6 +92,8 @@ def build_docker_command(
             "-e",
             "PYTHONPATH=/app/src",
             "-e",
+            "JORYU_REPO_ROOT=/app",
+            "-e",
             "VLLM_USE_FLASHINFER_SAMPLER=0",
             "-e",
             "VLLM_ATTENTION_BACKEND=FLASH_ATTN",
