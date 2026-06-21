@@ -38,9 +38,7 @@ from joryu.preflight import (
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="joryu-up",
-        description=(
-            "git 差分に応じて docker compose build/up する (既定: dashboard + api)。"
-        ),
+        description=("git 差分に応じて docker compose build/up する (既定: dashboard + api)。"),
     )
     g = p.add_mutually_exclusive_group()
     g.add_argument(
