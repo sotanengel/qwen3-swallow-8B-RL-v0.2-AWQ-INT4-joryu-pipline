@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# venv / uv
+.venv/
+venv/
+
+# Test / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# Tooling caches
+.ruff_cache/
+.mypy_cache/
+
+# Distilled data — never commit
+data/
+exports/
+
+# Model artifacts
+models/
+
+# Dashboard build artifacts
+dashboard/.next/
+dashboard/node_modules/
+dashboard/out/
+dashboard/public/responses.jsonl
+dashboard/public/stats.json
+
+# Secrets / local env
+.env
+*.local
+
+# OS
+.DS_Store
+Thumbs.db
