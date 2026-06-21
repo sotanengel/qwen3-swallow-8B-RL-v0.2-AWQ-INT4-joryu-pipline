@@ -6,6 +6,13 @@ import subprocess
 import sys
 
 
+def compose_build_command(*, services: list[str]) -> list[str]:
+    """`docker compose build [services...]` を構築。"""
+    cmd: list[str] = ["docker", "compose", "build"]
+    cmd.extend(services)
+    return cmd
+
+
 def compose_up_command(
     *,
     services: list[str] | None,

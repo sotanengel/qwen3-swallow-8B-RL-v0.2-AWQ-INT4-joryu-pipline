@@ -2,7 +2,17 @@
 
 from __future__ import annotations
 
-from joryu.compose import compose_down_command, compose_up_command
+from joryu.compose import compose_build_command, compose_down_command, compose_up_command
+
+
+def test_build_single_service() -> None:
+    cmd = compose_build_command(services=["dashboard"])
+    assert cmd == ["docker", "compose", "build", "dashboard"]
+
+
+def test_build_multiple_services() -> None:
+    cmd = compose_build_command(services=["dashboard", "joryu"])
+    assert cmd == ["docker", "compose", "build", "dashboard", "joryu"]
 
 
 def test_up_default_brings_up_full_stack_with_build() -> None:

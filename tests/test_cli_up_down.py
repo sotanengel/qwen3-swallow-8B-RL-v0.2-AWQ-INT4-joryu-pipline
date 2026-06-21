@@ -30,48 +30,57 @@ def _patch_runner(
     return calls
 
 
-def test_up_default_is_dashboard_only(monkeypatch: pytest.MonkeyPatch) -> None:
-    """既定は dashboard のみ起動 (joryu イメージは 20GB+ なので明示時のみビルドする)。"""
+def test_up_default_no_changes_builds_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
+    """git 差分なし → build なし、dashboard up のみ。"""
     calls = _patch_runner(monkeypatch)
+    monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: set())
     rc = cli_up.main([])
     assert rc == 0
     assert len(calls) == 1
     cmd = calls[0]
-    assert cmd[:3] == ["docker", "compose", "up"]
-    assert "--build" in cmd
-    assert cmd[-1] == "dashboard"
-    assert "joryu" not in cmd
+    assert cmd == ["docker", "compose", "up", "dashboard"]
+    assert "build" not in " ".join(cmd)
 
 
-def test_up_full_brings_up_all_services(monkeypatch: pytest.MonkeyPatch) -> None:
-    """--full で joryu (vLLM) + dashboard を両方起動。"""
+def test_up_joryu_diff_triggers_build_then_up(monkeypatch: pytest.MonkeyPatch) -> None:
+    """joryu 側 git 差分 → build joryu → up joryu。"""
     calls = _patch_runner(monkeypatch)
+    monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: {"joryu"})
+    rc = cli_up.main([])
+    assert rc == 0
+    assert len(calls) == 2
+    assert calls[0] == ["docker", "compose", "build", "joryu"]
+    assert calls[1] == ["docker", "compose", "up", "joryu"]
+
+
+def test_up_full_brings_up_all_builds_only_changed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """--full → 両方 up、差分がある dashboard のみ build。"""
+    calls = _patch_runner(monkeypatch)
+    monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: {"dashboard"})
     rc = cli_up.main(["--full"])
     assert rc == 0
-    cmd = calls[0]
-    assert cmd[:3] == ["docker", "compose", "up"]
-    # サービス指定なし = compose 全サービス
-    assert "dashboard" not in cmd
-    assert "joryu" not in cmd
+    assert calls[0] == ["docker", "compose", "build", "dashboard"]
+    assert calls[1] == ["docker", "compose", "up", "dashboard", "joryu"]
 
 
 def test_up_frontend_only_alias(monkeypatch: pytest.MonkeyPatch) -> None:
-    """--frontend-only は既定と同じ (後方互換のため残す)。"""
     calls = _patch_runner(monkeypatch)
+    monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: {"joryu"})
     rc = cli_up.main(["--frontend-only"])
     assert rc == 0
-    cmd = calls[0]
-    assert cmd[-1] == "dashboard"
-    assert "joryu" not in cmd
+    assert len(calls) == 1
+    assert calls[0] == ["docker", "compose", "up", "dashboard"]
 
 
 def test_up_backend_only(monkeypatch: pytest.MonkeyPatch) -> None:
     calls = _patch_runner(monkeypatch)
+    monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: {"joryu"})
     rc = cli_up.main(["--backend-only", "--detach"])
     assert rc == 0
-    cmd = calls[0]
-    assert cmd[-1] == "joryu"
-    assert "-d" in cmd
+    assert calls[0] == ["docker", "compose", "build", "joryu"]
+    assert calls[1] == ["docker", "compose", "up", "-d", "joryu"]
 
 
 def test_up_mutex_flags_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -89,6 +98,7 @@ def test_up_full_and_frontend_only_mutex(monkeypatch: pytest.MonkeyPatch) -> Non
 def test_up_refresh_stats_runs_before_compose(monkeypatch: pytest.MonkeyPatch) -> None:
     calls = _patch_runner(monkeypatch)
     stats_calls: list[list[str] | None] = []
+    monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: set())
 
     def _fake_stats_main(argv: list[str] | None = None) -> int:
         stats_calls.append(argv)
@@ -98,14 +108,54 @@ def test_up_refresh_stats_runs_before_compose(monkeypatch: pytest.MonkeyPatch) -
     rc = cli_up.main(["--refresh-stats", "--frontend-only"])
     assert rc == 0
     assert stats_calls == [[]]
-    # その後 compose up dashboard が呼ばれている
-    assert calls[0][-1] == "dashboard"
+    assert calls[0] == ["docker", "compose", "up", "dashboard"]
 
 
 def test_up_no_build_flag(monkeypatch: pytest.MonkeyPatch) -> None:
     calls = _patch_runner(monkeypatch)
-    cli_up.main(["--no-build"])
-    assert "--build" not in calls[0]
+    monkeypatch.setattr(
+        "joryu.cli.up.changed_services_from_git",
+        lambda _root: {"dashboard", "joryu"},
+    )
+    cli_up.main(["--no-build", "--full"])
+    assert len(calls) == 1
+    assert calls[0] == ["docker", "compose", "up", "dashboard", "joryu"]
+
+
+def test_up_aborts_on_insufficient_disk(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = _patch_runner(monkeypatch)
+    monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: {"joryu"})
+
+    def _fail_disk(
+        services: list[str],
+        repo_root: object,
+        *,
+        force: bool,
+        disk_usage_fn: object = None,
+    ) -> None:
+        from joryu.preflight import PreflightError
+
+        raise PreflightError("disk full")
+
+    monkeypatch.setattr("joryu.cli.up.check_disk_space", _fail_disk)
+    rc = cli_up.main([])
+    assert rc == 1
+    assert calls == []
+
+
+def test_up_force_bypasses_disk_check(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = _patch_runner(monkeypatch)
+    monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: {"joryu"})
+    recorded: list[bool] = []
+
+    def _record_force(services: list[str], repo_root: object, *, force: bool) -> None:
+        recorded.append(force)
+
+    monkeypatch.setattr("joryu.cli.up.check_disk_space", _record_force)
+    rc = cli_up.main(["--force"])
+    assert rc == 0
+    assert recorded == [True]
+    assert calls[0] == ["docker", "compose", "build", "joryu"]
 
 
 def test_down_default(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -127,8 +177,7 @@ def test_serve_alias_still_works(monkeypatch: pytest.MonkeyPatch) -> None:
     from joryu.cli import serve as cli_serve
 
     calls = _patch_runner(monkeypatch)
+    monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: set())
     rc = cli_serve.main([])
     assert rc == 0
-    cmd = calls[0]
-    assert cmd[-1] == "dashboard"
-    assert cmd[:3] == ["docker", "compose", "up"]
+    assert calls[0] == ["docker", "compose", "up", "dashboard"]
