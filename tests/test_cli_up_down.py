@@ -27,6 +27,8 @@ def _patch_runner(
         return _Done()
 
     monkeypatch.setattr("joryu.compose.subprocess.run", _fake_run)
+    monkeypatch.setattr("joryu.cli.up.schedule_open_dashboard", lambda **_: None)
+    monkeypatch.setattr("joryu.cli.up.open_dashboard_when_ready", lambda **_: None)
     return calls
 
 
@@ -156,6 +158,67 @@ def test_up_force_bypasses_disk_check(monkeypatch: pytest.MonkeyPatch) -> None:
     assert rc == 0
     assert recorded == [True]
     assert calls[0] == ["docker", "compose", "build", "joryu"]
+
+
+def test_up_detach_opens_browser_after_dashboard_up(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = _patch_runner(monkeypatch)
+    monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: set())
+    opened: list[bool] = []
+    monkeypatch.setattr(
+        "joryu.cli.up.open_dashboard_when_ready",
+        lambda **_: opened.append(True),
+    )
+    rc = cli_up.main(["--detach"])
+    assert rc == 0
+    assert calls[-1] == ["docker", "compose", "up", "-d", "dashboard"]
+    assert opened == [True]
+
+
+def test_up_backend_only_does_not_open_browser(monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch_runner(monkeypatch)
+    monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: {"joryu"})
+    opened: list[bool] = []
+    monkeypatch.setattr(
+        "joryu.cli.up.open_dashboard_when_ready",
+        lambda **_: opened.append(True),
+    )
+    cli_up.main(["--backend-only", "--detach"])
+    assert opened == []
+
+
+def test_up_no_open_skips_browser(monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch_runner(monkeypatch)
+    monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: set())
+    opened: list[bool] = []
+    monkeypatch.setattr(
+        "joryu.cli.up.open_dashboard_when_ready",
+        lambda **_: opened.append(True),
+    )
+    cli_up.main(["--detach", "--no-open"])
+    assert opened == []
+
+
+def test_up_foreground_schedules_browser_before_compose(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = _patch_runner(monkeypatch)
+    monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: set())
+    order: list[str] = []
+
+    def _schedule(**_: object) -> None:
+        order.append("schedule")
+
+    def _fake_run(cmd: list[str], *args: object, **kwargs: object) -> object:
+        calls.append(cmd)
+        order.append("compose")
+
+        class _Done:
+            returncode = 0
+
+        return _Done()
+
+    monkeypatch.setattr("joryu.cli.up.schedule_open_dashboard", _schedule)
+    monkeypatch.setattr("joryu.compose.subprocess.run", _fake_run)
+    cli_up.main([])
+    assert order == ["schedule", "compose"]
 
 
 def test_down_default(monkeypatch: pytest.MonkeyPatch) -> None:

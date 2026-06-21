@@ -8,6 +8,7 @@ joryu ビルド前にホスト空き容量を検査し、不足時は `--force` 
     uv run joryu-up --full              # joryu + dashboard を up (差分ある方だけ build)
     uv run joryu-up --backend-only      # joryu コンテナのみ
     uv run joryu-up --detach            # バックグラウンド起動
+    uv run joryu-up --no-open           # ブラウザ自動起動を無効化
     uv run joryu-up --force             # ディスク不足でも続行
     uv run joryu-up --refresh-stats     # 起動前に joryu-stats を回して dashboard 表示を最新化
 """
@@ -18,6 +19,7 @@ import argparse
 import sys
 from pathlib import Path
 
+from joryu.browser import open_dashboard_when_ready, schedule_open_dashboard
 from joryu.cli import stats as cli_stats
 from joryu.compose import compose_build_command, compose_up_command, run
 from joryu.preflight import (
@@ -64,7 +66,16 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="起動前に joryu-stats を実行して dashboard/public/stats.json を最新化",
     )
+    p.add_argument(
+        "--no-open",
+        action="store_true",
+        help="dashboard 起動後にブラウザを開かない",
+    )
     return p
+
+
+def _should_open_browser(args: argparse.Namespace, up_services: list[str]) -> bool:
+    return not args.no_open and "dashboard" in up_services
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -97,7 +108,13 @@ def main(argv: list[str] | None = None) -> int:
         detach=args.detach,
         build=False,
     )
-    return run(cmd)
+    open_browser = _should_open_browser(args, up_services)
+    if open_browser and not args.detach:
+        schedule_open_dashboard()
+    rc = run(cmd)
+    if rc == 0 and open_browser and args.detach:
+        open_dashboard_when_ready()
+    return rc
 
 
 if __name__ == "__main__":  # pragma: no cover
