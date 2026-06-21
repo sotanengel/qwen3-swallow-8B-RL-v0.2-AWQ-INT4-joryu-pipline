@@ -56,12 +56,44 @@ export function sortByCount(
     .slice(0, topN);
 }
 
+/** stats.json の部分欠損でも描画が壊れないようネストをマージする。 */
+export function mergeStats(data: Partial<JoryuStats>): JoryuStats {
+  return {
+    ...EMPTY_STATS,
+    ...data,
+    answer_length: {
+      ...EMPTY_STATS.answer_length,
+      ...data.answer_length,
+      bins: data.answer_length?.bins ?? EMPTY_STATS.answer_length.bins,
+    },
+    thinking_length: {
+      ...EMPTY_STATS.thinking_length,
+      ...data.thinking_length,
+      bins: data.thinking_length?.bins ?? EMPTY_STATS.thinking_length.bins,
+    },
+    sampling: {
+      temperature: {
+        ...EMPTY_STATS.sampling.temperature,
+        ...data.sampling?.temperature,
+      },
+      top_p: {
+        ...EMPTY_STATS.sampling.top_p,
+        ...data.sampling?.top_p,
+      },
+    },
+    timeline_daily: {
+      ...EMPTY_STATS.timeline_daily,
+      ...data.timeline_daily,
+    },
+  };
+}
+
 export async function loadStats(url = "/stats.json"): Promise<JoryuStats> {
   try {
     const r = await fetch(url, { cache: "no-store" });
     if (!r.ok) return EMPTY_STATS;
     const data = (await r.json()) as Partial<JoryuStats>;
-    return { ...EMPTY_STATS, ...data };
+    return mergeStats(data);
   } catch {
     return EMPTY_STATS;
   }
