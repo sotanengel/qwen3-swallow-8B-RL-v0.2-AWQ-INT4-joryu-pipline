@@ -26,6 +26,7 @@ distill:
   out_dir: "data/distilled"
   out_file: "responses.jsonl"
   min_interval_sec: 0.5
+  styles_file: "styles.yaml"
   system_prompt: |
     あなたは丁寧で正確な日本語アシスタントです。
     ユーザの質問に、根拠を示しながら自然な日本語で答えてください。

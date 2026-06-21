@@ -10,8 +10,10 @@ from pathlib import Path
 from typing import Any
 
 from joryu.config import Config
-from joryu.progress import load_done_prompts
-from joryu.prompt_bank import EffectiveSampling, PromptRow, load_prompt_bank, merge_with_defaults
+from joryu.progress import load_done_keys, run_key_from_parts
+from joryu.prompt_bank import EffectiveSampling, PromptRow, load_prompt_bank
+from joryu.styles import StylePreset, load_styles, resolve_style_ids
+from joryu.variants import DistillVariant, expand_variants
 from joryu.vllm_client import SupportsChat, VllmClient
 from joryu.writer import JsonlAppendWriter
 
@@ -30,7 +32,7 @@ def _build_record(
     return {
         "prompt": row.prompt,
         "category": row.category,
-        "style_id": row.style_id,
+        "style_id": eff.style_id,
         "mode": eff.mode,
         "system_prompt": eff.system_prompt,
         "sampling": dict(eff.sampling),
@@ -43,6 +45,17 @@ def _build_record(
     }
 
 
+def variant_run_key(variant: DistillVariant) -> str:
+    """DistillVariant から resume キーを構築。"""
+    return run_key_from_parts(
+        prompt=variant.row.prompt,
+        style_id=variant.eff.style_id,
+        mode=variant.eff.mode,
+        temperature=variant.eff.sampling.get("temperature"),
+        top_p=variant.eff.sampling.get("top_p"),
+    )
+
+
 def run_distill(
     config: Config,
     *,
@@ -51,6 +64,9 @@ def run_distill(
     client: SupportsChat | None = None,
     count: int = 0,
     deadline: float | None = None,
+    style_presets: list[StylePreset] | None = None,
+    temperatures: list[float] | None = None,
+    top_ps: list[float] | None = None,
 ) -> int:
     """蒸留を実行し、新規に書き込んだレコード数を返す。
 
@@ -65,9 +81,15 @@ def run_distill(
     client:
         SupportsChat 実装。`None` の場合は VllmClient を構築。
     count:
-        0 = 全件、>0 = 新規生成件数の上限。
+        0 = 全件、>0 = 新規生成件数の上限（バリアント含む）。
     deadline:
         UNIX 秒の時刻。超えたら次の prompt 前で打ち切る。
+    style_presets:
+        CLI `--style` から解決した文体プリセットリスト。
+    temperatures:
+        CLI `--temperature` スイープ値。
+    top_ps:
+        CLI `--top-p` スイープ値。
     """
     bank_p = Path(bank_path) if bank_path else Path(config.distill.prompt_bank)
     if out_path is not None:
@@ -76,8 +98,15 @@ def run_distill(
         out_p = Path(config.distill.out_dir) / config.distill.out_file
 
     rows = load_prompt_bank(bank_p)
-    done = load_done_prompts(out_p)
-    pending = [r for r in rows if r.prompt not in done]
+    all_variants = expand_variants(
+        rows,
+        config,
+        style_presets=style_presets,
+        temperatures=temperatures,
+        top_ps=top_ps,
+    )
+    done = load_done_keys(out_p)
+    pending = [v for v in all_variants if variant_run_key(v) not in done]
 
     if client is None:
         client = VllmClient.from_config(config.model, config.vllm)
@@ -85,14 +114,15 @@ def run_distill(
     fingerprint = config.fingerprint()
     n = 0
     with JsonlAppendWriter(out_p) as writer:
-        for row in pending:
+        for variant in pending:
             if deadline is not None and time.time() >= deadline:
                 logger.info("[distill] deadline reached; stopping")
                 break
             if count and n >= count:
                 break
 
-            eff = merge_with_defaults(row, config)
+            row = variant.row
+            eff = variant.eff
             messages = [
                 {"role": "system", "content": eff.system_prompt},
                 {"role": "user", "content": row.prompt},
@@ -126,3 +156,14 @@ def run_distill(
             writer.write(record)
             n += 1
     return n
+
+
+def load_style_presets_from_config(
+    config: Config,
+    style_ids: list[str],
+) -> list[StylePreset]:
+    """config.distill.styles_file から style ID を解決。"""
+    if not style_ids:
+        return []
+    styles = load_styles(config.distill.styles_file)
+    return resolve_style_ids(style_ids, styles)

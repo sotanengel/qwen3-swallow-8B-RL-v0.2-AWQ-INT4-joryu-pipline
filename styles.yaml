@@ -1,0 +1,11 @@
+# 文体プリセット。`joryu-distill --style polite,casual` で参照。
+styles:
+  polite:
+    label: "丁寧語"
+    instruction: "回答は丁寧語（です・ます調）で、敬意をもって書いてください。"
+  casual:
+    label: "カジュアル"
+    instruction: "回答はカジュアルで親しみやすい口調で書いてください。"
+  expert:
+    label: "専門家向け"
+    instruction: "回答は専門家向けに、専門用語を適切に使い、論理的かつ簡潔に書いてください。"

@@ -52,6 +52,7 @@ class DistillConfig:
     out_file: str = "responses.jsonl"
     min_interval_sec: float = 0.5
     system_prompt: str = _DEFAULT_SYSTEM_PROMPT
+    styles_file: str = "styles.yaml"
 
 
 @dataclass

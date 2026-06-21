@@ -51,10 +51,12 @@ def build_docker_command(
     src_dir: Path,
     data_dir: Path,
     hf_cache: Path,
+    styles_path: Path | None = None,
+    styles_rel: str | None = None,
     extra_args: list[str],
 ) -> list[str]:
     """`docker run --gpus all ... joryu-distill --no-docker --config <c> <extra>` を構築。"""
-    return [
+    cmd: list[str] = [
         "docker",
         "run",
         "--rm",
@@ -63,28 +65,36 @@ def build_docker_command(
         "-v",
         f"{data_dir}:/app/data",
         "-v",
-        f"{config_path}:/app/{config_rel}:ro",
+        f"{config_path}:/app/{config_rel.replace('\\', '/')}:ro",
         "-v",
         f"{src_dir}:/app/src:ro",
         "-v",
         f"{hf_cache}:/root/.cache/huggingface",
-        "-e",
-        "HF_HOME=/root/.cache/huggingface",
-        "-e",
-        "PYTHONPATH=/app/src",
-        "-e",
-        "VLLM_USE_FLASHINFER_SAMPLER=0",
-        "-e",
-        "VLLM_ATTENTION_BACKEND=FLASH_ATTN",
-        image,
-        "python",
-        "-m",
-        "joryu.cli.distill",
-        "--no-docker",
-        "--config",
-        config_rel,
-        *extra_args,
     ]
+    if styles_path is not None and styles_rel:
+        rel = styles_rel.replace("\\", "/")
+        cmd.extend(["-v", f"{styles_path}:/app/{rel}:ro"])
+    cmd.extend(
+        [
+            "-e",
+            "HF_HOME=/root/.cache/huggingface",
+            "-e",
+            "PYTHONPATH=/app/src",
+            "-e",
+            "VLLM_USE_FLASHINFER_SAMPLER=0",
+            "-e",
+            "VLLM_ATTENTION_BACKEND=FLASH_ATTN",
+            image,
+            "python",
+            "-m",
+            "joryu.cli.distill",
+            "--no-docker",
+            "--config",
+            config_rel.replace("\\", "/"),
+            *extra_args,
+        ]
+    )
+    return cmd
 
 
 def run_in_docker(
@@ -104,6 +114,23 @@ def run_in_docker(
     hf_cache.mkdir(parents=True, exist_ok=True)
     src_dir = (cwd / "src").resolve()
 
+    styles_path: Path | None = None
+    styles_rel: str | None = None
+    try:
+        from joryu.config import load_config
+
+        cfg = load_config(config_path)
+        styles_rel = cfg.distill.styles_file
+        candidate = (config_path.parent / styles_rel).resolve()
+        if candidate.exists():
+            styles_path = candidate
+        elif "--style" in extra_args or any(a.startswith("--style") for a in extra_args):
+            print(f"[joryu] styles file not found: {candidate}", file=sys.stderr)
+            return 2
+    except (FileNotFoundError, ValueError) as exc:
+        print(f"[joryu] config error: {exc}", file=sys.stderr)
+        return 2
+
     cmd = build_docker_command(
         image=image,
         cwd=cwd,
@@ -112,6 +139,8 @@ def run_in_docker(
         src_dir=src_dir,
         data_dir=data_dir,
         hf_cache=hf_cache,
+        styles_path=styles_path,
+        styles_rel=styles_rel,
         extra_args=extra_args,
     )
     print(f"[joryu] docker delegate: {' '.join(cmd)}", file=sys.stderr)

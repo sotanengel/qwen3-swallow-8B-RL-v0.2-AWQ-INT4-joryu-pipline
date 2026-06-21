@@ -1,13 +1,83 @@
-"""既存 JSONL から処理済 prompt の集合を返す resume-safe ヘルパ。"""
+"""既存 JSONL から処理済み run キーの集合を返す resume-safe ヘルパ。"""
 
 from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
+
+
+def _round_float(value: Any) -> Any:
+    if isinstance(value, float):
+        return round(value, 6)
+    return value
+
+
+def run_key_from_parts(
+    *,
+    prompt: str,
+    style_id: str | None,
+    mode: str | None,
+    temperature: Any,
+    top_p: Any,
+) -> str:
+    """蒸留 run の安定キー（prompt + style + mode + sampling 主要軸）。"""
+    payload = {
+        "prompt": prompt,
+        "style_id": style_id,
+        "mode": mode,
+        "temperature": _round_float(temperature),
+        "top_p": _round_float(top_p),
+    }
+    return json.dumps(payload, sort_keys=True, ensure_ascii=False)
+
+
+def run_key_from_record(record: dict[str, Any]) -> str | None:
+    """出力 JSONL レコードから run キーを構築。prompt 欠損時は None。"""
+    prompt = record.get("prompt")
+    if not isinstance(prompt, str) or not prompt:
+        return None
+    sampling = record.get("sampling") or {}
+    if not isinstance(sampling, dict):
+        sampling = {}
+    style_id = record.get("style_id")
+    if style_id is not None and not isinstance(style_id, str):
+        style_id = None
+    mode = record.get("mode")
+    if mode is not None and not isinstance(mode, str):
+        mode = None
+    return run_key_from_parts(
+        prompt=prompt,
+        style_id=style_id,
+        mode=mode,
+        temperature=sampling.get("temperature"),
+        top_p=sampling.get("top_p"),
+    )
+
+
+def load_done_keys(path: str | Path) -> set[str]:
+    """JSONL レコードから処理済 run キーの set を構築する。"""
+    p = Path(path)
+    if not p.exists():
+        return set()
+    done: set[str] = set()
+    for line in p.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            record = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(record, dict):
+            continue
+        key = run_key_from_record(record)
+        if key is not None:
+            done.add(key)
+    return done
 
 
 def load_done_prompts(path: str | Path) -> set[str]:
-    """`prompt` フィールドを持つ JSONL レコードから set を構築する。"""
+    """後方互換: prompt 文字列のみの処理済集合（非推奨）。"""
     p = Path(path)
     if not p.exists():
         return set()

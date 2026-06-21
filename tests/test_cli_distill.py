@@ -46,6 +46,18 @@ def test_parser_defaults() -> None:
     assert args.mode is None
     assert args.bank == ""
     assert args.out == ""
+    assert args.style == ""
+    assert args.temperature == ""
+    assert args.top_p == ""
+
+
+def test_parser_style_and_sampling() -> None:
+    args = build_parser().parse_args(
+        ["--style", "polite,casual", "--temperature", "0.5,0.8", "--top-p", "0.8,0.9"]
+    )
+    assert args.style == "polite,casual"
+    assert args.temperature == "0.5,0.8"
+    assert args.top_p == "0.8,0.9"
 
 
 def test_parser_mode_override() -> None:
@@ -81,3 +93,36 @@ def test_main_runs_native_with_fake_client(tmp_path: Path, monkeypatch: pytest.M
     assert out.exists()
     rec = json.loads(out.read_text(encoding="utf-8").splitlines()[0])
     assert rec["answer"] == "ans"
+
+
+def test_main_invalid_style_returns_error(tmp_path: Path) -> None:
+    from joryu.cli import distill as cli_distill
+
+    cfg_yaml = tmp_path / "c.yaml"
+    cfg_yaml.write_text('distill:\n  styles_file: "styles.yaml"\n', encoding="utf-8")
+    rc = cli_distill.main(["--no-docker", "--config", str(cfg_yaml), "--style", "unknown"])
+    assert rc == 2
+
+
+def test_docker_extra_args_includes_style_and_sampling() -> None:
+    from joryu.cli.distill import _docker_extra_args
+
+    args = build_parser().parse_args(
+        [
+            "--style",
+            "polite",
+            "--temperature",
+            "0.5,0.8",
+            "--top-p",
+            "0.9",
+            "--count",
+            "3",
+        ]
+    )
+    extra = _docker_extra_args(args)
+    assert "--style" in extra
+    assert "polite" in extra
+    assert "--temperature" in extra
+    assert "0.5,0.8" in extra
+    assert "--top-p" in extra
+    assert "0.9" in extra
