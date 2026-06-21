@@ -61,8 +61,9 @@ styles.yaml ──┤
 | `joryu-distill` | 蒸留ループ実行 (Windows なら auto Docker) |
 | `joryu-export` | zstd 圧縮 + meta + SHA256 + tar |
 | `joryu-stats` | dashboard JSON 生成 |
-| `joryu-up` | 既定: `docker compose up dashboard --build` |
-| `joryu-up --full` | `docker compose up --build` (joryu + dashboard) |
+| `joryu-up` | git 差分 → `compose build` → `compose up` (変更なしなら dashboard up のみ) |
+| `joryu-up --full` | 両サービス up、差分がある方だけ build |
+| `joryu-up --force` | ディスク preflight をスキップ |
 | `joryu-serve` | `joryu-up --frontend-only` の互換エイリアス |
 
 ## 再現性キー
