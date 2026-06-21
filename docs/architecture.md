@@ -61,7 +61,9 @@ styles.yaml ──┤
 | `joryu-distill` | 蒸留ループ実行 (Windows なら auto Docker) |
 | `joryu-export` | zstd 圧縮 + meta + SHA256 + tar |
 | `joryu-stats` | dashboard JSON 生成 |
-| `joryu-serve` | `docker compose up dashboard --build` |
+| `joryu-up` | 既定: `docker compose up dashboard --build` |
+| `joryu-up --full` | `docker compose up --build` (joryu + dashboard) |
+| `joryu-serve` | `joryu-up --frontend-only` の互換エイリアス |
 
 ## 再現性キー
 

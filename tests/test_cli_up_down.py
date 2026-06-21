@@ -30,7 +30,8 @@ def _patch_runner(
     return calls
 
 
-def test_up_default_runs_compose_up(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_up_default_is_dashboard_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    """既定は dashboard のみ起動 (joryu イメージは 20GB+ なので明示時のみビルドする)。"""
     calls = _patch_runner(monkeypatch)
     rc = cli_up.main([])
     assert rc == 0
@@ -38,10 +39,24 @@ def test_up_default_runs_compose_up(monkeypatch: pytest.MonkeyPatch) -> None:
     cmd = calls[0]
     assert cmd[:3] == ["docker", "compose", "up"]
     assert "--build" in cmd
-    assert "dashboard" not in cmd  # フルスタック
+    assert cmd[-1] == "dashboard"
+    assert "joryu" not in cmd
 
 
-def test_up_frontend_only(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_up_full_brings_up_all_services(monkeypatch: pytest.MonkeyPatch) -> None:
+    """--full で joryu (vLLM) + dashboard を両方起動。"""
+    calls = _patch_runner(monkeypatch)
+    rc = cli_up.main(["--full"])
+    assert rc == 0
+    cmd = calls[0]
+    assert cmd[:3] == ["docker", "compose", "up"]
+    # サービス指定なし = compose 全サービス
+    assert "dashboard" not in cmd
+    assert "joryu" not in cmd
+
+
+def test_up_frontend_only_alias(monkeypatch: pytest.MonkeyPatch) -> None:
+    """--frontend-only は既定と同じ (後方互換のため残す)。"""
     calls = _patch_runner(monkeypatch)
     rc = cli_up.main(["--frontend-only"])
     assert rc == 0
@@ -63,6 +78,12 @@ def test_up_mutex_flags_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
     _patch_runner(monkeypatch)
     with pytest.raises(SystemExit):
         cli_up.main(["--frontend-only", "--backend-only"])
+
+
+def test_up_full_and_frontend_only_mutex(monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch_runner(monkeypatch)
+    with pytest.raises(SystemExit):
+        cli_up.main(["--full", "--frontend-only"])
 
 
 def test_up_refresh_stats_runs_before_compose(monkeypatch: pytest.MonkeyPatch) -> None:
