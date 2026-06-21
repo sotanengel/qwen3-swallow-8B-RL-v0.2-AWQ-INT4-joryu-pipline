@@ -5,17 +5,25 @@ from __future__ import annotations
 import time
 from pathlib import Path
 
+import pytest
+
 from joryu.jobs.models import DistillJobSpec, JobRecord, JobStatus
-from joryu.jobs.runner import JobRunner, build_job_command, should_use_compose_run
+from joryu.jobs.runner import (
+    JobRunner,
+    build_job_command,
+    resolve_docker_bin,
+    should_use_compose_run,
+)
 from joryu.jobs.store import JobStore
 
 
 def test_build_job_command_compose(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("JORYU_USE_COMPOSE_RUN", "1")
+    monkeypatch.setattr("joryu.jobs.runner.resolve_docker_bin", lambda: "/usr/bin/docker")
     (tmp_path / "docker-compose.yml").write_text("services: {}\n", encoding="utf-8")
     spec = DistillJobSpec(count=3, mode="nothinking")
     cmd = build_job_command(tmp_path, spec)
-    assert cmd[0:4] == ["docker", "compose", "-f", str(tmp_path / "docker-compose.yml")]
+    assert cmd[0:4] == ["/usr/bin/docker", "compose", "-f", str(tmp_path / "docker-compose.yml")]
     assert "joryu-distill" in cmd
     assert "--count" in cmd and "3" in cmd
     assert "--mode" in cmd and "nothinking" in cmd
@@ -26,6 +34,12 @@ def test_should_use_compose_run_env(monkeypatch) -> None:
     monkeypatch.setattr("joryu.jobs.runner.platform.system", lambda: "Linux")
     monkeypatch.setattr("joryu.jobs.runner.Path.exists", lambda _self: False)
     assert should_use_compose_run(env={"JORYU_USE_COMPOSE_RUN": "true"}) is True
+
+
+def test_resolve_docker_bin_missing(monkeypatch) -> None:
+    monkeypatch.setattr("joryu.jobs.runner.shutil.which", lambda _name: None)
+    with pytest.raises(FileNotFoundError, match="docker CLI not found"):
+        resolve_docker_bin()
 
 
 def test_runner_executes_queued_job(tmp_path: Path) -> None:

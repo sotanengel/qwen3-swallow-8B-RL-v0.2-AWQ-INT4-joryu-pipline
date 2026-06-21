@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import platform
+import shutil
 import subprocess
 import threading
 from collections.abc import Callable
@@ -27,10 +28,23 @@ def should_use_compose_run(*, env: dict[str, str] | None = None) -> bool:
     return Path("/var/run/docker.sock").exists() and platform.system() != "Windows"
 
 
+def resolve_docker_bin() -> str:
+    """docker CLI のパス。API コンテナ (DooD) やホスト実行で使用。"""
+    path = shutil.which("docker")
+    if path:
+        return path
+    msg = (
+        "docker CLI not found in PATH. "
+        "API コンテナからジョブ実行する場合は api イメージを再ビルドしてください "
+        "(`docker compose build api`)."
+    )
+    raise FileNotFoundError(msg)
+
+
 def build_compose_run_command(repo_root: Path, spec: DistillJobSpec) -> list[str]:
     compose_file = repo_root / "docker-compose.yml"
     return [
-        "docker",
+        resolve_docker_bin(),
         "compose",
         "-f",
         str(compose_file),
