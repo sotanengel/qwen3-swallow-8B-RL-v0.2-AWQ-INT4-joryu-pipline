@@ -55,15 +55,20 @@ uv run joryu-up --detach
 ## フロント + バックエンドの起動 / 停止
 
 ```powershell
-uv run joryu-up                  # dashboard + api (http://localhost:3000, :8000)
-uv run joryu-up --full           # joryu + dashboard + api を build して起動 (vLLM image ~20GB)
+uv run joryu-up                  # dashboard + api (git 差分に応じて build+up)
+uv run joryu-up --full           # joryu + dashboard + api を up (差分がある方だけ build)
 uv run joryu-up --detach         # バックグラウンド起動
+uv run joryu-up --no-open        # ブラウザ自動起動を無効化
+uv run joryu-up --force          # ディスク容量 preflight をスキップ
 uv run joryu-up --frontend-only  # dashboard のみ (= joryu-serve と等価)
 uv run joryu-up --backend-only   # joryu コンテナだけ
+uv run joryu-up --no-build       # build をスキップして up のみ
 uv run joryu-up --refresh-stats  # 起動前に joryu-stats を回して描画を最新化
 uv run joryu-down                # 停止 (volume は残す)
 uv run joryu-down --volumes      # HF キャッシュ含めて完全に削除
 ```
+
+`joryu-up` は git 作業ツリーの差分から rebuild 対象を自動判定する。dashboard を起動した場合は http://localhost:3000 が ready になったらブラウザを自動で開く (`--no-open` で無効化)。joryu ビルド時はホスト空き **25 GB** 以上を要求し、不足時は中止する (`--force` で続行可)。
 
 ## ジョブ API とダッシュボード
 

@@ -74,8 +74,9 @@ styles.yaml ──┤
 | `joryu-export` | zstd 圧縮 + meta + SHA256 + tar |
 | `joryu-stats` | dashboard JSON 生成 |
 | `joryu-api` | 蒸留ジョブ REST API (FastAPI, :8000) |
-| `joryu-up` | 既定: `docker compose up dashboard api --build` |
-| `joryu-up --full` | `docker compose up --build` (joryu + dashboard + api) |
+| `joryu-up` | git 差分 → `compose build` → `compose up` (既定: dashboard + api) |
+| `joryu-up --full` | dashboard + api + joryu を up、差分がある方だけ build |
+| `joryu-up --force` | ディスク preflight をスキップ |
 | `joryu-serve` | `joryu-up --frontend-only` の互換エイリアス |
 
 ## 再現性キー
