@@ -40,6 +40,12 @@ install_pinact() {
   case "$os" in
     linux) asset="pinact_linux_${arch}.tar.gz" ;;
     darwin) asset="pinact_darwin_${arch}.tar.gz" ;;
+    mingw*|msys*|cygwin*)
+      log "Windows detected; using scripts/install-pinact-windows.sh"
+      bash "${ROOT}/scripts/install-pinact-windows.sh"
+      export PATH="${HOME}/.local/bin:${PATH}"
+      return 0
+      ;;
     *)
       log "WARN: unsupported os=$os; install pinact manually for full pre-commit"
       return 0
