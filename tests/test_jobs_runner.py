@@ -12,19 +12,25 @@ from joryu.jobs.runner import (
     JobRunner,
     build_job_command,
     resolve_docker_bin,
+    should_use_api_docker_delegate,
     should_use_compose_run,
 )
 from joryu.jobs.store import JobStore
 
 
-def test_build_job_command_compose(tmp_path: Path, monkeypatch) -> None:
+def test_build_job_command_api_delegate(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("JORYU_USE_COMPOSE_RUN", "1")
     monkeypatch.setattr("joryu.jobs.runner.resolve_docker_bin", lambda: "/usr/bin/docker")
+    host_root = Path("C:/repo")
+    monkeypatch.setattr("joryu.jobs.runner.resolve_host_repo_root", lambda _root: host_root)
+    (tmp_path / "config.yaml").write_text("x: 1\n", encoding="utf-8")
     (tmp_path / "docker-compose.yml").write_text("services: {}\n", encoding="utf-8")
     spec = DistillJobSpec(count=3, mode="nothinking")
     cmd = build_job_command(tmp_path, spec)
-    assert cmd[0:4] == ["/usr/bin/docker", "compose", "-f", str(tmp_path / "docker-compose.yml")]
-    assert "joryu-distill" in cmd
+    assert cmd[0:3] == ["/usr/bin/docker", "run", "--rm"]
+    assert "joryu:latest" in cmd
+    assert "hf-cache:/root/.cache/huggingface" in cmd
+    assert "joryu.cli.distill" in cmd
     assert "--count" in cmd and "3" in cmd
     assert "--mode" in cmd and "nothinking" in cmd
 
@@ -33,7 +39,8 @@ def test_should_use_compose_run_env(monkeypatch) -> None:
     monkeypatch.delenv("JORYU_USE_COMPOSE_RUN", raising=False)
     monkeypatch.setattr("joryu.jobs.runner.platform.system", lambda: "Linux")
     monkeypatch.setattr("joryu.jobs.runner.Path.exists", lambda _self: False)
-    assert should_use_compose_run(env={"JORYU_USE_COMPOSE_RUN": "true"}) is True
+    assert should_use_compose_run(env={"JORYU_USE_COMPOSE_RUN": "true"}) is False
+    assert should_use_api_docker_delegate(env={"JORYU_USE_COMPOSE_RUN": "true"}) is True
 
 
 def test_resolve_docker_bin_missing(monkeypatch) -> None:

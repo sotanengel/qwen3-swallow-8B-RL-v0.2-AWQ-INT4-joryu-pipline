@@ -50,7 +50,7 @@ def build_docker_command(
     config_rel: str,
     src_dir: Path,
     data_dir: Path,
-    hf_cache: Path,
+    hf_cache: Path | str,
     styles_path: Path | None = None,
     styles_rel: str | None = None,
     allocate_tty: bool = False,

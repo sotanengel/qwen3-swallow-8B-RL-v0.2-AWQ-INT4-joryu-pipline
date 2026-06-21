@@ -89,6 +89,8 @@ cd dashboard && npm run dev
 
 ジョブ状態は `data/jobs/` に JSON で永続化される（gitignore）。成功時は自動で `joryu-stats` が走り、概要ページの統計が更新される。
 
+api コンテナから GPU ジョブを実行する場合、Docker デーモンが参照できるホスト側リポジトリパスへ自動変換する（`/proc/self/mountinfo`）。解決できない場合のみ `JORYU_HOST_REPO_ROOT` を手動指定する。
+
 **注意**: API は localhost 専用。認証は v1 では付けていない。
 
 ## `joryu-distill` CLI 引数
