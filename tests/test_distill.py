@@ -47,21 +47,35 @@ def test_run_distill_writes_records(tmp_path: Path) -> None:
     assert "created_at" in records[0]
 
 
+def _done_record(prompt: str, cfg: Config, **extra: object) -> dict:
+    rec = {
+        "prompt": prompt,
+        "answer": "x",
+        "mode": cfg.model.mode,
+        "style_id": None,
+        "sampling": {
+            "temperature": cfg.model.temperature,
+            "top_p": cfg.model.top_p,
+        },
+    }
+    rec.update(extra)
+    return rec
+
+
 def test_run_distill_skips_already_done(tmp_path: Path) -> None:
     bank = tmp_path / "bank.jsonl"
     _write_bank(bank, [{"prompt": "P1"}, {"prompt": "P2"}, {"prompt": "P3"}])
     out = tmp_path / "out.jsonl"
-    # 既に P1 と P2 が処理済みであるとする。
+    cfg = Config()
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(
-        json.dumps({"prompt": "P1", "answer": "x"}, ensure_ascii=False)
+        json.dumps(_done_record("P1", cfg), ensure_ascii=False)
         + "\n"
-        + json.dumps({"prompt": "P2", "answer": "y"}, ensure_ascii=False)
+        + json.dumps(_done_record("P2", cfg), ensure_ascii=False)
         + "\n",
         encoding="utf-8",
     )
 
-    cfg = Config()
     client = FakeVllmClient(answer="A", thinking="T")
     n = run_distill(cfg, bank_path=bank, out_path=out, client=client)
 
@@ -194,3 +208,59 @@ def test_deadline_stops_loop(tmp_path: Path) -> None:
     n = run_distill(cfg, bank_path=bank, out_path=out, client=client, deadline=time.time() - 1)
     assert n == 0
     assert not out.exists() or out.read_text(encoding="utf-8") == ""
+
+
+def test_run_distill_style_temperature_cartesian(tmp_path: Path) -> None:
+    from joryu.styles import load_styles
+
+    bank = tmp_path / "bank.jsonl"
+    _write_bank(bank, [{"prompt": "P1"}])
+    out = tmp_path / "out.jsonl"
+    cfg = Config()
+    styles = load_styles("styles.yaml")
+    client = FakeVllmClient(answer="A")
+    n = run_distill(
+        cfg,
+        bank_path=bank,
+        out_path=out,
+        client=client,
+        style_presets=[styles["polite"], styles["casual"]],
+        temperatures=[0.5, 0.8],
+    )
+    assert n == 4
+    records = _load_jsonl(out)
+    assert len(records) == 4
+    style_ids = {r["style_id"] for r in records}
+    temps = {r["sampling"]["temperature"] for r in records}
+    assert style_ids == {"polite", "casual"}
+    assert temps == {0.5, 0.8}
+
+
+def test_run_distill_same_prompt_different_style_not_skipped(tmp_path: Path) -> None:
+    from joryu.styles import load_styles
+
+    bank = tmp_path / "bank.jsonl"
+    _write_bank(bank, [{"prompt": "P1"}])
+    out = tmp_path / "out.jsonl"
+    cfg = Config()
+    styles = load_styles("styles.yaml")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(
+        json.dumps(
+            _done_record("P1", cfg, style_id="polite"),
+            ensure_ascii=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    client = FakeVllmClient(answer="A")
+    n = run_distill(
+        cfg,
+        bank_path=bank,
+        out_path=out,
+        client=client,
+        style_presets=[styles["casual"]],
+    )
+    assert n == 1
+    rec = _load_jsonl(out)[-1]
+    assert rec["style_id"] == "casual"

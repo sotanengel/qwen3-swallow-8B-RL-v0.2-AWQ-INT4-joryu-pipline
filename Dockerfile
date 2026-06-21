@@ -12,6 +12,7 @@ RUN uv sync --frozen --no-dev --no-install-project
 COPY src ./src
 COPY scripts ./scripts
 COPY config.yaml ./config.yaml
+COPY styles.yaml ./styles.yaml
 COPY README.md ./README.md
 RUN uv sync --frozen --no-dev
 

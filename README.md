@@ -35,6 +35,9 @@ docker compose build joryu
 # 3. 推論モードで蒸留
 uv run joryu-distill --count 50 --duration 1h
 
+# 3b. 文体 × サンプリングの直積スイープ（同一プロンプトを複数条件で生成）
+uv run joryu-distill --style polite,casual,expert --temperature 0.5,0.8,1.0 --top-p 0.8,0.9,0.95 --count 100
+
 # 4. 非推論モードで蒸留
 uv run joryu-distill --count 50 --mode nothinking
 
@@ -44,6 +47,26 @@ uv run joryu-export --bundle-tar
 # 6. ダッシュボード起動 (http://localhost:3000)
 uv run joryu-serve
 ```
+
+## `joryu-distill` CLI 引数
+
+| 引数 | 例 | 説明 |
+|---|---|---|
+| `--config` | `config.yaml` | 設定ファイル |
+| `--bank` | `data/prompts/foo.jsonl` | プロンプトバンク上書き |
+| `--out` | `data/distilled/out.jsonl` | 出力 JSONL 上書き |
+| `--count` | `50` | 新規レコード上限（0 = 未処理分すべて）。**バリアント含む総件数** |
+| `--duration` | `1h30m` | 実行時間上限 |
+| `--mode` | `thinking` / `nothinking` | 推論 / 非推論 |
+| `--style` | `polite,casual,expert` | 文体プリセット（[`styles.yaml`](styles.yaml) 参照） |
+| `--temperature` | `0.5,0.7,1.0` | temperature スイープ（0.5〜1.0） |
+| `--top-p` | `0.8,0.9,0.95` | top_p スイープ（0.8〜0.95） |
+| `--docker` / `--no-docker` | | Docker 委譲の強制 / 無効化 |
+
+`--style` × `--temperature` × `--top-p` は **直積（cartesian product）** で展開される。
+例: 4,001 プロンプト × 3 文体 × 6 temperature × 4 top_p = **288,072 レコード** — `--count` で上限を必ず指定すること。
+
+文体プリセットは [`styles.yaml`](styles.yaml) に定義。`config.yaml` の `distill.styles_file` でパスを変更可能。
 
 ## ディレクトリ概要
 

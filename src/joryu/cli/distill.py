@@ -8,8 +8,9 @@ import sys
 import time
 
 from joryu.config import load_config
-from joryu.distill import run_distill
+from joryu.distill import load_style_presets_from_config, run_distill
 from joryu.docker_delegate import DEFAULT_IMAGE, run_in_docker, should_use_docker
+from joryu.variants import parse_comma_list, parse_float_list
 from joryu.vllm_client import SupportsChat
 
 DEFAULT_CONFIG = "config.yaml"
@@ -42,6 +43,21 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("thinking", "nothinking"),
         default=None,
         help="行に mode が無い場合の既定モード (config.model.mode を上書き)",
+    )
+    p.add_argument(
+        "--style",
+        default="",
+        help="文体プリセット ID (カンマ区切り。styles.yaml 参照。例: polite,casual,expert)",
+    )
+    p.add_argument(
+        "--temperature",
+        default="",
+        help="temperature スイープ (0.5〜1.0、カンマ区切り。例: 0.5,0.7,1.0)",
+    )
+    p.add_argument(
+        "--top-p",
+        default="",
+        help="top_p スイープ (0.8〜0.95、カンマ区切り。例: 0.8,0.9,0.95)",
     )
     p.add_argument(
         "--image",
@@ -88,6 +104,12 @@ def _docker_extra_args(args: argparse.Namespace) -> list[str]:
         out.extend(["--out", args.out])
     if args.mode:
         out.extend(["--mode", args.mode])
+    if args.style:
+        out.extend(["--style", args.style])
+    if args.temperature:
+        out.extend(["--temperature", args.temperature])
+    if args.top_p:
+        out.extend(["--top-p", args.top_p])
     return out
 
 
@@ -101,12 +123,27 @@ def main(argv: list[str] | None = None, *, _client: SupportsChat | None = None) 
             extra_args=_docker_extra_args(args),
         )
 
-    cfg = load_config(args.config)
-    if args.mode is not None:
-        cfg.model.mode = args.mode
+    try:
+        cfg = load_config(args.config)
+        if args.mode is not None:
+            cfg.model.mode = args.mode
+
+        style_ids = parse_comma_list(args.style)
+        style_presets = load_style_presets_from_config(cfg, style_ids)
+        temperatures = parse_float_list(
+            args.temperature, min_val=0.5, max_val=1.0, name="temperature"
+        )
+        top_ps = parse_float_list(args.top_p, min_val=0.8, max_val=0.95, name="top_p")
+    except (FileNotFoundError, ValueError) as exc:
+        print(f"[joryu-distill] error: {exc}", file=sys.stderr)
+        return 2
 
     deadline = None
-    secs = parse_duration(args.duration)
+    try:
+        secs = parse_duration(args.duration)
+    except ValueError as exc:
+        print(f"[joryu-distill] error: {exc}", file=sys.stderr)
+        return 2
     if secs is not None:
         deadline = time.time() + secs
 
@@ -119,6 +156,9 @@ def main(argv: list[str] | None = None, *, _client: SupportsChat | None = None) 
         client=_client,
         count=args.count,
         deadline=deadline,
+        style_presets=style_presets or None,
+        temperatures=temperatures,
+        top_ps=top_ps,
     )
     print(f"[joryu-distill] wrote {n} records", file=sys.stderr)
     return 0
