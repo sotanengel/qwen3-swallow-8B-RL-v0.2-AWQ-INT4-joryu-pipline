@@ -59,9 +59,36 @@ def test_build_docker_command_contains_expected_mounts(tmp_path: Path) -> None:
     assert f"{config_path}:/app/config.yaml:ro" in flat
     assert f"{src_dir}:/app/src:ro" in flat
     assert f"{hf_cache}:/root/.cache/huggingface" in flat
+    assert "joryu:test" in cmd
+
+
+def test_build_docker_command_mounts_styles_when_provided(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text("model: {}\n", encoding="utf-8")
+    src_dir = tmp_path / "src"
+    src_dir.mkdir()
+    data_dir = tmp_path / "data"
+    hf_cache = tmp_path / "hf"
+    styles_path = tmp_path / "styles.yaml"
+    styles_path.write_text("styles: {}\n", encoding="utf-8")
+
+    cmd = build_docker_command(
+        image="joryu:test",
+        cwd=tmp_path,
+        config_path=config_path,
+        config_rel="config.yaml",
+        src_dir=src_dir,
+        data_dir=data_dir,
+        hf_cache=hf_cache,
+        styles_path=styles_path,
+        styles_rel="styles.yaml",
+        extra_args=["--style", "polite"],
+    )
+
+    flat = " ".join(cmd)
+    assert f"{styles_path}:/app/styles.yaml:ro" in flat
     # コンテナ内コマンドは joryu-distill --no-docker (再起防止)
     assert "joryu.cli.distill" in flat or "joryu-distill" in flat
     assert "--no-docker" in cmd
     assert "--config" in cmd
-    assert "--count" in cmd and "1" in cmd
-    assert "joryu:test" in cmd
+    assert "--style" in cmd and "polite" in cmd
