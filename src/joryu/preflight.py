@@ -11,21 +11,25 @@ from typing import Protocol
 
 DISK_REQUIRED_GB: dict[str, float] = {
     "dashboard": 5.0,
+    "api": 2.0,
     "joryu": 25.0,
 }
 
 _JORYU_PATHS = frozenset(
     {
         "Dockerfile",
+        "Dockerfile.api",
         "pyproject.toml",
         "uv.lock",
         "config.yaml",
         "styles.yaml",
         "README.md",
         ".dockerignore",
+        "docker-compose.yml",
     }
 )
 _JORYU_PREFIXES = ("src/", "scripts/")
+_API_PREFIXES = ("src/joryu/api/", "src/joryu/jobs/")
 _DASHBOARD_PREFIX = "dashboard/"
 _DASHBOARD_RUNTIME_PATHS = frozenset(
     {
@@ -34,7 +38,8 @@ _DASHBOARD_RUNTIME_PATHS = frozenset(
     }
 )
 
-_SERVICE_ORDER = ("dashboard", "joryu")
+_SERVICE_ORDER = ("dashboard", "api", "joryu")
+_DEFAULT_UP = ("dashboard", "api")
 
 
 class PreflightError(Exception):
@@ -58,6 +63,8 @@ def path_affects_service(path: str) -> set[str]:
     normalized = path.replace("\\", "/")
     if normalized in _DASHBOARD_RUNTIME_PATHS:
         return set()
+    if normalized.startswith(_API_PREFIXES) or normalized == "Dockerfile.api":
+        return {"api"}
     if normalized in _JORYU_PATHS or normalized.startswith(_JORYU_PREFIXES):
         return {"joryu"}
     if normalized.startswith(_DASHBOARD_PREFIX):
@@ -112,7 +119,7 @@ def resolve_up_services(args: argparse.Namespace, changed: set[str]) -> list[str
         return ["dashboard"]
     if changed:
         return [svc for svc in _SERVICE_ORDER if svc in changed]
-    return ["dashboard"]
+    return list(_DEFAULT_UP)
 
 
 def services_to_build(

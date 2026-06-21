@@ -33,15 +33,13 @@ def _patch_runner(
 
 
 def test_up_default_no_changes_builds_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
-    """git 差分なし → build なし、dashboard up のみ。"""
+    """git 差分なし → build なし、dashboard + api up。"""
     calls = _patch_runner(monkeypatch)
     monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: set())
     rc = cli_up.main([])
     assert rc == 0
     assert len(calls) == 1
-    cmd = calls[0]
-    assert cmd == ["docker", "compose", "up", "dashboard"]
-    assert "build" not in " ".join(cmd)
+    assert calls[0] == ["docker", "compose", "up", "dashboard", "api"]
 
 
 def test_up_joryu_diff_triggers_build_then_up(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -58,13 +56,13 @@ def test_up_joryu_diff_triggers_build_then_up(monkeypatch: pytest.MonkeyPatch) -
 def test_up_full_brings_up_all_builds_only_changed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """--full → 両方 up、差分がある dashboard のみ build。"""
+    """--full → 全サービス up、差分がある dashboard のみ build。"""
     calls = _patch_runner(monkeypatch)
     monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: {"dashboard"})
     rc = cli_up.main(["--full"])
     assert rc == 0
     assert calls[0] == ["docker", "compose", "build", "dashboard"]
-    assert calls[1] == ["docker", "compose", "up", "dashboard", "joryu"]
+    assert calls[1] == ["docker", "compose", "up", "dashboard", "api", "joryu"]
 
 
 def test_up_frontend_only_alias(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -121,7 +119,7 @@ def test_up_no_build_flag(monkeypatch: pytest.MonkeyPatch) -> None:
     )
     cli_up.main(["--no-build", "--full"])
     assert len(calls) == 1
-    assert calls[0] == ["docker", "compose", "up", "dashboard", "joryu"]
+    assert calls[0] == ["docker", "compose", "up", "dashboard", "api", "joryu"]
 
 
 def test_up_aborts_on_insufficient_disk(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -170,7 +168,7 @@ def test_up_detach_opens_browser_after_dashboard_up(monkeypatch: pytest.MonkeyPa
     )
     rc = cli_up.main(["--detach"])
     assert rc == 0
-    assert calls[-1] == ["docker", "compose", "up", "-d", "dashboard"]
+    assert calls[-1] == ["docker", "compose", "up", "-d", "dashboard", "api"]
     assert opened == [True]
 
 

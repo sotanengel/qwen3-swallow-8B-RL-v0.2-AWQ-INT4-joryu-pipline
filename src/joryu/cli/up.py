@@ -3,9 +3,13 @@
 git 差分から rebuild 対象を自動判定し、必要時は `docker compose build` → `up` を実行する。
 joryu ビルド前にホスト空き容量を検査し、不足時は `--force` なしでは中止する。
 
+**既定は dashboard + api** — `/jobs` から蒸留ジョブを投入できる。
+joryu コンテナ (vLLM + CUDA, 20GB+) は `--full` か `--backend-only` のときだけビルドする。
+
 簡略コマンド:
-    uv run joryu-up                     # git 差分に応じて build+up (変更なしなら dashboard up のみ)
-    uv run joryu-up --full              # joryu + dashboard を up (差分ある方だけ build)
+    uv run joryu-up                     # dashboard + api (git 差分に応じて build)
+    uv run joryu-up --frontend-only     # dashboard のみ
+    uv run joryu-up --full              # joryu + dashboard + api を up
     uv run joryu-up --backend-only      # joryu コンテナのみ
     uv run joryu-up --detach            # バックグラウンド起動
     uv run joryu-up --no-open           # ブラウザ自動起動を無効化
@@ -34,15 +38,13 @@ from joryu.preflight import (
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="joryu-up",
-        description=(
-            "git 差分に応じて docker compose build/up する (変更なしなら dashboard up のみ)。"
-        ),
+        description=("git 差分に応じて docker compose build/up する (既定: dashboard + api)。"),
     )
     g = p.add_mutually_exclusive_group()
     g.add_argument(
         "--full",
         action="store_true",
-        help="joryu + dashboard を両方 up (差分があるサービスのみ build)",
+        help="joryu + dashboard + api を up (差分があるサービスのみ build)",
     )
     g.add_argument(
         "--frontend-only",

@@ -23,6 +23,9 @@ from joryu.preflight import (
     ("path", "expected"),
     [
         ("src/joryu/cli/up.py", {"joryu"}),
+        ("src/joryu/jobs/models.py", {"api"}),
+        ("src/joryu/api/app.py", {"api"}),
+        ("Dockerfile.api", {"api"}),
         ("Dockerfile", {"joryu"}),
         ("pyproject.toml", {"joryu"}),
         ("dashboard/src/app/page.tsx", {"dashboard"}),
@@ -54,7 +57,7 @@ def test_changed_services_from_git_merges_sources() -> None:
 
 def test_resolve_up_services_default_no_changes() -> None:
     args = argparse.Namespace(full=False, frontend_only=False, backend_only=False)
-    assert resolve_up_services(args, set()) == ["dashboard"]
+    assert resolve_up_services(args, set()) == ["dashboard", "api"]
 
 
 def test_resolve_up_services_default_with_joryu_diff() -> None:
@@ -65,11 +68,12 @@ def test_resolve_up_services_default_with_joryu_diff() -> None:
 def test_resolve_up_services_default_with_both_diffs() -> None:
     args = argparse.Namespace(full=False, frontend_only=False, backend_only=False)
     assert resolve_up_services(args, {"joryu", "dashboard"}) == ["dashboard", "joryu"]
+    assert resolve_up_services(args, {"api", "dashboard"}) == ["dashboard", "api"]
 
 
 def test_resolve_up_services_full() -> None:
     args = argparse.Namespace(full=True, frontend_only=False, backend_only=False)
-    assert resolve_up_services(args, {"joryu"}) == ["dashboard", "joryu"]
+    assert resolve_up_services(args, {"joryu"}) == ["dashboard", "api", "joryu"]
 
 
 def test_services_to_build_intersection() -> None:
