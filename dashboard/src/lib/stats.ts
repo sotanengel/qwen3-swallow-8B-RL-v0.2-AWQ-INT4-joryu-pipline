@@ -1,0 +1,68 @@
+// joryu-stats CLI が出力する dashboard/public/stats.json のスキーマと型。
+// 入力欠損時にも壊れないようすべて optional にしてある (fallback で空にしてある)。
+
+export interface LengthBin {
+  lo: number;
+  hi: number | null;
+  count: number;
+}
+
+export interface LengthSummary {
+  count: number;
+  mean: number;
+  max: number;
+  min: number;
+  bins: LengthBin[];
+}
+
+export interface JoryuStats {
+  total: number;
+  models: Record<string, number>;
+  modes: Record<string, number>;
+  categories: Record<string, number>;
+  styles: Record<string, number>;
+  answer_length: LengthSummary;
+  thinking_length: LengthSummary;
+  sampling: {
+    temperature: Record<string, number>;
+    top_p: Record<string, number>;
+  };
+  timeline_daily: Record<string, number>;
+  _meta?: {
+    source_path?: string;
+    generated_at?: string;
+  };
+}
+
+export const EMPTY_STATS: JoryuStats = {
+  total: 0,
+  models: {},
+  modes: {},
+  categories: {},
+  styles: {},
+  answer_length: { count: 0, mean: 0, max: 0, min: 0, bins: [] },
+  thinking_length: { count: 0, mean: 0, max: 0, min: 0, bins: [] },
+  sampling: { temperature: {}, top_p: {} },
+  timeline_daily: {},
+};
+
+export function sortByCount(
+  obj: Record<string, number>,
+  topN = 20,
+): Array<{ key: string; count: number }> {
+  return Object.entries(obj)
+    .map(([key, count]) => ({ key, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, topN);
+}
+
+export async function loadStats(url = "/stats.json"): Promise<JoryuStats> {
+  try {
+    const r = await fetch(url, { cache: "no-store" });
+    if (!r.ok) return EMPTY_STATS;
+    const data = (await r.json()) as Partial<JoryuStats>;
+    return { ...EMPTY_STATS, ...data };
+  } catch {
+    return EMPTY_STATS;
+  }
+}

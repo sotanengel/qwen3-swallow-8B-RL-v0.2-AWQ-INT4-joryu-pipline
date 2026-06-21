@@ -30,5 +30,19 @@ services:
     # 手動キック用: `docker compose run --rm joryu joryu-distill --no-docker --count 1`
     command: ["python", "-c", "import joryu; print('joryu', joryu.__version__)"]
 
+  dashboard:
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile
+    image: joryu-dashboard:latest
+    container_name: joryu-dashboard
+    ports:
+      - "3000:3000"
+    volumes:
+      # 蒸留 JSONL と stats.json をホストの dashboard/public/ に直接マウント。
+      # ホスト側で `joryu-stats` を実行すると自動反映される。
+      - ./dashboard/public:/app/public:ro
+    restart: "on-failure:3"
+
 volumes:
   hf-cache:
