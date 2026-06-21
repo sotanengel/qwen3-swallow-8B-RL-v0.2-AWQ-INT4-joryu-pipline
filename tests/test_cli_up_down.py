@@ -29,11 +29,14 @@ def _patch_runner(
     monkeypatch.setattr("joryu.compose.subprocess.run", _fake_run)
     monkeypatch.setattr("joryu.cli.up.schedule_open_dashboard", lambda **_: None)
     monkeypatch.setattr("joryu.cli.up.open_dashboard_when_ready", lambda **_: None)
+    monkeypatch.setattr("joryu.cli.up.is_first_up_run", lambda _root: False)
+    monkeypatch.setattr("joryu.cli.up.git_head_at", lambda _root: "abc")
+    monkeypatch.setattr("joryu.cli.up.save_up_state", lambda *_args: None)
     return calls
 
 
 def test_up_default_no_changes_builds_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
-    """git 差分なし → build なし、dashboard + api up。"""
+    """git 差分なし・初回でもない → build なし、dashboard + api up。"""
     calls = _patch_runner(monkeypatch)
     monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: set())
     rc = cli_up.main([])
@@ -43,13 +46,14 @@ def test_up_default_no_changes_builds_nothing(monkeypatch: pytest.MonkeyPatch) -
 
 
 def test_up_joryu_diff_triggers_build_then_up(monkeypatch: pytest.MonkeyPatch) -> None:
-    """joryu 側 git 差分でも既定は dashboard + api を up (joryu は build/up しない)。"""
+    """api 側 git 差分 → build api → up dashboard + api。"""
     calls = _patch_runner(monkeypatch)
-    monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: {"joryu"})
+    monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: {"api"})
     rc = cli_up.main([])
     assert rc == 0
-    assert len(calls) == 1
-    assert calls[0] == ["docker", "compose", "up", "dashboard", "api"]
+    assert len(calls) == 2
+    assert calls[0] == ["docker", "compose", "build", "api"]
+    assert calls[1] == ["docker", "compose", "up", "dashboard", "api"]
 
 
 def test_up_full_brings_up_all_builds_only_changed(
@@ -119,6 +123,24 @@ def test_up_no_build_flag(monkeypatch: pytest.MonkeyPatch) -> None:
     cli_up.main(["--no-build", "--full"])
     assert len(calls) == 1
     assert calls[0] == ["docker", "compose", "up", "dashboard", "api", "joryu"]
+
+
+def test_up_build_flag_forces_rebuild(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = _patch_runner(monkeypatch)
+    monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: set())
+    rc = cli_up.main(["--build"])
+    assert rc == 0
+    assert calls[0] == ["docker", "compose", "build", "dashboard", "api"]
+    assert calls[1] == ["docker", "compose", "up", "dashboard", "api"]
+
+
+def test_up_first_run_builds_up_targets(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = _patch_runner(monkeypatch)
+    monkeypatch.setattr("joryu.cli.up.is_first_up_run", lambda _root: True)
+    monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: set())
+    rc = cli_up.main([])
+    assert rc == 0
+    assert calls[0] == ["docker", "compose", "build", "dashboard", "api"]
 
 
 def test_up_aborts_on_insufficient_disk(monkeypatch: pytest.MonkeyPatch) -> None:

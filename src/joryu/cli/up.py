@@ -1,6 +1,7 @@
 """joryu-up: フロント (dashboard) とバックエンド (joryu) を docker compose で起動する。
 
 git 差分から rebuild 対象を自動判定し、必要時は `docker compose build` → `up` を実行する。
+未コミット差分に加え、前回起動後の `git pull` 分も rebuild 対象に含める。
 joryu ビルド前にホスト空き容量を検査し、不足時は `--force` なしでは中止する。
 
 **既定は dashboard + api** — `/jobs` から蒸留ジョブを投入できる。
@@ -15,6 +16,7 @@ joryu コンテナ (vLLM + CUDA, 20GB+) は `--full` か `--backend-only` のと
     uv run joryu-up --no-open           # ブラウザ自動起動を無効化
     uv run joryu-up --force             # ディスク不足でも続行
     uv run joryu-up --refresh-stats     # 起動前に joryu-stats を回して dashboard 表示を最新化
+    uv run joryu-up --build             # up 対象を強制 rebuild
 """
 
 from __future__ import annotations
@@ -30,7 +32,10 @@ from joryu.preflight import (
     PreflightError,
     changed_services_from_git,
     check_disk_space,
+    git_head_at,
+    is_first_up_run,
     resolve_up_services,
+    save_up_state,
     services_to_build,
 )
 
@@ -58,6 +63,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--detach", "-d", action="store_true", help="バックグラウンド起動 (-d)")
     p.add_argument("--no-build", action="store_true", help="build をスキップして up のみ")
+    p.add_argument(
+        "--build",
+        action="store_true",
+        help="up 対象サービスを git 差分に関係なく強制 rebuild",
+    )
     p.add_argument(
         "--force",
         action="store_true",
@@ -92,7 +102,13 @@ def main(argv: list[str] | None = None) -> int:
 
     changed = changed_services_from_git(repo_root)
     up_services = resolve_up_services(args, changed)
-    build_services = services_to_build(up_services, changed, no_build=args.no_build)
+    build_services = services_to_build(
+        up_services,
+        changed,
+        no_build=args.no_build,
+        force_build=args.build,
+        first_run=is_first_up_run(repo_root),
+    )
 
     try:
         check_disk_space(build_services, repo_root, force=args.force)
@@ -114,6 +130,10 @@ def main(argv: list[str] | None = None) -> int:
     if open_browser and not args.detach:
         schedule_open_dashboard()
     rc = run(cmd)
+    if rc == 0:
+        head = git_head_at(repo_root)
+        if head:
+            save_up_state(repo_root, head)
     if rc == 0 and open_browser and args.detach:
         open_dashboard_when_ready()
     return rc
