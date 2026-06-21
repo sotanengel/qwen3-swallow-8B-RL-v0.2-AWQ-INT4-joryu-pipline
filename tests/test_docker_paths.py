@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from joryu.docker_paths import map_path_for_docker, resolve_host_repo_root
 
 _BIND_MOUNTINFO = """
@@ -35,18 +33,17 @@ def test_resolve_host_repo_root_from_bind_mountinfo() -> None:
     assert root == Path("/host_mnt/c/Users/dev/repo")
 
 
-def test_resolve_host_repo_root_from_9p_mountinfo(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("joryu.docker_paths.os.name", "posix")
+def test_resolve_host_repo_root_from_9p_mountinfo() -> None:
     root = resolve_host_repo_root(
         Path("/workspace"),
         env={"JORYU_REPO_ROOT": "/workspace"},
         mountinfo_reader=lambda: _9P_MOUNTINFO,
     )
-    assert root == Path("/run/desktop/mnt/host/c/qwen3-swallow-8B-RL-v0.2-AWQ-INT4-joryu-pipline")
+    assert root == Path("C:/qwen3-swallow-8B-RL-v0.2-AWQ-INT4-joryu-pipline")
 
 
 def test_map_path_for_docker_translates_under_workspace() -> None:
-    host_root = Path("/run/desktop/mnt/host/c/Users/dev/repo")
+    host_root = Path("C:/Users/dev/repo")
     mapped = map_path_for_docker(
         Path("/workspace/config.yaml"),
         repo_root=Path("/workspace"),

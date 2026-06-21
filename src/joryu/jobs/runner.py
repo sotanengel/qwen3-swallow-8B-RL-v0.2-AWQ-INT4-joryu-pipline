@@ -21,12 +21,17 @@ def default_jobs_dir(repo_root: Path) -> Path:
 
 
 def should_use_compose_run(*, env: dict[str, str] | None = None) -> bool:
-    """API コンテナ内など docker compose run を使うか。"""
+    """ホスト上で docker compose run を使うか（API コンテナ内は False）。"""
     e = os.environ if env is None else env
-    flag = e.get("JORYU_USE_COMPOSE_RUN", "").lower()
-    if flag in ("1", "true", "yes"):
-        return True
+    if e.get("JORYU_USE_COMPOSE_RUN", "").lower() in ("1", "true", "yes"):
+        return False
     return Path("/var/run/docker.sock").exists() and platform.system() != "Windows"
+
+
+def should_use_api_docker_delegate(*, env: dict[str, str] | None = None) -> bool:
+    """API コンテナ内から docker run デリゲートを使うか。"""
+    e = os.environ if env is None else env
+    return e.get("JORYU_USE_COMPOSE_RUN", "").lower() in ("1", "true", "yes")
 
 
 def resolve_docker_bin() -> str:
@@ -76,9 +81,14 @@ def build_docker_delegate_command(repo_root: Path, spec: DistillJobSpec) -> list
     cfg = load_config(config_path)
     data_dir = repo_root / "data"
     data_dir.mkdir(parents=True, exist_ok=True)
-    hf_cache = hf_cache_dir()
-    hf_cache.mkdir(parents=True, exist_ok=True)
     src_dir = (repo_root / "src").resolve()
+
+    if should_use_api_docker_delegate():
+        hf_cache: Path | str = "hf-cache"
+    else:
+        hf_cache_path = hf_cache_dir()
+        hf_cache_path.mkdir(parents=True, exist_ok=True)
+        hf_cache = _map(hf_cache_path)
 
     styles_path = None
     styles_rel = None
@@ -88,22 +98,26 @@ def build_docker_delegate_command(repo_root: Path, spec: DistillJobSpec) -> list
         if candidate.exists():
             styles_path = candidate
 
-    return build_docker_command(
+    cmd = build_docker_command(
         image=DEFAULT_IMAGE,
         cwd=host_root,
         config_path=_map(config_path),
         config_rel=spec.config.replace("\\", "/"),
         src_dir=_map(src_dir),
         data_dir=_map(data_dir),
-        hf_cache=_map(hf_cache),
+        hf_cache=hf_cache,
         styles_path=_map(styles_path) if styles_path is not None else None,
         styles_rel=styles_rel,
         allocate_tty=False,
         extra_args=spec.to_distill_argv(),
     )
+    cmd[0] = resolve_docker_bin()
+    return cmd
 
 
 def build_job_command(repo_root: Path, spec: DistillJobSpec) -> list[str]:
+    if should_use_api_docker_delegate():
+        return build_docker_delegate_command(repo_root, spec)
     if should_use_compose_run():
         return build_compose_run_command(repo_root, spec)
     if platform.system() == "Windows":
@@ -126,7 +140,7 @@ def run_subprocess_logged(
         log_fh.flush()
         proc = runner(
             cmd,
-            cwd=resolve_host_repo_root(cwd),
+            cwd=cwd,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
