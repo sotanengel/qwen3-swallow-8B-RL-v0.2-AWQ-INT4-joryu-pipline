@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 from joryu.jobs.models import JobRecord
@@ -23,10 +24,10 @@ class JobStore:
 
     def save(self, record: JobRecord) -> None:
         path = self._record_path(record.id)
-        path.write_text(
-            json.dumps(record.to_dict(), ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
+        payload = json.dumps(record.to_dict(), ensure_ascii=False, indent=2)
+        tmp = path.with_suffix(f"{path.suffix}.tmp")
+        tmp.write_text(payload, encoding="utf-8")
+        os.replace(tmp, path)
 
     def load(self, job_id: str) -> JobRecord:
         path = self._record_path(job_id)

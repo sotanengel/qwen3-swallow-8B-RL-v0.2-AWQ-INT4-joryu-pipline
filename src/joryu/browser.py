@@ -44,9 +44,16 @@ def open_dashboard(
     browser: _WebBrowser | None = None,
 ) -> None:
     """既定ブラウザで dashboard URL を開く。"""
-    opener = browser or webbrowser
     print(f"[joryu-up] opening {url}", file=sys.stderr)
-    opener.open(url)
+    if browser is not None:
+        browser.open(url)
+        return
+    if sys.platform == "win32":
+        import os
+
+        os.startfile(url)  # type: ignore[attr-defined,no-untyped-call]
+        return
+    webbrowser.open(url)
 
 
 def schedule_open_dashboard(

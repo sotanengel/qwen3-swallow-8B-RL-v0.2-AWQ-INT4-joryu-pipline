@@ -63,6 +63,22 @@ def test_open_dashboard_uses_browser(capsys: pytest.CaptureFixture[str]) -> None
     assert "opening" in capsys.readouterr().err
 
 
+def test_open_dashboard_uses_startfile_on_windows(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    opened: list[str] = []
+    monkeypatch.setattr("joryu.browser.sys.platform", "win32")
+
+    def _startfile(url: str) -> None:
+        opened.append(url)
+
+    monkeypatch.setattr("os.startfile", _startfile, raising=False)
+    open_dashboard(DASHBOARD_URL)
+    assert opened == [DASHBOARD_URL]
+    assert "opening" in capsys.readouterr().err
+
+
 def test_open_dashboard_when_ready_skips_if_not_ready(capsys: pytest.CaptureFixture[str]) -> None:
     open_dashboard_when_ready(wait_fn=lambda _url: False, open_fn=lambda **_kw: None)
     err = capsys.readouterr().err

@@ -110,15 +110,18 @@ def changed_services_from_git(
 
 
 def resolve_up_services(args: argparse.Namespace, changed: set[str]) -> list[str]:
-    """CLI フラグと git 差分から `docker compose up` 対象サービスを決定。"""
+    """CLI フラグから `docker compose up` 対象サービスを決定。
+
+    git 差分 (`changed`) は build 対象の判定にのみ使う。既定モードでは常に
+    dashboard + api を起動する。
+    """
+    del changed  # build 判定は services_to_build 側
     if args.full:
         return list(_SERVICE_ORDER)
     if args.backend_only:
         return ["joryu"]
     if args.frontend_only:
         return ["dashboard"]
-    if changed:
-        return [svc for svc in _SERVICE_ORDER if svc in changed]
     return list(_DEFAULT_UP)
 
 

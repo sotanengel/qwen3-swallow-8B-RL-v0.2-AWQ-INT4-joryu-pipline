@@ -43,14 +43,13 @@ def test_up_default_no_changes_builds_nothing(monkeypatch: pytest.MonkeyPatch) -
 
 
 def test_up_joryu_diff_triggers_build_then_up(monkeypatch: pytest.MonkeyPatch) -> None:
-    """joryu 側 git 差分 → build joryu → up joryu。"""
+    """joryu 側 git 差分でも既定は dashboard + api を up (joryu は build/up しない)。"""
     calls = _patch_runner(monkeypatch)
     monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: {"joryu"})
     rc = cli_up.main([])
     assert rc == 0
-    assert len(calls) == 2
-    assert calls[0] == ["docker", "compose", "build", "joryu"]
-    assert calls[1] == ["docker", "compose", "up", "joryu"]
+    assert len(calls) == 1
+    assert calls[0] == ["docker", "compose", "up", "dashboard", "api"]
 
 
 def test_up_full_brings_up_all_builds_only_changed(
@@ -155,7 +154,7 @@ def test_up_force_bypasses_disk_check(monkeypatch: pytest.MonkeyPatch) -> None:
     rc = cli_up.main(["--force"])
     assert rc == 0
     assert recorded == [True]
-    assert calls[0] == ["docker", "compose", "build", "joryu"]
+    assert calls[0] == ["docker", "compose", "up", "dashboard", "api"]
 
 
 def test_up_detach_opens_browser_after_dashboard_up(monkeypatch: pytest.MonkeyPatch) -> None:
