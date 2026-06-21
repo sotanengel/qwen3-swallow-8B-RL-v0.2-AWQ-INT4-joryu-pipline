@@ -149,7 +149,7 @@ def main(argv: list[str] | None = None, *, _client: SupportsChat | None = None) 
 
     bank = args.bank or None
     out = args.out or None
-    n = run_distill(
+    run_distill(
         cfg,
         bank_path=bank,
         out_path=out,
@@ -160,7 +160,6 @@ def main(argv: list[str] | None = None, *, _client: SupportsChat | None = None) 
         temperatures=temperatures,
         top_ps=top_ps,
     )
-    print(f"[joryu-distill] wrote {n} records", file=sys.stderr)
     return 0
 
 
