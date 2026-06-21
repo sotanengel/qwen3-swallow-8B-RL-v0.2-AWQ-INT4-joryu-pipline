@@ -92,3 +92,26 @@ def test_build_docker_command_mounts_styles_when_provided(tmp_path: Path) -> Non
     assert "--no-docker" in cmd
     assert "--config" in cmd
     assert "--style" in cmd and "polite" in cmd
+
+
+def test_build_docker_command_allocates_tty_when_requested(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text("model: {}\n", encoding="utf-8")
+    src_dir = tmp_path / "src"
+    src_dir.mkdir()
+    data_dir = tmp_path / "data"
+    hf_cache = tmp_path / "hf"
+
+    cmd = build_docker_command(
+        image="joryu:test",
+        cwd=tmp_path,
+        config_path=config_path,
+        config_rel="config.yaml",
+        src_dir=src_dir,
+        data_dir=data_dir,
+        hf_cache=hf_cache,
+        allocate_tty=True,
+        extra_args=["--count", "1"],
+    )
+
+    assert cmd[0:4] == ["docker", "run", "--rm", "-t"]

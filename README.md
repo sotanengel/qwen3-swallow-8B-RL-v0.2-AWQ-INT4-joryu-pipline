@@ -68,6 +68,8 @@ uv run joryu-serve
 
 文体プリセットは [`styles.yaml`](styles.yaml) に定義。`config.yaml` の `distill.styles_file` でパスを変更可能。
 
+蒸留中は **stderr** に進捗・ETA・直近 5 件のプロンプト/回答が表示される。Docker 委譲時もホストが TTY なら `docker run -t` で `\r` 更新が有効。
+
 ## ディレクトリ概要
 
 ```

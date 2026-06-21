@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from joryu.config import Config
 from joryu.distill import run_distill
 
@@ -264,3 +266,22 @@ def test_run_distill_same_prompt_different_style_not_skipped(tmp_path: Path) -> 
     assert n == 1
     rec = _load_jsonl(out)[-1]
     assert rec["style_id"] == "casual"
+
+
+def test_logs_progress_messages(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    bank = tmp_path / "bank.jsonl"
+    _write_bank(bank, [{"prompt": "P1"}, {"prompt": "P2"}])
+    out = tmp_path / "out.jsonl"
+    cfg = Config()
+    client = FakeVllmClient(answer="ans")
+
+    run_distill(cfg, bank_path=bank, out_path=out, client=client)
+
+    err = capsys.readouterr().err
+    assert "[joryu-distill] 全体 2件" in err
+    assert "進捗 1/2" in err
+    assert "進捗 2/2" in err
+    assert "直近の完了" in err
+    assert "P1" in err
+    assert "ans" in err
+    assert f"完了: 2 件 → {out}" in err

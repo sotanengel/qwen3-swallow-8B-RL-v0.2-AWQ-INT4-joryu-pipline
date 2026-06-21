@@ -53,6 +53,7 @@ def build_docker_command(
     hf_cache: Path,
     styles_path: Path | None = None,
     styles_rel: str | None = None,
+    allocate_tty: bool = False,
     extra_args: list[str],
 ) -> list[str]:
     """`docker run --gpus all ... joryu-distill --no-docker --config <c> <extra>` を構築。"""
@@ -60,17 +61,23 @@ def build_docker_command(
         "docker",
         "run",
         "--rm",
-        "--gpus",
-        "all",
-        "-v",
-        f"{data_dir}:/app/data",
-        "-v",
-        f"{config_path}:/app/{config_rel.replace('\\', '/')}:ro",
-        "-v",
-        f"{src_dir}:/app/src:ro",
-        "-v",
-        f"{hf_cache}:/root/.cache/huggingface",
     ]
+    if allocate_tty:
+        cmd.append("-t")
+    cmd.extend(
+        [
+            "--gpus",
+            "all",
+            "-v",
+            f"{data_dir}:/app/data",
+            "-v",
+            f"{config_path}:/app/{config_rel.replace('\\', '/')}:ro",
+            "-v",
+            f"{src_dir}:/app/src:ro",
+            "-v",
+            f"{hf_cache}:/root/.cache/huggingface",
+        ]
+    )
     if styles_path is not None and styles_rel:
         rel = styles_rel.replace("\\", "/")
         cmd.extend(["-v", f"{styles_path}:/app/{rel}:ro"])
@@ -141,6 +148,7 @@ def run_in_docker(
         hf_cache=hf_cache,
         styles_path=styles_path,
         styles_rel=styles_rel,
+        allocate_tty=sys.stderr.isatty(),
         extra_args=extra_args,
     )
     print(f"[joryu] docker delegate: {' '.join(cmd)}", file=sys.stderr)
