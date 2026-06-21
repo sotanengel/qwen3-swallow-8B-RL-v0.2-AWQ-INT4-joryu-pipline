@@ -27,11 +27,21 @@ _JORYU_PATHS = frozenset(
         "styles.yaml",
         "README.md",
         ".dockerignore",
-        "docker-compose.yml",
     }
 )
 _JORYU_PREFIXES = ("src/", "scripts/")
 _API_PREFIXES = ("src/joryu/api/", "src/joryu/jobs/")
+# API ジョブ実行時に joryu コンテナへも載るモジュール (api + joryu 両方 rebuild)
+_JORYU_JOB_RUNTIME_PATHS = frozenset(
+    {
+        "docker-compose.yml",
+        "src/joryu/distill.py",
+        "src/joryu/docker_delegate.py",
+        "src/joryu/stats.py",
+        "src/joryu/cli/distill.py",
+        "src/joryu/cli/stats.py",
+    }
+)
 _DASHBOARD_PREFIX = "dashboard/"
 _DASHBOARD_RUNTIME_PATHS = frozenset(
     {
@@ -68,10 +78,12 @@ def path_affects_service(path: str) -> set[str]:
         return set()
     if normalized.startswith(_API_PREFIXES) or normalized == "Dockerfile.api":
         return {"api"}
-    if normalized in _JORYU_PATHS or normalized.startswith(_JORYU_PREFIXES):
-        return {"joryu"}
+    if normalized in _JORYU_JOB_RUNTIME_PATHS:
+        return {"api", "joryu"}
     if normalized.startswith(_DASHBOARD_PREFIX):
         return {"dashboard"}
+    if normalized in _JORYU_PATHS or normalized.startswith(_JORYU_PREFIXES):
+        return {"joryu"}
     return set()
 
 
@@ -210,10 +222,19 @@ def services_to_build(
     if no_build:
         return []
     if force_build:
-        return list(up_services)
-    if first_run:
-        return list(up_services)
-    return [svc for svc in up_services if svc in changed]
+        candidates = list(up_services)
+    elif first_run:
+        candidates = list(up_services)
+    else:
+        candidates = [svc for svc in up_services if svc in changed]
+
+    # 既定 up (dashboard+api) でも API 経由蒸留の joryu イメージを rebuild する。
+    if "api" in up_services and "joryu" in changed and "joryu" not in candidates:
+        candidates.append("joryu")
+    if force_build and "api" in up_services and "joryu" not in candidates:
+        candidates.append("joryu")
+
+    return [svc for svc in _SERVICE_ORDER if svc in candidates]
 
 
 def required_disk_gb(services: list[str]) -> float:
