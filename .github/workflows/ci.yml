@@ -40,6 +40,9 @@ jobs:
       - name: Run tests
         run: uv run pytest --cov=joryu --cov-report=term-missing
 
+      - name: End-to-end smoke (no GPU)
+        run: bash scripts/verify_pipeline.sh
+
   security:
     name: Workflow Security (pre-commit)
     runs-on: ubuntu-latest

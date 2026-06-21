@@ -81,6 +81,22 @@ data/             ローカル生成データ (gitignore)
 exports/          圧縮済み蒸留データ (gitignore)
 ```
 
+## ドキュメント
+
+- [docs/requirements.md](docs/requirements.md) — 機能要件・非機能要件
+- [docs/architecture.md](docs/architecture.md) — モジュール構成図とレイヤー責務
+- [docs/sft-consumer.md](docs/sft-consumer.md) — エクスポートデータを別リポジトリの SFT で使う手順
+
+## エンドツーエンドスモーク (GPU 不要)
+
+```bash
+bash scripts/verify_pipeline.sh
+```
+
+Fake vLLM クライアントで `distill → export → stats` まで一通り走らせ、
+`responses.jsonl.zst` / `meta.json` / `SHA256SUMS` / `stats.json` が
+出ることを確認する。CI からも同じスクリプトが走る。
+
 ## ライセンス
 
 Apache-2.0 (`LICENSE` 参照)。
