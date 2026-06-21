@@ -1,0 +1,33 @@
+# joryu インフラ。実行環境: Windows + RTX 3060 Ti / Docker Desktop(WSL2) + NVIDIA Container Toolkit
+# 起動: docker compose build joryu
+
+services:
+  joryu:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: joryu:latest
+    container_name: joryu
+    environment:
+      - VLLM_USE_DEEP_GEMM=0
+      - VLLM_DEEP_GEMM_WARMUP=skip
+      - VLLM_USE_FLASHINFER_SAMPLER=0
+      - VLLM_ATTENTION_BACKEND=FLASH_ATTN
+      - HF_HOME=/root/.cache/huggingface
+    volumes:
+      - ./data:/app/data
+      - ./exports:/app/exports
+      - ./config.yaml:/app/config.yaml:ro
+      - hf-cache:/root/.cache/huggingface
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    # 手動キック用: `docker compose run --rm joryu joryu-distill --no-docker --count 1`
+    command: ["python", "-c", "import joryu; print('joryu', joryu.__version__)"]
+
+volumes:
+  hf-cache:

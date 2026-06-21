@@ -1,0 +1,42 @@
+# joryu app コンテナ。uv ビルド + NVIDIA CUDA ランタイム + vLLM。
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS builder
+
+WORKDIR /app
+
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy
+
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev --no-install-project
+
+COPY src ./src
+COPY scripts ./scripts
+COPY config.yaml ./config.yaml
+COPY README.md ./README.md
+RUN uv sync --frozen --no-dev
+
+# cu130 + vLLM ランタイム
+FROM nvidia/cuda:13.0.0-runtime-ubuntu24.04
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /usr/local /usr/local
+COPY --from=builder /app /app
+
+RUN uv pip install torch --python /app/.venv/bin/python \
+       --index-url https://download.pytorch.org/whl/cu130 && \
+    uv pip install vllm --python /app/.venv/bin/python
+
+ENV PATH="/app/.venv/bin:/usr/local/bin:$PATH" \
+    PYTHONPATH=/app/src \
+    PYTHONUNBUFFERED=1 \
+    LD_LIBRARY_PATH=/usr/local/cuda/lib64:${LD_LIBRARY_PATH} \
+    VLLM_USE_DEEP_GEMM=0 \
+    VLLM_DEEP_GEMM_WARMUP=skip \
+    VLLM_USE_FLASHINFER_SAMPLER=0
+
+CMD ["python", "-c", "import joryu; print('joryu', joryu.__version__)"]
