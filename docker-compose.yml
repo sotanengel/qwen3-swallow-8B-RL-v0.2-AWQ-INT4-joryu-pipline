@@ -17,6 +17,7 @@ services:
     volumes:
       - ./data:/app/data
       - ./exports:/app/exports
+      - ./dashboard/public:/app/dashboard/public
       - ./config.yaml:/app/config.yaml:ro
       - ./styles.yaml:/app/styles.yaml:ro
       - hf-cache:/root/.cache/huggingface

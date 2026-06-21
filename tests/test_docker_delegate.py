@@ -38,6 +38,8 @@ def test_build_docker_command_contains_expected_mounts(tmp_path: Path) -> None:
     src_dir = tmp_path / "src"
     src_dir.mkdir()
     data_dir = tmp_path / "data"
+    dashboard_public = tmp_path / "dashboard" / "public"
+    dashboard_public.mkdir(parents=True)
     hf_cache = tmp_path / "hf"
 
     cmd = build_docker_command(
@@ -47,6 +49,7 @@ def test_build_docker_command_contains_expected_mounts(tmp_path: Path) -> None:
         config_rel="config.yaml",
         src_dir=src_dir,
         data_dir=data_dir,
+        dashboard_public_dir=dashboard_public,
         hf_cache=hf_cache,
         extra_args=["--count", "1"],
     )
@@ -56,6 +59,7 @@ def test_build_docker_command_contains_expected_mounts(tmp_path: Path) -> None:
     # マウント
     flat = " ".join(cmd)
     assert f"{data_dir}:/app/data" in flat
+    assert f"{dashboard_public}:/app/dashboard/public" in flat
     assert f"{config_path}:/app/config.yaml:ro" in flat
     assert f"{src_dir}:/app/src:ro" in flat
     assert f"{hf_cache}:/root/.cache/huggingface" in flat

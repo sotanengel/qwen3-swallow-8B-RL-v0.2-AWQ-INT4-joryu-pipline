@@ -14,7 +14,7 @@ from joryu.config import Config
 from joryu.progress import load_done_keys, run_key_from_parts
 from joryu.progress_reporter import DistillProgressReporter
 from joryu.prompt_bank import EffectiveSampling, PromptRow, load_prompt_bank
-from joryu.stats import DEFAULT_STATS_OUTPUT, write_stats_json
+from joryu.stats import resolve_stats_output_path, write_stats_json
 from joryu.styles import StylePreset, load_styles, resolve_style_ids
 from joryu.variants import DistillVariant, expand_variants
 from joryu.vllm_client import SupportsChat, VllmClient
@@ -63,7 +63,8 @@ def variant_run_key(variant: DistillVariant) -> str:
 
 def default_stats_refresher(out_path: Path) -> None:
     """dashboard/public/stats.json を蒸留 JSONL から更新する。"""
-    write_stats_json(out_path, DEFAULT_STATS_OUTPUT)
+    dst = resolve_stats_output_path(out_path=out_path)
+    write_stats_json(out_path, dst)
 
 
 class _StatsRefreshThrottler:

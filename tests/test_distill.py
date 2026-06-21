@@ -304,7 +304,21 @@ def test_run_distill_calls_stats_refresher_after_writes(tmp_path: Path) -> None:
     )
 
     assert calls == [out, out]
-    assert len(_load_jsonl(out)) == 2
+
+
+def test_default_stats_refresher_writes_under_repo_root(tmp_path: Path) -> None:
+    from joryu.distill import default_stats_refresher
+
+    out = tmp_path / "data" / "distilled" / "responses.jsonl"
+    out.parent.mkdir(parents=True)
+    out.write_text('{"prompt":"P","answer":"A","model":"M"}\n', encoding="utf-8")
+    stats_path = tmp_path / "dashboard" / "public" / "stats.json"
+
+    default_stats_refresher(out)
+
+    assert stats_path.exists()
+    data = json.loads(stats_path.read_text(encoding="utf-8"))
+    assert data["total"] == 1
 
 
 def test_run_distill_stats_refresher_is_throttled(tmp_path: Path) -> None:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from collections import Counter
 from datetime import UTC, datetime
 from pathlib import Path
@@ -137,6 +138,28 @@ def _empty_stats() -> dict[str, Any]:
         "sampling": {"temperature": {}, "top_p": {}},
         "timeline_daily": {},
     }
+
+
+def resolve_repo_root(*, out_path: Path | None = None) -> Path:
+    """stats.json 出力先を決めるリポジトリルートを返す。"""
+    env = os.environ.get("JORYU_REPO_ROOT", "").strip()
+    if env:
+        return Path(env).resolve()
+    if out_path is not None:
+        resolved = out_path.resolve()
+        if len(resolved.parts) >= 3 and resolved.parent.name == "distilled":
+            return resolved.parent.parent.parent
+    return Path.cwd().resolve()
+
+
+def resolve_stats_output_path(
+    *,
+    out_path: Path | None = None,
+    repo_root: Path | None = None,
+) -> Path:
+    """dashboard/public/stats.json の絶対パスを返す。"""
+    root = repo_root or resolve_repo_root(out_path=out_path)
+    return root / DEFAULT_STATS_OUTPUT
 
 
 def write_stats_json(

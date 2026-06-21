@@ -81,6 +81,8 @@ def build_docker_delegate_command(repo_root: Path, spec: DistillJobSpec) -> list
     cfg = load_config(config_path)
     data_dir = repo_root / "data"
     data_dir.mkdir(parents=True, exist_ok=True)
+    dashboard_public = repo_root / "dashboard" / "public"
+    dashboard_public.mkdir(parents=True, exist_ok=True)
     src_dir = (repo_root / "src").resolve()
 
     if should_use_api_docker_delegate():
@@ -105,6 +107,7 @@ def build_docker_delegate_command(repo_root: Path, spec: DistillJobSpec) -> list
         config_rel=spec.config.replace("\\", "/"),
         src_dir=_map(src_dir),
         data_dir=_map(data_dir),
+        dashboard_public_dir=_map(dashboard_public),
         hf_cache=hf_cache,
         styles_path=_map(styles_path) if styles_path is not None else None,
         styles_rel=styles_rel,
@@ -170,7 +173,7 @@ class JobRunner:
         self._run_command = run_command or (
             lambda cmd, _cwd, log_path: run_subprocess_logged(cmd, cwd=repo_root, log_path=log_path)
         )
-        self._refresh_stats = refresh_stats or _default_refresh_stats
+        self._refresh_stats = refresh_stats or make_refresh_stats(repo_root)
         self._command_builder = command_builder or build_job_command
         self._lock = threading.Lock()
         self._queue: list[str] = []
@@ -229,6 +232,20 @@ class JobRunner:
         with self._lock:
             self._running_id = None
         self._maybe_start_next()
+
+
+def make_refresh_stats(repo_root: Path) -> Callable[[DistillJobSpec], int]:
+    """ジョブ成功後に repo_root 基準で stats.json を更新する。"""
+
+    def refresh_stats(spec: DistillJobSpec) -> int:
+        from joryu.cli.stats import main as stats_main
+        from joryu.stats import resolve_stats_output_path
+
+        cfg = repo_root / spec.config
+        out = resolve_stats_output_path(repo_root=repo_root)
+        return stats_main(["--config", str(cfg), "--output", str(out)])
+
+    return refresh_stats
 
 
 def _default_refresh_stats(spec: DistillJobSpec) -> int:
