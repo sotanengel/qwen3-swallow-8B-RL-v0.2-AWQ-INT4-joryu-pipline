@@ -1,11 +1,18 @@
 """joryu-up: フロント (dashboard) とバックエンド (joryu) を docker compose で起動する。
 
+**既定は dashboard のみ起動する** — joryu コンテナは vLLM + CUDA で 20GB+ になるため、
+明示的に `--full` か `--backend-only` を渡したときだけビルドする。
+
 簡略コマンド:
-    uv run joryu-up                     # フルスタック (joryu + dashboard) を build して起動
+    uv run joryu-up                     # dashboard のみ (軽量、http://localhost:3000)
+    uv run joryu-up --full              # joryu + dashboard を両方 build して起動
+    uv run joryu-up --backend-only      # joryu コンテナのみ (蒸留 image を idle 待機)
     uv run joryu-up --detach            # バックグラウンド起動
-    uv run joryu-up --frontend-only     # dashboard のみ (= joryu-serve)
-    uv run joryu-up --backend-only      # joryu container のみ (蒸留 image を idle 待機)
     uv run joryu-up --refresh-stats     # 起動前に joryu-stats を回して dashboard 表示を最新化
+
+蒸留ジョブは `joryu-up --backend-only` 後に
+`docker compose run --rm joryu joryu-distill --no-docker --count 1` で投げる、
+あるいは Windows ホストから `uv run joryu-distill` (Docker 自動委譲) で実行する。
 """
 
 from __future__ import annotations
@@ -20,13 +27,18 @@ from joryu.compose import compose_up_command, run
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="joryu-up",
-        description="フロント + バックエンドを docker compose で起動する。",
+        description="フロント + バックエンドを docker compose で起動する (既定: dashboard のみ)。",
     )
     g = p.add_mutually_exclusive_group()
     g.add_argument(
+        "--full",
+        action="store_true",
+        help="joryu + dashboard を両方起動 (vLLM image は ~20GB 必要)",
+    )
+    g.add_argument(
         "--frontend-only",
         action="store_true",
-        help="dashboard のみ起動 (joryu-serve と等価)",
+        help="dashboard のみ (既定と同じ、明示用)",
     )
     g.add_argument(
         "--backend-only",
@@ -44,11 +56,12 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _services(args: argparse.Namespace) -> list[str] | None:
-    if args.frontend_only:
-        return ["dashboard"]
+    if args.full:
+        return None  # 全サービス
     if args.backend_only:
         return ["joryu"]
-    return None  # 全サービス
+    # 既定 + --frontend-only はいずれも dashboard のみ
+    return ["dashboard"]
 
 
 def main(argv: list[str] | None = None) -> int:
