@@ -63,12 +63,13 @@ uv run joryu-up --force          # ディスク容量 preflight をスキップ
 uv run joryu-up --frontend-only  # dashboard のみ (= joryu-serve と等価)
 uv run joryu-up --backend-only   # joryu コンテナだけ
 uv run joryu-up --no-build       # build をスキップして up のみ
+uv run joryu-up --build          # up 対象を強制 rebuild
 uv run joryu-up --refresh-stats  # 起動前に joryu-stats を回して描画を最新化
 uv run joryu-down                # 停止 (volume は残す)
 uv run joryu-down --volumes      # HF キャッシュ含めて完全に削除
 ```
 
-`joryu-up` は git 作業ツリーの差分から rebuild 対象を自動判定する。dashboard を起動した場合は http://localhost:3000 が ready になったらブラウザを自動で開く (`--no-open` で無効化)。joryu ビルド時はホスト空き **25 GB** 以上を要求し、不足時は中止する (`--force` で続行可)。
+`joryu-up` は git 作業ツリーの差分と、前回起動時の HEAD からのコミット差分（`git pull` 後など）から rebuild 対象を自動判定する。初回起動時は up 対象をすべて build する。dashboard を起動した場合は http://localhost:3000 が ready になったらブラウザを自動で開く (`--no-open` で無効化)。joryu ビルド時はホスト空き **25 GB** 以上を要求し、不足時は中止する (`--force` で続行可)。
 
 ## ジョブ API とダッシュボード
 

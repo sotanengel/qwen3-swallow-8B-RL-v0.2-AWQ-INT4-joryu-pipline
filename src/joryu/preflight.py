@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import argparse
+import json
 import shutil
 import subprocess
 from collections.abc import Callable
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol
 
 DISK_REQUIRED_GB: dict[str, float] = {
     "dashboard": 5.0,
@@ -40,6 +41,7 @@ _DASHBOARD_RUNTIME_PATHS = frozenset(
 
 _SERVICE_ORDER = ("dashboard", "api", "joryu")
 _DEFAULT_UP = ("dashboard", "api")
+_UP_STATE_REL = Path("data") / ".joryu" / "up-state.json"
 
 
 class PreflightError(Exception):
@@ -85,28 +87,98 @@ def _git_lines(repo_root: Path, args: list[str], git_runner: _GitRunner) -> list
     return [line for line in result.stdout.splitlines() if line.strip()]
 
 
+def up_state_path(repo_root: Path) -> Path:
+    return repo_root / _UP_STATE_REL
+
+
+def load_up_state(repo_root: Path) -> dict[str, Any] | None:
+    path = up_state_path(repo_root)
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return None
+    if isinstance(data, dict) and isinstance(data.get("git_head"), str):
+        return data
+    return None
+
+
+def save_up_state(repo_root: Path, git_head: str) -> None:
+    path = up_state_path(repo_root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps({"git_head": git_head}, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+
+def git_head_at(repo_root: Path, *, git_runner: _GitRunner | None = None) -> str | None:
+    runner = git_runner or subprocess.run
+    lines = _git_lines(repo_root, ["git", "rev-parse", "HEAD"], runner)
+    return lines[0] if lines else None
+
+
+def _paths_from_working_tree(repo_root: Path, git_runner: _GitRunner) -> set[str]:
+    paths: set[str] = set()
+    paths.update(_git_lines(repo_root, ["git", "diff", "--name-only", "HEAD"], git_runner))
+    paths.update(_git_lines(repo_root, ["git", "diff", "--name-only", "--cached"], git_runner))
+    paths.update(
+        _git_lines(
+            repo_root,
+            ["git", "ls-files", "--others", "--exclude-standard"],
+            git_runner,
+        )
+    )
+    return paths
+
+
+def _paths_since_last_up(
+    repo_root: Path,
+    *,
+    git_runner: _GitRunner,
+    state: dict[str, Any] | None,
+    head: str | None,
+) -> set[str]:
+    if not state or not head:
+        return set()
+    last_head = state["git_head"]
+    if last_head == head:
+        return set()
+    return set(
+        _git_lines(
+            repo_root,
+            ["git", "diff", "--name-only", f"{last_head}..{head}"],
+            git_runner,
+        )
+    )
+
+
 def changed_services_from_git(
     repo_root: Path,
     *,
     git_runner: _GitRunner | None = None,
 ) -> set[str]:
-    """git 作業ツリー差分から rebuild が必要なサービスを返す。"""
+    """rebuild が必要なサービスを返す。
+
+    未コミットの作業ツリー差分に加え、前回 ``joryu-up`` 成功時の HEAD から
+    現在の HEAD までに入ったコミット（``git pull`` 後など）も対象にする。
+    """
     runner = git_runner or subprocess.run
-    paths: set[str] = set()
-    paths.update(_git_lines(repo_root, ["git", "diff", "--name-only", "HEAD"], runner))
-    paths.update(_git_lines(repo_root, ["git", "diff", "--name-only", "--cached"], runner))
-    paths.update(
-        _git_lines(
-            repo_root,
-            ["git", "ls-files", "--others", "--exclude-standard"],
-            runner,
-        )
-    )
+    head = git_head_at(repo_root, git_runner=runner)
+    state = load_up_state(repo_root)
+    paths = _paths_from_working_tree(repo_root, runner)
+    paths.update(_paths_since_last_up(repo_root, git_runner=runner, state=state, head=head))
 
     services: set[str] = set()
     for path in paths:
         services.update(path_affects_service(path))
     return services
+
+
+def is_first_up_run(repo_root: Path) -> bool:
+    """前回成功した joryu-up の記録が無い。"""
+    return load_up_state(repo_root) is None
 
 
 def resolve_up_services(args: argparse.Namespace, changed: set[str]) -> list[str]:
@@ -130,10 +202,16 @@ def services_to_build(
     changed: set[str],
     *,
     no_build: bool,
+    force_build: bool = False,
+    first_run: bool = False,
 ) -> list[str]:
-    """`up` 対象のうち git 差分があるサービスだけ build する。"""
+    """`up` 対象のうち rebuild が必要なサービスだけ build する。"""
     if no_build:
         return []
+    if force_build:
+        return list(up_services)
+    if first_run:
+        return list(up_services)
     return [svc for svc in up_services if svc in changed]
 
 

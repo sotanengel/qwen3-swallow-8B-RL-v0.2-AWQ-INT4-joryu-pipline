@@ -49,10 +49,49 @@ def test_changed_services_from_git_merges_sources() -> None:
             return _GitResult(stdout="dashboard/package.json\n")
         if args[:2] == ["git", "ls-files"]:
             return _GitResult(stdout="dashboard/public/.gitkeep\n")
+        if args[:2] == ["git", "rev-parse"]:
+            return _GitResult(stdout="newhead\n")
         return _GitResult(stdout="")
 
     changed = changed_services_from_git(Path("."), git_runner=_fake_git)
     assert changed == {"joryu", "dashboard"}
+
+
+def test_changed_services_includes_commits_since_last_up(tmp_path: Path) -> None:
+    state_dir = tmp_path / "data" / ".joryu"
+    state_dir.mkdir(parents=True)
+    (state_dir / "up-state.json").write_text(
+        '{"git_head": "oldhead"}\n',
+        encoding="utf-8",
+    )
+
+    def _fake_git(args: list[str], **_kwargs: object) -> _GitResult:
+        if args[:2] == ["git", "rev-parse"]:
+            return _GitResult(stdout="newhead\n")
+        if args[:3] == ["git", "diff", "--name-only"] and args[-1] == "oldhead..newhead":
+            return _GitResult(stdout="Dockerfile.api\n")
+        return _GitResult(stdout="")
+
+    changed = changed_services_from_git(tmp_path, git_runner=_fake_git)
+    assert changed == {"api"}
+
+
+def test_services_to_build_first_run_builds_all_up_targets() -> None:
+    assert services_to_build(
+        ["dashboard", "api"],
+        set(),
+        no_build=False,
+        first_run=True,
+    ) == ["dashboard", "api"]
+
+
+def test_services_to_build_force_build() -> None:
+    assert services_to_build(
+        ["dashboard", "api"],
+        set(),
+        no_build=False,
+        force_build=True,
+    ) == ["dashboard", "api"]
 
 
 def test_resolve_up_services_default_no_changes() -> None:
