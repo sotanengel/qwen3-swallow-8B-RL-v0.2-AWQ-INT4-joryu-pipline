@@ -130,7 +130,7 @@ def test_up_build_flag_forces_rebuild(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: set())
     rc = cli_up.main(["--build"])
     assert rc == 0
-    assert calls[0] == ["docker", "compose", "build", "dashboard", "api"]
+    assert calls[0] == ["docker", "compose", "build", "dashboard", "api", "joryu"]
     assert calls[1] == ["docker", "compose", "up", "dashboard", "api"]
 
 
@@ -176,7 +176,8 @@ def test_up_force_bypasses_disk_check(monkeypatch: pytest.MonkeyPatch) -> None:
     rc = cli_up.main(["--force"])
     assert rc == 0
     assert recorded == [True]
-    assert calls[0] == ["docker", "compose", "up", "dashboard", "api"]
+    assert calls[0] == ["docker", "compose", "build", "joryu"]
+    assert calls[1] == ["docker", "compose", "up", "dashboard", "api"]
 
 
 def test_up_detach_opens_browser_after_dashboard_up(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -28,7 +28,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         </header>
         <main className="main">{children}</main>
         <footer className="footer">
-          <span>stats.json を読み込み中。joryu-stats を実行して更新できます。</span>
+          <span>stats.json / responses.jsonl を 3 秒ごとに再読み込みします。</span>
         </footer>
       </body>
     </html>

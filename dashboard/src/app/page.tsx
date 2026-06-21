@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-
-import { EMPTY_STATS, JoryuStats, loadStats, sortByCount } from "@/lib/stats";
+import { useIntervalPoll } from "@/lib/useIntervalPoll";
+import { EMPTY_STATS, JoryuStats, loadStats, sortByCount, statsDataChanged } from "@/lib/stats";
 
 function StatCard({ label, value }: { label: string; value: string | number }) {
   return (
@@ -42,11 +41,9 @@ function HistogramTable({
 }
 
 export default function HomePage() {
-  const [stats, setStats] = useState<JoryuStats>(EMPTY_STATS);
-
-  useEffect(() => {
-    loadStats().then(setStats);
-  }, []);
+  const stats = useIntervalPoll(loadStats, EMPTY_STATS, {
+    shouldUpdate: statsDataChanged,
+  });
 
   const modeRows = sortByCount(stats.modes);
   const modelRows = sortByCount(stats.models);

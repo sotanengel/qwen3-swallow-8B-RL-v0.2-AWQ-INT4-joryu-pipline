@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import sys
 import time
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -13,12 +14,15 @@ from joryu.config import Config
 from joryu.progress import load_done_keys, run_key_from_parts
 from joryu.progress_reporter import DistillProgressReporter
 from joryu.prompt_bank import EffectiveSampling, PromptRow, load_prompt_bank
+from joryu.stats import resolve_stats_output_path, write_stats_json
 from joryu.styles import StylePreset, load_styles, resolve_style_ids
 from joryu.variants import DistillVariant, expand_variants
 from joryu.vllm_client import SupportsChat, VllmClient
 from joryu.writer import JsonlAppendWriter
 
 logger = logging.getLogger(__name__)
+
+STATS_REFRESH_INTERVAL_SEC = 10.0
 
 
 def _build_record(
@@ -57,6 +61,39 @@ def variant_run_key(variant: DistillVariant) -> str:
     )
 
 
+def default_stats_refresher(out_path: Path) -> None:
+    """dashboard/public/stats.json を蒸留 JSONL から更新する。"""
+    dst = resolve_stats_output_path(out_path=out_path)
+    if dst is None:
+        return
+    write_stats_json(out_path, dst)
+
+
+class _StatsRefreshThrottler:
+    """蒸留中の stats.json 更新を間引く。"""
+
+    def __init__(
+        self,
+        out_path: Path,
+        refresher: Callable[[Path], None],
+        *,
+        interval_sec: float = STATS_REFRESH_INTERVAL_SEC,
+        time_fn: Callable[[], float] | None = None,
+    ) -> None:
+        self._out_path = out_path
+        self._refresher = refresher
+        self._interval = interval_sec
+        self._time_fn = time_fn or time.time
+        self._last_refresh = -interval_sec
+
+    def maybe_refresh(self, *, force: bool = False) -> None:
+        now = self._time_fn()
+        if not force and now - self._last_refresh < self._interval:
+            return
+        self._refresher(self._out_path)
+        self._last_refresh = now
+
+
 def run_distill(
     config: Config,
     *,
@@ -69,6 +106,7 @@ def run_distill(
     temperatures: list[float] | None = None,
     top_ps: list[float] | None = None,
     _print: Any = None,
+    stats_refresher: Callable[[Path], None] | None = None,
 ) -> int:
     """蒸留を実行し、新規に書き込んだレコード数を返す。"""
     log = _print if _print is not None else print
@@ -115,6 +153,9 @@ def run_distill(
 
     fingerprint = config.fingerprint()
     n = 0
+    stats_throttler = (
+        _StatsRefreshThrottler(out_p, stats_refresher) if stats_refresher is not None else None
+    )
     with JsonlAppendWriter(out_p) as writer:
         for i, variant in enumerate(work, 1):
             if deadline is not None and time.time() >= deadline:
@@ -160,6 +201,11 @@ def run_distill(
             n += 1
             reporter.record_success(row.prompt, final_answer, style_id=eff.style_id)
             reporter.update(i)
+            if stats_throttler is not None:
+                stats_throttler.maybe_refresh()
+
+    if stats_throttler is not None and n > 0:
+        stats_throttler.maybe_refresh(force=True)
 
     reporter.log_finish(n, out_path=out_p)
     return n

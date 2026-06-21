@@ -12,6 +12,7 @@ from joryu.preflight import (
     PreflightError,
     changed_services_from_git,
     check_disk_space,
+    ensure_dashboard_data_paths,
     path_affects_service,
     required_disk_gb,
     resolve_up_services,
@@ -23,6 +24,10 @@ from joryu.preflight import (
     ("path", "expected"),
     [
         ("src/joryu/cli/up.py", {"joryu"}),
+        ("src/joryu/distill.py", {"api", "joryu"}),
+        ("src/joryu/docker_delegate.py", {"api", "joryu"}),
+        ("src/joryu/stats.py", {"api", "joryu"}),
+        ("docker-compose.yml", {"api", "joryu"}),
         ("src/joryu/jobs/models.py", {"api"}),
         ("src/joryu/api/app.py", {"api"}),
         ("Dockerfile.api", {"api"}),
@@ -91,7 +96,7 @@ def test_services_to_build_force_build() -> None:
         set(),
         no_build=False,
         force_build=True,
-    ) == ["dashboard", "api"]
+    ) == ["dashboard", "api", "joryu"]
 
 
 def test_resolve_up_services_default_no_changes() -> None:
@@ -119,6 +124,16 @@ def test_services_to_build_intersection() -> None:
     assert services_to_build(["dashboard", "joryu"], {"joryu"}, no_build=False) == ["joryu"]
     assert services_to_build(["dashboard"], {"joryu"}, no_build=False) == []
     assert services_to_build(["dashboard"], {"dashboard"}, no_build=True) == []
+    assert services_to_build(["dashboard", "api"], {"joryu"}, no_build=False) == ["joryu"]
+    assert services_to_build(["dashboard", "api"], {"dashboard", "joryu"}, no_build=False) == [
+        "dashboard",
+        "joryu",
+    ]
+    assert services_to_build(["dashboard", "api"], set(), no_build=False, force_build=True) == [
+        "dashboard",
+        "api",
+        "joryu",
+    ]
 
 
 def test_required_disk_gb_sums_thresholds() -> None:
@@ -148,6 +163,24 @@ def test_check_disk_space_skipped_with_force() -> None:
         force=True,
         disk_usage_fn=lambda _p: (100, 100, free_bytes),
     )
+
+
+def test_ensure_dashboard_data_paths_creates_jsonl_and_symlink(tmp_path: Path) -> None:
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text(
+        "distill:\n  out_dir: data/distilled\n  out_file: responses.jsonl\n",
+        encoding="utf-8",
+    )
+    ensure_dashboard_data_paths(tmp_path)
+    jsonl_path = tmp_path / "data" / "distilled" / "responses.jsonl"
+    public_jsonl = tmp_path / "dashboard" / "public" / "responses.jsonl"
+    assert jsonl_path.is_file()
+    if public_jsonl.is_symlink():
+        assert public_jsonl.resolve() == jsonl_path.resolve()
+    elif not public_jsonl.exists():
+        import platform
+
+        assert platform.system() == "Windows"
 
 
 class _GitResult:

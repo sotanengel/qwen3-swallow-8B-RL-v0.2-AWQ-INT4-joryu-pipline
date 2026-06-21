@@ -8,7 +8,7 @@ import sys
 import time
 
 from joryu.config import load_config
-from joryu.distill import load_style_presets_from_config, run_distill
+from joryu.distill import default_stats_refresher, load_style_presets_from_config, run_distill
 from joryu.docker_delegate import DEFAULT_IMAGE, run_in_docker, should_use_docker
 from joryu.variants import parse_comma_list, parse_float_list
 from joryu.vllm_client import SupportsChat
@@ -159,6 +159,7 @@ def main(argv: list[str] | None = None, *, _client: SupportsChat | None = None) 
         style_presets=style_presets or None,
         temperatures=temperatures,
         top_ps=top_ps,
+        stats_refresher=default_stats_refresher,
     )
     return 0
 

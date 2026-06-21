@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { parseJsonl, searchRecords } from "./jsonl";
+import { jsonlDataChanged, parseJsonl, searchRecords } from "./jsonl";
 
 const SAMPLE = [
   JSON.stringify({ prompt: "桜の特徴", answer: "美しい花", mode: "thinking", category: "国語" }),
@@ -54,5 +54,18 @@ describe("searchRecords", () => {
 
   it("empty query returns all", () => {
     expect(searchRecords(recs, { query: "" })).toHaveLength(3);
+  });
+});
+
+describe("jsonlDataChanged", () => {
+  it("detects length changes", () => {
+    const prev = parseJsonl(SAMPLE);
+    const next = [...prev, { prompt: "new", answer: "x" }];
+    expect(jsonlDataChanged(prev, next)).toBe(true);
+  });
+
+  it("returns false for identical data", () => {
+    const rows = parseJsonl(SAMPLE);
+    expect(jsonlDataChanged(rows, rows)).toBe(false);
   });
 });

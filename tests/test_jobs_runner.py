@@ -11,6 +11,7 @@ from joryu.jobs.models import DistillJobSpec, JobRecord, JobStatus
 from joryu.jobs.runner import (
     JobRunner,
     build_job_command,
+    make_refresh_stats,
     resolve_docker_bin,
     should_use_api_docker_delegate,
     should_use_compose_run,
@@ -132,3 +133,33 @@ def test_runner_serializes_two_jobs(tmp_path: Path) -> None:
     assert set(finished) == {"1", "2"}
     assert store.load(first.id).status == JobStatus.SUCCEEDED
     assert store.load(second.id).status == JobStatus.SUCCEEDED
+
+
+def test_make_refresh_stats_uses_repo_root_paths(tmp_path: Path, monkeypatch) -> None:
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text(
+        "distill:\n  out_dir: data/distilled\n  out_file: responses.jsonl\n",
+        encoding="utf-8",
+    )
+    out_dir = tmp_path / "dashboard" / "public"
+    out_dir.mkdir(parents=True)
+    jsonl = tmp_path / "data" / "distilled" / "responses.jsonl"
+    jsonl.parent.mkdir(parents=True)
+    jsonl.write_text('{"prompt":"P","answer":"A"}\n', encoding="utf-8")
+    calls: list[list[str]] = []
+
+    def fake_stats_main(argv: list[str] | None = None) -> int:
+        calls.append(list(argv or []))
+        return 0
+
+    monkeypatch.setattr("joryu.cli.stats.main", fake_stats_main)
+    spec = DistillJobSpec(config="config.yaml")
+    make_refresh_stats(tmp_path)(spec)
+    assert calls == [
+        [
+            "--config",
+            str(cfg),
+            "--output",
+            str(out_dir / "stats.json"),
+        ]
+    ]

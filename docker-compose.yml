@@ -17,6 +17,7 @@ services:
     volumes:
       - ./data:/app/data
       - ./exports:/app/exports
+      - ./dashboard/public:/app/dashboard/public
       - ./config.yaml:/app/config.yaml:ro
       - ./styles.yaml:/app/styles.yaml:ro
       - hf-cache:/root/.cache/huggingface
@@ -39,9 +40,10 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      # 蒸留 JSONL と stats.json をホストの dashboard/public/ に直接マウント。
-      # ホスト側で `joryu-stats` を実行すると自動反映される。
-      - ./dashboard/public:/app/public:ro
+      # public は rw にして responses.jsonl の bind mount マウントポイントを作成可能にする。
+      # stats.json / responses.jsonl はホスト側 (joryu-stats / 蒸留) から更新される。
+      - ./dashboard/public:/app/public
+      - ./data/distilled/responses.jsonl:/app/public/responses.jsonl:ro
     restart: "on-failure:3"
 
   api:

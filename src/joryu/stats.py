@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 import json
+import os
 from collections import Counter
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
+DEFAULT_STATS_OUTPUT = "dashboard/public/stats.json"
 
 # 文字数ベースのビン (token 換算はモデル依存なので char で近似する)。
 _LENGTH_BIN_EDGES: tuple[int, ...] = (0, 50, 100, 200, 500, 1000, 2000, 5000)
@@ -134,3 +138,46 @@ def _empty_stats() -> dict[str, Any]:
         "sampling": {"temperature": {}, "top_p": {}},
         "timeline_daily": {},
     }
+
+
+def resolve_repo_root(*, out_path: Path | None = None) -> Path | None:
+    """stats.json 出力先を決めるリポジトリルートを返す。特定できなければ None。"""
+    env = os.environ.get("JORYU_REPO_ROOT", "").strip()
+    if env:
+        return Path(env).resolve()
+    if out_path is not None:
+        resolved = out_path.resolve()
+        if len(resolved.parts) >= 3 and resolved.parent.name == "distilled":
+            return resolved.parent.parent.parent
+    return None
+
+
+def resolve_stats_output_path(
+    *,
+    out_path: Path | None = None,
+    repo_root: Path | None = None,
+) -> Path | None:
+    """dashboard/public/stats.json の絶対パスを返す。特定できなければ None。"""
+    root = repo_root or resolve_repo_root(out_path=out_path)
+    if root is None:
+        return None
+    return root / DEFAULT_STATS_OUTPUT
+
+
+def write_stats_json(
+    src: str | Path,
+    dst: str | Path,
+    *,
+    generated_at: datetime | None = None,
+) -> dict[str, Any]:
+    """JSONL から統計を計算し dashboard 用 JSON を書き出す。"""
+    src_path = Path(src)
+    dst_path = Path(dst)
+    stats = compute_stats(src_path)
+    stats["_meta"] = {
+        "source_path": str(src_path),
+        "generated_at": (generated_at or datetime.now(UTC)).isoformat(),
+    }
+    dst_path.parent.mkdir(parents=True, exist_ok=True)
+    dst_path.write_text(json.dumps(stats, ensure_ascii=False, indent=2), encoding="utf-8")
+    return stats

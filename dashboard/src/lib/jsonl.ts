@@ -69,3 +69,19 @@ export async function loadJsonl(url = "/responses.jsonl"): Promise<DistilledReco
     return [];
   }
 }
+
+/** ポーリング時に再描画が必要か (件数または末尾レコードで判定)。 */
+export function jsonlDataChanged(
+  prev: DistilledRecord[],
+  next: DistilledRecord[],
+): boolean {
+  if (prev.length !== next.length) return true;
+  if (prev.length === 0) return false;
+  const prevLast = prev[prev.length - 1];
+  const nextLast = next[next.length - 1];
+  return (
+    prevLast.created_at !== nextLast.created_at ||
+    prevLast.prompt !== nextLast.prompt ||
+    prevLast.answer !== nextLast.answer
+  );
+}

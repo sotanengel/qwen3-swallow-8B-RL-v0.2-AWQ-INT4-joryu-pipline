@@ -51,6 +51,7 @@ def build_docker_command(
     src_dir: Path,
     data_dir: Path,
     hf_cache: Path | str,
+    dashboard_public_dir: Path | None = None,
     styles_path: Path | None = None,
     styles_rel: str | None = None,
     allocate_tty: bool = False,
@@ -78,6 +79,9 @@ def build_docker_command(
             f"{hf_cache}:/root/.cache/huggingface",
         ]
     )
+    if dashboard_public_dir is not None:
+        dashboard_public_dir.mkdir(parents=True, exist_ok=True)
+        cmd.extend(["-v", f"{dashboard_public_dir}:/app/dashboard/public"])
     if styles_path is not None and styles_rel:
         rel = styles_rel.replace("\\", "/")
         cmd.extend(["-v", f"{styles_path}:/app/{rel}:ro"])
@@ -87,6 +91,8 @@ def build_docker_command(
             "HF_HOME=/root/.cache/huggingface",
             "-e",
             "PYTHONPATH=/app/src",
+            "-e",
+            "JORYU_REPO_ROOT=/app",
             "-e",
             "VLLM_USE_FLASHINFER_SAMPLER=0",
             "-e",
@@ -117,6 +123,8 @@ def run_in_docker(
         return 2
     data_dir = cwd / "data"
     data_dir.mkdir(parents=True, exist_ok=True)
+    dashboard_public = (cwd / "dashboard" / "public").resolve()
+    dashboard_public.mkdir(parents=True, exist_ok=True)
     hf_cache = hf_cache_dir()
     hf_cache.mkdir(parents=True, exist_ok=True)
     src_dir = (cwd / "src").resolve()
@@ -145,6 +153,7 @@ def run_in_docker(
         config_rel=config,
         src_dir=src_dir,
         data_dir=data_dir,
+        dashboard_public_dir=dashboard_public,
         hf_cache=hf_cache,
         styles_path=styles_path,
         styles_rel=styles_rel,
