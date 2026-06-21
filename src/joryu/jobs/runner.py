@@ -11,6 +11,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
+from joryu.docker_paths import map_path_for_docker, resolve_host_repo_root
 from joryu.jobs.models import DistillJobSpec, JobRecord, JobStatus
 from joryu.jobs.store import JobStore
 
@@ -42,12 +43,15 @@ def resolve_docker_bin() -> str:
 
 
 def build_compose_run_command(repo_root: Path, spec: DistillJobSpec) -> list[str]:
-    compose_file = repo_root / "docker-compose.yml"
+    host_root = resolve_host_repo_root(repo_root)
+    compose_file = host_root / "docker-compose.yml"
     return [
         resolve_docker_bin(),
         "compose",
         "-f",
         str(compose_file),
+        "--project-directory",
+        str(host_root),
         "run",
         "--rm",
         "joryu",
@@ -62,6 +66,11 @@ def build_compose_run_command(repo_root: Path, spec: DistillJobSpec) -> list[str
 def build_docker_delegate_command(repo_root: Path, spec: DistillJobSpec) -> list[str]:
     from joryu.config import load_config
     from joryu.docker_delegate import DEFAULT_IMAGE, build_docker_command, hf_cache_dir
+
+    host_root = resolve_host_repo_root(repo_root)
+
+    def _map(path: Path) -> Path:
+        return map_path_for_docker(path, repo_root=repo_root, host_repo_root=host_root)
 
     config_path = (repo_root / spec.config).resolve()
     cfg = load_config(config_path)
@@ -81,13 +90,13 @@ def build_docker_delegate_command(repo_root: Path, spec: DistillJobSpec) -> list
 
     return build_docker_command(
         image=DEFAULT_IMAGE,
-        cwd=repo_root,
-        config_path=config_path,
+        cwd=host_root,
+        config_path=_map(config_path),
         config_rel=spec.config.replace("\\", "/"),
-        src_dir=src_dir,
-        data_dir=data_dir,
-        hf_cache=hf_cache,
-        styles_path=styles_path,
+        src_dir=_map(src_dir),
+        data_dir=_map(data_dir),
+        hf_cache=_map(hf_cache),
+        styles_path=_map(styles_path) if styles_path is not None else None,
         styles_rel=styles_rel,
         allocate_tty=False,
         extra_args=spec.to_distill_argv(),
@@ -117,7 +126,7 @@ def run_subprocess_logged(
         log_fh.flush()
         proc = runner(
             cmd,
-            cwd=cwd,
+            cwd=resolve_host_repo_root(cwd),
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,

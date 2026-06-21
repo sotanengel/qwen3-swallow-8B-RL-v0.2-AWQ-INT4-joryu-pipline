@@ -20,10 +20,21 @@ from joryu.jobs.store import JobStore
 def test_build_job_command_compose(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("JORYU_USE_COMPOSE_RUN", "1")
     monkeypatch.setattr("joryu.jobs.runner.resolve_docker_bin", lambda: "/usr/bin/docker")
+    host_root = tmp_path.resolve()
+    monkeypatch.setattr("joryu.jobs.runner.resolve_host_repo_root", lambda _root: host_root)
     (tmp_path / "docker-compose.yml").write_text("services: {}\n", encoding="utf-8")
     spec = DistillJobSpec(count=3, mode="nothinking")
     cmd = build_job_command(tmp_path, spec)
-    assert cmd[0:4] == ["/usr/bin/docker", "compose", "-f", str(tmp_path / "docker-compose.yml")]
+    assert cmd[0:8] == [
+        "/usr/bin/docker",
+        "compose",
+        "-f",
+        str(host_root / "docker-compose.yml"),
+        "--project-directory",
+        str(host_root),
+        "run",
+        "--rm",
+    ]
     assert "joryu-distill" in cmd
     assert "--count" in cmd and "3" in cmd
     assert "--mode" in cmd and "nothinking" in cmd

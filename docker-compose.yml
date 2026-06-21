@@ -59,6 +59,8 @@ services:
     environment:
       - JORYU_REPO_ROOT=/workspace
       - JORYU_USE_COMPOSE_RUN=1
+      # DooD: api コンテナ内 /workspace をホストパスへ解決できない場合の手動指定
+      - JORYU_HOST_REPO_ROOT=${JORYU_HOST_REPO_ROOT:-}
     restart: "on-failure:3"
 
 volumes:
