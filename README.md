@@ -48,6 +48,18 @@ uv run joryu-export --bundle-tar
 uv run joryu-serve
 ```
 
+## フロント + バックエンドの起動 / 停止
+
+```powershell
+uv run joryu-up                  # joryu + dashboard を build して起動
+uv run joryu-up --detach         # バックグラウンド起動
+uv run joryu-up --frontend-only  # dashboard だけ (= joryu-serve)
+uv run joryu-up --backend-only   # joryu コンテナだけ
+uv run joryu-up --refresh-stats  # 起動前に joryu-stats を回して描画を最新化
+uv run joryu-down                # 停止 (volume は残す)
+uv run joryu-down --volumes      # HF キャッシュ含めて完全に削除
+```
+
 ## `joryu-distill` CLI 引数
 
 | 引数 | 例 | 説明 |
