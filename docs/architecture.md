@@ -34,8 +34,18 @@ styles.yaml ──┤
    exports/<ts>/             dashboard/public/stats.json
    responses.jsonl.zst              │
                                     ▼
-                          Next.js (recharts, 検索)
+                          Next.js (recharts, 検索, /jobs)
                           http://localhost:3000
+                                    ▲
+                                    │ POST/GET /api/jobs
+                                    │
+                          joryu-api (FastAPI) :8000
+                                    │
+                                    ▼
+                          jobs/runner → docker compose run joryu
+                                    │
+                                    ▼
+                          data/jobs/*.json (状態・ログ)
 ```
 
 ## レイヤーごとの責務
@@ -53,6 +63,8 @@ styles.yaml ──┤
 | 配布 | JSONL | `.zst` / `meta.json` / `SHA256SUMS` / `.tar` | export.py |
 | 統計 | JSONL | dashboard 用 JSON | stats.py |
 | Docker 委譲 | Windows ネイティブ呼び出し | `docker run` 実行 | docker_delegate.py |
+| ジョブ API | HTTP POST ジョブ spec | queued/running 状態 + ログ | jobs/ + api/ |
+| ジョブ実行 | spec | GPU 蒸留 subprocess | jobs/runner.py |
 
 ## CLI 構成
 
@@ -61,8 +73,9 @@ styles.yaml ──┤
 | `joryu-distill` | 蒸留ループ実行 (Windows なら auto Docker) |
 | `joryu-export` | zstd 圧縮 + meta + SHA256 + tar |
 | `joryu-stats` | dashboard JSON 生成 |
-| `joryu-up` | 既定: `docker compose up dashboard --build` |
-| `joryu-up --full` | `docker compose up --build` (joryu + dashboard) |
+| `joryu-api` | 蒸留ジョブ REST API (FastAPI, :8000) |
+| `joryu-up` | 既定: `docker compose up dashboard api --build` |
+| `joryu-up --full` | `docker compose up --build` (joryu + dashboard + api) |
 | `joryu-serve` | `joryu-up --frontend-only` の互換エイリアス |
 
 ## 再現性キー

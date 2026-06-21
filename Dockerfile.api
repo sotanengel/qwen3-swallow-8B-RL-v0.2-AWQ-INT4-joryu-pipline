@@ -1,0 +1,26 @@
+# joryu API コンテナ。vLLM なし軽量イメージ。
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+
+WORKDIR /workspace
+
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    JORYU_REPO_ROOT=/workspace \
+    JORYU_USE_COMPOSE_RUN=1
+
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev --extra api --no-install-project
+
+COPY src ./src
+COPY config.yaml ./config.yaml
+COPY styles.yaml ./styles.yaml
+COPY docker-compose.yml ./docker-compose.yml
+RUN uv sync --frozen --no-dev --extra api
+
+ENV PATH="/workspace/.venv/bin:$PATH" \
+    PYTHONPATH=/workspace/src \
+    PYTHONUNBUFFERED=1
+
+EXPOSE 8000
+
+CMD ["joryu-api", "--host", "0.0.0.0", "--port", "8000", "--repo-root", "/workspace"]

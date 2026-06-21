@@ -1,11 +1,12 @@
 """joryu-up: フロント (dashboard) とバックエンド (joryu) を docker compose で起動する。
 
-**既定は dashboard のみ起動する** — joryu コンテナは vLLM + CUDA で 20GB+ になるため、
-明示的に `--full` か `--backend-only` を渡したときだけビルドする。
+**既定は dashboard + api を起動する** — `/jobs` から蒸留ジョブを投入できる。
+joryu コンテナ (vLLM + CUDA, 20GB+) は `--full` か `--backend-only` のときだけビルドする。
 
 簡略コマンド:
-    uv run joryu-up                     # dashboard のみ (軽量、http://localhost:3000)
-    uv run joryu-up --full              # joryu + dashboard を両方 build して起動
+    uv run joryu-up                     # dashboard + api (http://localhost:3000, :8000)
+    uv run joryu-up --frontend-only     # dashboard のみ
+    uv run joryu-up --full              # joryu + dashboard + api を build して起動
     uv run joryu-up --backend-only      # joryu コンテナのみ (蒸留 image を idle 待機)
     uv run joryu-up --detach            # バックグラウンド起動
     uv run joryu-up --refresh-stats     # 起動前に joryu-stats を回して dashboard 表示を最新化
@@ -27,7 +28,9 @@ from joryu.compose import compose_up_command, run
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="joryu-up",
-        description="フロント + バックエンドを docker compose で起動する (既定: dashboard のみ)。",
+        description=(
+            "フロント + API + バックエンドを docker compose で起動する (既定: dashboard + api)。"
+        ),
     )
     g = p.add_mutually_exclusive_group()
     g.add_argument(
@@ -57,11 +60,13 @@ def build_parser() -> argparse.ArgumentParser:
 
 def _services(args: argparse.Namespace) -> list[str] | None:
     if args.full:
-        return None  # 全サービス
+        return None  # 全サービス (joryu + dashboard + api)
     if args.backend_only:
         return ["joryu"]
-    # 既定 + --frontend-only はいずれも dashboard のみ
-    return ["dashboard"]
+    if args.frontend_only:
+        return ["dashboard"]
+    # 既定: dashboard + api (/jobs 画面から蒸留ジョブ投入可能)
+    return ["dashboard", "api"]
 
 
 def main(argv: list[str] | None = None) -> int:

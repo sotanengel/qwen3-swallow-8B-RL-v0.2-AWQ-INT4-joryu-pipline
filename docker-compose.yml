@@ -44,5 +44,22 @@ services:
       - ./dashboard/public:/app/public:ro
     restart: "on-failure:3"
 
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    image: joryu-api:latest
+    container_name: joryu-api
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/workspace
+      - /var/run/docker.sock:/var/run/docker.sock
+    working_dir: /workspace
+    environment:
+      - JORYU_REPO_ROOT=/workspace
+      - JORYU_USE_COMPOSE_RUN=1
+    restart: "on-failure:3"
+
 volumes:
   hf-cache:
