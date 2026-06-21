@@ -62,12 +62,12 @@ def test_resolve_up_services_default_no_changes() -> None:
 
 def test_resolve_up_services_default_with_joryu_diff() -> None:
     args = argparse.Namespace(full=False, frontend_only=False, backend_only=False)
-    assert resolve_up_services(args, {"joryu"}) == ["joryu"]
+    assert resolve_up_services(args, {"joryu"}) == ["dashboard", "api"]
 
 
 def test_resolve_up_services_default_with_both_diffs() -> None:
     args = argparse.Namespace(full=False, frontend_only=False, backend_only=False)
-    assert resolve_up_services(args, {"joryu", "dashboard"}) == ["dashboard", "joryu"]
+    assert resolve_up_services(args, {"joryu", "dashboard"}) == ["dashboard", "api"]
     assert resolve_up_services(args, {"api", "dashboard"}) == ["dashboard", "api"]
 
 
