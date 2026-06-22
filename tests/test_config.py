@@ -25,6 +25,7 @@ def test_default_config_round_trips_known_values() -> None:
     assert cfg.vllm.dtype == "bfloat16"
     assert cfg.vllm.quantization == "awq_marlin"
     assert cfg.distill.prompt_bank.endswith("training_prompts.jsonl")
+    assert cfg.distill.prompt_csv == ""
     assert cfg.export.compression == "zstd"
     assert cfg.export.level == 19
 

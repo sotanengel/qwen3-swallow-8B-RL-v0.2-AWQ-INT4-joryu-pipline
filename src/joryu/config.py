@@ -48,6 +48,8 @@ _DEFAULT_SYSTEM_PROMPT = (
 @dataclass
 class DistillConfig:
     prompt_bank: str = "data/prompts/training_prompts.jsonl"
+    prompt_csv: str = ""
+    prompt_bank_seed: str = ""
     out_dir: str = "data/distilled"
     out_file: str = "responses.jsonl"
     min_interval_sec: float = 0.5

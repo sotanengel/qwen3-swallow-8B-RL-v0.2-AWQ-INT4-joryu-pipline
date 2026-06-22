@@ -307,6 +307,101 @@ def check_disk_space(
     raise PreflightError(msg)
 
 
+_DEFAULT_PROMPT_CSV_REL = Path("../make-japan-ai-great-again/src/mjaga/data/training_prompts.csv")
+_DEFAULT_PROMPT_BANK_SEED_REL = Path("scripts/seeds/training_prompts.jsonl")
+_DEFAULT_PROMPT_BANK_SEED_ZST_REL = Path("scripts/seeds/training_prompts.jsonl.zst")
+
+
+def _resolve_existing_path(repo_root: Path, candidates: list[Path]) -> Path | None:
+    for raw in candidates:
+        path = raw if raw.is_absolute() else (repo_root / raw)
+        resolved = path.resolve()
+        if resolved.is_file():
+            return resolved
+    return None
+
+
+def resolve_prompt_bank_seed_path(repo_root: Path, cfg: Any) -> Path | None:
+    """prompt bank コピー元 JSONL のパスを解決する。見つからなければ None。"""
+    candidates: list[Path] = []
+    seed = getattr(cfg.distill, "prompt_bank_seed", "")
+    if isinstance(seed, str) and seed.strip():
+        candidates.append(Path(seed.strip()))
+    env_seed = os.environ.get("JORYU_PROMPT_BANK_SEED", "").strip()
+    if env_seed:
+        candidates.append(Path(env_seed))
+    candidates.append(_DEFAULT_PROMPT_BANK_SEED_REL)
+    candidates.append(_DEFAULT_PROMPT_BANK_SEED_ZST_REL)
+    return _resolve_existing_path(repo_root, candidates)
+
+
+def _materialize_prompt_bank_from_seed(seed: Path, bank_path: Path) -> None:
+    bank_path.parent.mkdir(parents=True, exist_ok=True)
+    if seed.suffix == ".zst":
+        import zstandard as zstd
+
+        data = zstd.ZstdDecompressor().decompress(seed.read_bytes())
+        bank_path.write_bytes(data)
+        return
+    shutil.copy2(seed, bank_path)
+
+
+def resolve_prompt_csv_path(repo_root: Path, cfg: Any) -> Path | None:
+    """prompt bank 生成元 CSV のパスを解決する。見つからなければ None。"""
+    candidates: list[Path] = []
+    prompt_csv = getattr(cfg.distill, "prompt_csv", "")
+    if isinstance(prompt_csv, str) and prompt_csv.strip():
+        candidates.append(Path(prompt_csv.strip()))
+    env_csv = os.environ.get("JORYU_PROMPT_CSV", "").strip()
+    if env_csv:
+        candidates.append(Path(env_csv))
+    candidates.append(_DEFAULT_PROMPT_CSV_REL)
+    return _resolve_existing_path(repo_root, candidates)
+
+
+def _emit_preflight_log(message: str, log: Callable[[str], None] | None) -> None:
+    if log is not None:
+        log(message)
+        return
+    import sys
+
+    print(message, file=sys.stderr)
+
+
+def ensure_prompt_bank(
+    repo_root: Path,
+    *,
+    log: Callable[[str], None] | None = None,
+) -> None:
+    """prompt bank JSONL が無ければ seed JSONL のコピーまたは CSV 変換で用意する。"""
+    from joryu.migrate import csv_to_jsonl
+    from joryu.paths import DEFAULT_CONFIG, resolve_optional_config
+
+    cfg = resolve_optional_config(repo_root / DEFAULT_CONFIG)
+    bank_path = (repo_root / cfg.distill.prompt_bank).resolve()
+    if bank_path.is_file():
+        return
+
+    seed = resolve_prompt_bank_seed_path(repo_root, cfg)
+    if seed is not None:
+        _materialize_prompt_bank_from_seed(seed, bank_path)
+        _emit_preflight_log(f"[joryu-up] prompt bank copied from {seed}", log)
+        return
+
+    src = resolve_prompt_csv_path(repo_root, cfg)
+    if src is None:
+        raise PreflightError(
+            f"[joryu-up] prompt bank が見つかりません: {cfg.distill.prompt_bank}\n"
+            "  scripts/seeds/training_prompts.jsonl を配置するか、"
+            "config.yaml の distill.prompt_csv / distill.prompt_bank_seed を設定してください。\n"
+            "  手動生成: uv run python scripts/migrate_csv_to_jsonl.py "
+            f"--src <csv> --dst {cfg.distill.prompt_bank}"
+        )
+
+    n = csv_to_jsonl(src, bank_path)
+    _emit_preflight_log(f"[joryu-up] prompt bank: {n} rows from {src}", log)
+
+
 def ensure_dashboard_data_paths(repo_root: Path) -> None:
     """蒸留 JSONL を dashboard から参照できるようディレクトリと symlink を整備する。"""
     from joryu.paths import DEFAULT_CONFIG, dashboard_public, resolve_optional_config
