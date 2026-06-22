@@ -133,27 +133,49 @@ def run_subprocess_logged(
     *,
     cwd: Path,
     log_path: Path,
-    subprocess_run: Callable[..., subprocess.CompletedProcess[str]] | None = None,
+    on_process: Callable[[subprocess.Popen[str]], None] | None = None,
+    subprocess_popen: Callable[..., subprocess.Popen[str]] | None = None,
 ) -> int:
-    """subprocess を実行し stdout/stderr をログファイルへ追記する。"""
-    runner = subprocess_run or subprocess.run
+    """subprocess を実行し stdout/stderr をログファイルへ逐次追記する。
+
+    Popen を使うことで実行中のプロセスハンドルを ``on_process`` 経由で
+    呼び出し側に渡せる。これによりキャンセル時に ``terminate()`` 可能。
+    """
+    popen = subprocess_popen or subprocess.Popen
     log_path.parent.mkdir(parents=True, exist_ok=True)
     with log_path.open("a", encoding="utf-8") as log_fh:
         log_fh.write(f"[joryu-runner] {' '.join(cmd)}\n")
         log_fh.flush()
-        proc = runner(
+        proc = popen(
             cmd,
-            cwd=cwd,
+            cwd=str(cwd),
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
-            check=False,
+            bufsize=1,
         )
-        if proc.stdout:
-            log_fh.write(proc.stdout)
-            if not proc.stdout.endswith("\n"):
-                log_fh.write("\n")
-        return proc.returncode
+        if on_process is not None:
+            on_process(proc)
+        assert proc.stdout is not None
+        for line in proc.stdout:
+            log_fh.write(line)
+            log_fh.flush()
+        return proc.wait()
+
+
+RunCommand = Callable[[list[str], Path, Path, Callable[[subprocess.Popen[str]], None] | None], int]
+
+
+def _default_run_command(repo_root: Path) -> RunCommand:
+    def _run(
+        cmd: list[str],
+        _cwd: Path,
+        log_path: Path,
+        on_process: Callable[[subprocess.Popen[str]], None] | None,
+    ) -> int:
+        return run_subprocess_logged(cmd, cwd=repo_root, log_path=log_path, on_process=on_process)
+
+    return _run
 
 
 class JobRunner:
@@ -164,20 +186,20 @@ class JobRunner:
         store: JobStore,
         repo_root: Path,
         *,
-        run_command: Callable[[list[str], Path, Path], int] | None = None,
+        run_command: RunCommand | None = None,
         refresh_stats: Callable[[DistillJobSpec], int] | None = None,
         command_builder: Callable[[Path, DistillJobSpec], list[str]] | None = None,
     ) -> None:
         self.store = store
         self.repo_root = repo_root
-        self._run_command = run_command or (
-            lambda cmd, _cwd, log_path: run_subprocess_logged(cmd, cwd=repo_root, log_path=log_path)
-        )
+        self._run_command: RunCommand = run_command or _default_run_command(repo_root)
         self._refresh_stats = refresh_stats or make_refresh_stats(repo_root)
         self._command_builder = command_builder or build_job_command
         self._lock = threading.Lock()
         self._queue: list[str] = []
         self._running_id: str | None = None
+        self._running_process: subprocess.Popen[str] | None = None
+        self._cancel_requested: set[str] = set()
 
     @property
     def running_id(self) -> str | None:
@@ -187,6 +209,31 @@ class JobRunner:
         with self._lock:
             self._queue.append(record.id)
         self._maybe_start_next()
+
+    def cancel(self, job_id: str) -> bool:
+        """ジョブをキャンセルする。キュー内なら除去、実行中なら terminate。"""
+        with self._lock:
+            if job_id in self._queue:
+                self._queue.remove(job_id)
+                try:
+                    record = self.store.load(job_id)
+                except FileNotFoundError:
+                    return False
+                record.status = JobStatus.CANCELLED
+                record.finished_at = datetime.now(UTC).isoformat()
+                record.error = "cancelled by user"
+                self.store.save(record)
+                return True
+            if job_id == self._running_id:
+                self._cancel_requested.add(job_id)
+                proc = self._running_process
+                if proc is not None and proc.poll() is None:
+                    try:
+                        proc.terminate()
+                    except OSError:
+                        pass
+                return True
+        return False
 
     def _maybe_start_next(self) -> None:
         with self._lock:
@@ -199,6 +246,10 @@ class JobRunner:
         thread = threading.Thread(target=self._run_job, args=(job_id,), daemon=True)
         thread.start()
 
+    def _set_running_process(self, proc: subprocess.Popen[str] | None) -> None:
+        with self._lock:
+            self._running_process = proc
+
     def _run_job(self, job_id: str) -> None:
         record = self.store.load(job_id)
         record.status = JobStatus.RUNNING
@@ -209,7 +260,7 @@ class JobRunner:
         exit_code = 1
         try:
             cmd = self._command_builder(self.repo_root, record.spec)
-            exit_code = self._run_command(cmd, self.repo_root, log_path)
+            exit_code = self._run_command(cmd, self.repo_root, log_path, self._set_running_process)
             record.exit_code = exit_code
             if exit_code != 0:
                 record.error = f"distill exited with code {exit_code}"
@@ -223,10 +274,19 @@ class JobRunner:
             record.error = str(exc)
 
         record.finished_at = datetime.now(UTC).isoformat()
-        record.status = JobStatus.SUCCEEDED if exit_code == 0 else JobStatus.FAILED
+        with self._lock:
+            cancelled = job_id in self._cancel_requested
+            self._cancel_requested.discard(job_id)
+            self._running_process = None
+        if cancelled:
+            record.status = JobStatus.CANCELLED
+            record.error = "cancelled by user"
+            self.store.append_log(job_id, "[joryu-runner] cancelled by user\n")
+        else:
+            record.status = JobStatus.SUCCEEDED if exit_code == 0 else JobStatus.FAILED
         self.store.save(record)
 
-        if exit_code == 0:
+        if record.status == JobStatus.SUCCEEDED:
             self._refresh_stats(record.spec)
 
         with self._lock:

@@ -215,6 +215,21 @@ pre.snippet {
   cursor: not-allowed;
 }
 
+.danger-btn {
+  background: #8b2e2e;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 0.35rem 0.85rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.danger-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .error-banner {
   background: #3d1214;
   border: 1px solid #8b2e2e;
@@ -250,6 +265,11 @@ pre.snippet {
 .badge-failed {
   background: #3d1214;
   color: #ff7b72;
+}
+
+.badge-cancelled {
+  background: #30363d;
+  color: #c9a13c;
 }
 
 .row-selected td {

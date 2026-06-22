@@ -1,4 +1,4 @@
-export type JobStatus = "queued" | "running" | "succeeded" | "failed";
+export type JobStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled";
 
 export type DistillJobSpec = {
   count: number;
@@ -117,6 +117,11 @@ export async function getJobLogs(id: string, offset = 0): Promise<LogResponse> {
   return apiFetch<LogResponse>(`/api/jobs/${id}/logs?offset=${offset}`);
 }
 
+export async function cancelJob(id: string): Promise<JobRecord> {
+  const row = await apiFetch<unknown>(`/api/jobs/${id}/cancel`, { method: "POST" });
+  return parseJobRecord(row);
+}
+
 export function statusLabel(status: JobStatus): string {
   switch (status) {
     case "queued":
@@ -127,7 +132,13 @@ export function statusLabel(status: JobStatus): string {
       return "成功";
     case "failed":
       return "失敗";
+    case "cancelled":
+      return "中止";
     default:
       return status;
   }
+}
+
+export function isJobActive(status: JobStatus): boolean {
+  return status === "queued" || status === "running";
 }
