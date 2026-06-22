@@ -40,3 +40,10 @@ class FakeVllmClient:
 @pytest.fixture()
 def fake_client() -> FakeVllmClient:
     return FakeVllmClient()
+
+
+@pytest.fixture()
+def fake_judge():
+    from joryu.curate.judge_client import FakeJudgeClient
+
+    return FakeJudgeClient()

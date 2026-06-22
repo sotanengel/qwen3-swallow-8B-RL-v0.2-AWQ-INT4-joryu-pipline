@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 from joryu.config import Config, load_config
+from joryu.curate.stats import DEFAULT_CURATION_OUTPUT, write_curation_json
 from joryu.stats import DEFAULT_STATS_OUTPUT, write_stats_json
 
 DEFAULT_CONFIG = "config.yaml"
@@ -33,6 +34,17 @@ def build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_OUTPUT,
         help=f"出力 JSON (既定: {DEFAULT_OUTPUT})",
     )
+    p.add_argument(
+        "--curation",
+        default="",
+        help="curate ラン dir (scores.jsonl を含む) を指定すると "
+        f"{DEFAULT_CURATION_OUTPUT} も生成する",
+    )
+    p.add_argument(
+        "--curation-output",
+        default=DEFAULT_CURATION_OUTPUT,
+        help=f"curation.json の出力先 (既定: {DEFAULT_CURATION_OUTPUT})",
+    )
     return p
 
 
@@ -46,6 +58,19 @@ def main(argv: list[str] | None = None) -> int:
 
     stats = write_stats_json(src, out)
     print(f"[joryu-stats] wrote {out}  (total={stats['total']})", file=sys.stderr)
+
+    if args.curation:
+        curate_dir = Path(args.curation)
+        scores = curate_dir / "scores.jsonl"
+        if scores.exists():
+            cur_out = Path(args.curation_output)
+            cur = write_curation_json(scores, cur_out)
+            print(
+                f"[joryu-stats] wrote {cur_out}  (total={cur['total']}, kept={cur['accepted']})",
+                file=sys.stderr,
+            )
+        else:
+            print(f"[joryu-stats] curation scores.jsonl missing: {scores}", file=sys.stderr)
     return 0
 
 
