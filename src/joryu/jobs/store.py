@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from pathlib import Path
 
 from joryu.jobs.models import JobRecord
@@ -27,7 +28,16 @@ class JobStore:
         payload = json.dumps(record.to_dict(), ensure_ascii=False, indent=2)
         tmp = path.with_suffix(f"{path.suffix}.tmp")
         tmp.write_text(payload, encoding="utf-8")
-        os.replace(tmp, path)
+        # Windows では他スレッドが読み取り中だと os.replace が一時的に
+        # PermissionError を投げることがあるため、短い retry を入れる。
+        for attempt in range(10):
+            try:
+                os.replace(tmp, path)
+                return
+            except PermissionError:
+                if attempt == 9:
+                    raise
+                time.sleep(0.02)
 
     def load(self, job_id: str) -> JobRecord:
         path = self._record_path(job_id)

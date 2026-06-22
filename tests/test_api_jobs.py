@@ -91,3 +91,39 @@ def test_create_job_validation_error(client: TestClient) -> None:
 def test_get_missing_job(client: TestClient) -> None:
     resp = client.get("/api/jobs/does-not-exist")
     assert resp.status_code == 404
+
+
+def test_cancel_missing_job_returns_404(client: TestClient) -> None:
+    resp = client.post("/api/jobs/does-not-exist/cancel")
+    assert resp.status_code == 404
+
+
+def test_cancel_queued_job_via_api(client: TestClient) -> None:
+    """API 経由でキュー中ジョブをキャンセルできる。"""
+    from joryu.jobs.models import DistillJobSpec, JobRecord
+    from joryu.jobs.runner import JobRunner
+
+    runner: JobRunner = client.app.state.job_runner
+    store = client.app.state.job_store
+
+    # ランナーが実際の docker を呼ばないように差し替え
+    runner._command_builder = lambda _root, spec: ["noop", *spec.to_distill_argv()]
+    runner._run_command = lambda *args, **kwargs: 0  # type: ignore[assignment]
+
+    # キュー先頭を埋めるためにダミーをセットしてから 2 件目を入れる
+    busy = JobRecord.create(DistillJobSpec(count=1))
+    store.save(busy)
+    with runner._lock:
+        runner._running_id = busy.id  # 実行中扱いで block
+
+    pending = JobRecord.create(DistillJobSpec(count=2))
+    store.save(pending)
+    runner.enqueue(pending)
+
+    resp = client.post(f"/api/jobs/{pending.id}/cancel")
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "cancelled"
+
+    # 後片付け
+    with runner._lock:
+        runner._running_id = None

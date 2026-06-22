@@ -6,8 +6,10 @@ import {
   CreateJobRequest,
   JobOptions,
   JobRecord,
+  cancelJob,
   createJob,
   getJobLogs,
+  isJobActive,
   listJobs,
   loadJobOptions,
   statusLabel,
@@ -24,6 +26,8 @@ export default function JobsPage() {
   const [logs, setLogs] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
 
   const [count, setCount] = useState(0);
   const [duration, setDuration] = useState("");
@@ -92,6 +96,23 @@ export default function JobsPage() {
 
   const toggleStyle = (id: string) => {
     setStyles((prev) => (prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]));
+  };
+
+  const onCancel = async (job: JobRecord) => {
+    if (!isJobActive(job.status)) return;
+    if (typeof window !== "undefined" && !window.confirm("このジョブを停止しますか？")) {
+      return;
+    }
+    setCancellingId(job.id);
+    setError(null);
+    try {
+      await cancelJob(job.id);
+      await refreshJobs();
+    } catch (exc) {
+      setError(exc instanceof Error ? exc.message : String(exc));
+    } finally {
+      setCancellingId(null);
+    }
   };
 
   const onSubmit = async (event: FormEvent) => {
@@ -210,6 +231,7 @@ export default function JobsPage() {
                 <th>作成</th>
                 <th>終了</th>
                 <th>exit</th>
+                <th>操作</th>
               </tr>
             </thead>
             <tbody>
@@ -231,6 +253,23 @@ export default function JobsPage() {
                   <td>{new Date(job.created_at).toLocaleString()}</td>
                   <td>{job.finished_at ? new Date(job.finished_at).toLocaleString() : "—"}</td>
                   <td>{job.exit_code ?? "—"}</td>
+                  <td>
+                    {isJobActive(job.status) ? (
+                      <button
+                        type="button"
+                        className="danger-btn"
+                        disabled={cancellingId === job.id}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void onCancel(job);
+                        }}
+                      >
+                        {cancellingId === job.id ? "停止中…" : "停止"}
+                      </button>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

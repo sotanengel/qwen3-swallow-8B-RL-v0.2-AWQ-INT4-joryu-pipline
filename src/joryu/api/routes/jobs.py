@@ -127,3 +127,14 @@ def get_job_logs(job_id: str, request: Request, offset: int = 0) -> LogResponse:
         raise HTTPException(status_code=404, detail="job not found") from exc
     chunk, new_offset = store.read_log(job_id, offset=offset)
     return LogResponse(chunk=chunk, offset=new_offset)
+
+
+@router.post("/{job_id}/cancel", response_model=JobResponse)
+def cancel_job(job_id: str, request: Request) -> JobResponse:
+    store = _store(request)
+    try:
+        store.load(job_id)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="job not found") from exc
+    _runner(request).cancel(job_id)
+    return JobResponse.from_record(store.load(job_id))

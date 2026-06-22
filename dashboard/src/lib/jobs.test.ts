@@ -21,5 +21,46 @@ describe("statusLabel", () => {
   it("maps known statuses", () => {
     expect(statusLabel("running")).toBe("実行中");
     expect(statusLabel("succeeded")).toBe("成功");
+    expect(statusLabel("cancelled")).toBe("中止");
+  });
+});
+
+describe("isJobActive", () => {
+  it("only queued and running are active", async () => {
+    const { isJobActive } = await import("./jobs");
+    expect(isJobActive("queued")).toBe(true);
+    expect(isJobActive("running")).toBe(true);
+    expect(isJobActive("succeeded")).toBe(false);
+    expect(isJobActive("failed")).toBe(false);
+    expect(isJobActive("cancelled")).toBe(false);
+  });
+});
+
+describe("cancelJob", () => {
+  it("POSTs to the cancel endpoint and returns the parsed record", async () => {
+    const { cancelJob } = await import("./jobs");
+    const calls: { url: string; init?: RequestInit }[] = [];
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (url: string, init?: RequestInit) => {
+      calls.push({ url, init });
+      return new Response(
+        JSON.stringify({
+          id: "abc",
+          spec: { count: 1 },
+          status: "cancelled",
+          created_at: "2025-01-01T00:00:00+00:00",
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }) as unknown as typeof fetch;
+    try {
+      const rec = await cancelJob("abc");
+      expect(rec.status).toBe("cancelled");
+      expect(calls).toHaveLength(1);
+      expect(calls[0].url).toContain("/api/jobs/abc/cancel");
+      expect(calls[0].init?.method).toBe("POST");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 import time
 from pathlib import Path
 
@@ -59,7 +60,7 @@ def test_runner_executes_queued_job(tmp_path: Path) -> None:
     calls: list[list[str]] = []
     stats_called: list[DistillJobSpec] = []
 
-    def fake_run(cmd: list[str], _cwd: Path, log_path: Path) -> int:
+    def fake_run(cmd, _cwd, log_path, _on_process):
         calls.append(cmd)
         log_path.write_text("ok\n", encoding="utf-8")
         return 0
@@ -102,7 +103,7 @@ def test_runner_serializes_two_jobs(tmp_path: Path) -> None:
     max_concurrent = 0
     finished: list[str] = []
 
-    def fake_run(cmd: list[str], _cwd: Path, log_path: Path) -> int:
+    def fake_run(cmd, _cwd, log_path, _on_process):
         nonlocal concurrent, max_concurrent
         concurrent += 1
         max_concurrent = max(max_concurrent, concurrent)
@@ -163,3 +164,165 @@ def test_make_refresh_stats_uses_repo_root_paths(tmp_path: Path, monkeypatch) ->
             str(out_dir / "stats.json"),
         ]
     ]
+
+
+class _FakeProcess:
+    """Popen 互換の最小限の偽プロセス。terminate() で wait を解放する。"""
+
+    def __init__(self) -> None:
+        self._exit_code: int | None = None
+        self._event = threading.Event()
+        self.terminate_calls = 0
+
+    def poll(self) -> int | None:
+        return self._exit_code
+
+    def terminate(self) -> None:
+        self.terminate_calls += 1
+        if self._exit_code is None:
+            self._exit_code = -15
+            self._event.set()
+
+    def wait_for_terminate(self, timeout: float) -> bool:
+        return self._event.wait(timeout)
+
+
+def test_cancel_queued_job_removes_from_queue(tmp_path: Path) -> None:
+    store = JobStore(tmp_path)
+    first = JobRecord.create(DistillJobSpec(count=1))
+    second = JobRecord.create(DistillJobSpec(count=2))
+    store.save(first)
+    store.save(second)
+
+    gate = threading.Event()
+    started = threading.Event()
+    executed: list[str] = []
+    stats_called: list[DistillJobSpec] = []
+
+    def fake_run(cmd, _cwd, log_path, _on_process):
+        started.set()
+        gate.wait(timeout=5.0)
+        executed.append(cmd[cmd.index("--count") + 1])
+        log_path.write_text("done\n", encoding="utf-8")
+        return 0
+
+    runner = JobRunner(
+        store,
+        tmp_path,
+        run_command=fake_run,
+        refresh_stats=lambda s: (stats_called.append(s), 0)[1],
+        command_builder=lambda _root, spec: ["fake-distill", *spec.to_distill_argv()],
+    )
+    runner.enqueue(first)
+    runner.enqueue(second)
+
+    assert started.wait(timeout=5.0)
+    assert runner.cancel(second.id) is True
+    gate.set()
+
+    deadline = time.time() + 5.0
+    while time.time() < deadline:
+        if store.load(first.id).status == JobStatus.SUCCEEDED:
+            break
+        time.sleep(0.05)
+
+    assert store.load(first.id).status == JobStatus.SUCCEEDED
+    cancelled = store.load(second.id)
+    assert cancelled.status == JobStatus.CANCELLED
+    assert cancelled.error == "cancelled by user"
+    assert cancelled.finished_at is not None
+    assert executed == ["1"]
+    assert stats_called == [first.spec]
+
+
+def test_cancel_running_job_terminates_process(tmp_path: Path) -> None:
+    store = JobStore(tmp_path)
+    record = JobRecord.create(DistillJobSpec(count=1))
+    store.save(record)
+
+    fake_proc = _FakeProcess()
+    started = threading.Event()
+    stats_called: list[DistillJobSpec] = []
+
+    def fake_run(cmd, _cwd, log_path, on_process):
+        if on_process is not None:
+            on_process(fake_proc)
+        started.set()
+        # ブロックしつつ terminate されたら exit code を返す
+        fake_proc.wait_for_terminate(timeout=5.0)
+        log_path.write_text("partial\n", encoding="utf-8")
+        return -15
+
+    runner = JobRunner(
+        store,
+        tmp_path,
+        run_command=fake_run,
+        refresh_stats=lambda s: (stats_called.append(s), 0)[1],
+        command_builder=lambda _root, spec: ["fake-distill", *spec.to_distill_argv()],
+    )
+    runner.enqueue(record)
+
+    assert started.wait(timeout=5.0)
+    assert runner.cancel(record.id) is True
+    assert fake_proc.terminate_calls == 1
+
+    deadline = time.time() + 5.0
+    while time.time() < deadline:
+        loaded = store.load(record.id)
+        if loaded.status in (
+            JobStatus.SUCCEEDED,
+            JobStatus.FAILED,
+            JobStatus.CANCELLED,
+        ):
+            break
+        time.sleep(0.05)
+
+    loaded = store.load(record.id)
+    assert loaded.status == JobStatus.CANCELLED
+    assert loaded.error == "cancelled by user"
+    assert stats_called == []  # refresh_stats はキャンセル時に呼ばれない
+
+
+def test_cancel_unknown_job_returns_false(tmp_path: Path) -> None:
+    store = JobStore(tmp_path)
+    runner = JobRunner(
+        store,
+        tmp_path,
+        run_command=lambda *args, **kwargs: 0,
+        refresh_stats=lambda _s: 0,
+        command_builder=lambda _root, _spec: ["noop"],
+    )
+    assert runner.cancel("does-not-exist") is False
+
+
+def test_run_subprocess_logged_passes_process_to_callback(tmp_path: Path) -> None:
+    """run_subprocess_logged が on_process で Popen を渡し、wait の戻り値を返す。"""
+
+    class _DummyProc:
+        def __init__(self) -> None:
+            self.stdout = iter(["hello\n", "world\n"])
+            self._waited = False
+
+        def wait(self) -> int:
+            self._waited = True
+            return 0
+
+    captured: list[object] = []
+
+    def fake_popen(cmd, **kwargs):  # noqa: ARG001
+        return _DummyProc()
+
+    from joryu.jobs.runner import run_subprocess_logged
+
+    log = tmp_path / "out.log"
+    rc = run_subprocess_logged(
+        ["x"],
+        cwd=tmp_path,
+        log_path=log,
+        on_process=lambda p: captured.append(p),
+        subprocess_popen=fake_popen,
+    )
+    assert rc == 0
+    assert len(captured) == 1
+    text = log.read_text(encoding="utf-8")
+    assert "hello" in text and "world" in text
