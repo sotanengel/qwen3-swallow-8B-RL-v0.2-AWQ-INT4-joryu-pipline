@@ -2,29 +2,22 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Body, HTTPException, Request
+from pydantic import BaseModel
 
 from joryu.config import load_config
 from joryu.jobs.models import DistillJobSpec, JobRecord
 from joryu.jobs.runner import JobRunner
 from joryu.jobs.store import JobStore
 from joryu.jobs.validate import validate_job_spec
+from joryu.paths import DEFAULT_CONFIG
 from joryu.styles import load_styles
 
 router = APIRouter()
 
-
-class CreateJobBody(BaseModel):
-    count: int = 0
-    duration: str = ""
-    mode: str | None = None
-    style: list[str] = Field(default_factory=list)
-    temperature: str = ""
-    top_p: str = ""
-    config: str = "config.yaml"
+JobRequestBody = Annotated[dict[str, Any], Body()]
 
 
 class JobResponse(BaseModel):
@@ -74,24 +67,19 @@ def job_options(request: Request) -> dict[str, Any]:
         "modes": ["thinking", "nothinking"],
         "styles": [{"id": sid, "label": preset.label} for sid, preset in sorted(styles.items())],
         "defaults": {
-            "config": "config.yaml",
+            "config": DEFAULT_CONFIG,
             "mode": cfg.model.mode,
         },
     }
 
 
 @router.post("", response_model=JobResponse, status_code=201)
-def create_job(body: CreateJobBody, request: Request) -> JobResponse:
+def create_job(
+    request: Request,
+    body: JobRequestBody,
+) -> JobResponse:
     repo_root = request.app.state.repo_root
-    spec = DistillJobSpec(
-        count=body.count,
-        duration=body.duration,
-        mode=body.mode,
-        style=body.style,
-        temperature=body.temperature,
-        top_p=body.top_p,
-        config=body.config,
-    )
+    spec = DistillJobSpec.from_dict(body)
     try:
         validate_job_spec(spec, repo_root=repo_root)
     except ValueError as exc:

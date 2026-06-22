@@ -121,42 +121,35 @@ def run_in_docker(
     if not config_path.exists():
         print(f"[joryu] config not found: {config_path}", file=sys.stderr)
         return 2
-    data_dir = cwd / "data"
-    data_dir.mkdir(parents=True, exist_ok=True)
-    dashboard_public = (cwd / "dashboard" / "public").resolve()
-    dashboard_public.mkdir(parents=True, exist_ok=True)
-    hf_cache = hf_cache_dir()
-    hf_cache.mkdir(parents=True, exist_ok=True)
-    src_dir = (cwd / "src").resolve()
 
-    styles_path: Path | None = None
-    styles_rel: str | None = None
+    from joryu.docker_runtime import prepare_distill_docker_mounts
+
     try:
-        from joryu.config import load_config
-
-        cfg = load_config(config_path)
-        styles_rel = cfg.distill.styles_file
-        candidate = (config_path.parent / styles_rel).resolve()
-        if candidate.exists():
-            styles_path = candidate
-        elif "--style" in extra_args or any(a.startswith("--style") for a in extra_args):
-            print(f"[joryu] styles file not found: {candidate}", file=sys.stderr)
-            return 2
+        mounts = prepare_distill_docker_mounts(cwd, config_path, config_rel=config)
     except (FileNotFoundError, ValueError) as exc:
         print(f"[joryu] config error: {exc}", file=sys.stderr)
         return 2
 
+    if "--style" in extra_args or any(a.startswith("--style") for a in extra_args):
+        if mounts.styles_path is None:
+            from joryu.config import load_config
+
+            cfg = load_config(config_path)
+            candidate = (config_path.parent / cfg.distill.styles_file).resolve()
+            print(f"[joryu] styles file not found: {candidate}", file=sys.stderr)
+            return 2
+
     cmd = build_docker_command(
         image=image,
         cwd=cwd,
-        config_path=config_path,
-        config_rel=config,
-        src_dir=src_dir,
-        data_dir=data_dir,
-        dashboard_public_dir=dashboard_public,
-        hf_cache=hf_cache,
-        styles_path=styles_path,
-        styles_rel=styles_rel,
+        config_path=mounts.config_path,
+        config_rel=mounts.config_rel,
+        src_dir=mounts.src_dir,
+        data_dir=mounts.data_dir,
+        dashboard_public_dir=mounts.dashboard_public,
+        hf_cache=mounts.hf_cache,
+        styles_path=mounts.styles_path,
+        styles_rel=mounts.styles_rel,
         allocate_tty=sys.stderr.isatty(),
         extra_args=extra_args,
     )

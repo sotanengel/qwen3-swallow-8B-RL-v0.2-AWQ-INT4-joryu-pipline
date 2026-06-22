@@ -272,10 +272,9 @@ def check_disk_space(
 
 def ensure_dashboard_data_paths(repo_root: Path) -> None:
     """蒸留 JSONL を dashboard から参照できるようディレクトリと symlink を整備する。"""
-    from joryu.config import Config, load_config
+    from joryu.paths import DEFAULT_CONFIG, dashboard_public, resolve_optional_config
 
-    cfg_path = repo_root / "config.yaml"
-    cfg = load_config(cfg_path) if cfg_path.exists() else Config()
+    cfg = resolve_optional_config(repo_root / DEFAULT_CONFIG)
 
     distilled_dir = repo_root / cfg.distill.out_dir
     distilled_dir.mkdir(parents=True, exist_ok=True)
@@ -283,8 +282,7 @@ def ensure_dashboard_data_paths(repo_root: Path) -> None:
     if not jsonl_path.exists():
         jsonl_path.touch()
 
-    public_dir = repo_root / "dashboard" / "public"
-    public_dir.mkdir(parents=True, exist_ok=True)
+    public_dir = dashboard_public(repo_root)
     public_jsonl = public_dir / cfg.distill.out_file
 
     if public_jsonl.exists() or public_jsonl.is_symlink():

@@ -10,7 +10,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-import yaml
+from joryu.yaml_util import load_yaml_mapping
 
 
 @dataclass(frozen=True)
@@ -104,7 +104,7 @@ def load_style_rules(
         if not p.exists():
             rules = dict(DEFAULT_STYLE_RULES)
         else:
-            raw = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+            raw = load_yaml_mapping(p)
             declared = raw.get("styles") or {}
             rules = {
                 sid: DEFAULT_STYLE_RULES[sid] for sid in declared if sid in DEFAULT_STYLE_RULES

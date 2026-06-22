@@ -104,8 +104,8 @@ def test_main_invalid_style_returns_error(tmp_path: Path) -> None:
     assert rc == 2
 
 
-def test_docker_extra_args_includes_style_and_sampling() -> None:
-    from joryu.cli.distill import _docker_extra_args
+def test_distill_job_spec_to_distill_argv_includes_style_and_sampling() -> None:
+    from joryu.jobs.models import DistillJobSpec
 
     args = build_parser().parse_args(
         [
@@ -119,7 +119,8 @@ def test_docker_extra_args_includes_style_and_sampling() -> None:
             "3",
         ]
     )
-    extra = _docker_extra_args(args)
+    spec = DistillJobSpec.from_cli_namespace(args)
+    extra = spec.to_distill_argv()
     assert "--style" in extra
     assert "polite" in extra
     assert "--temperature" in extra

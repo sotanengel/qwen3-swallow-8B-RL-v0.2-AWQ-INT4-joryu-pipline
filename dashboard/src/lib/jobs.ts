@@ -1,5 +1,6 @@
 export type JobStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled";
 
+/** Python `joryu.jobs.models.DistillJobSpec` と同一フィールド。 */
 export type DistillJobSpec = {
   count: number;
   duration: string;

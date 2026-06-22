@@ -12,6 +12,8 @@ from pathlib import Path
 
 import zstandard as zstd
 
+from joryu.io.jsonl import iter_jsonl
+
 DEFAULT_LEVEL = 19
 
 
@@ -48,30 +50,21 @@ def _scan_jsonl(src: Path) -> dict:
     first_ts: str | None = None
     last_ts: str | None = None
 
-    with src.open("r", encoding="utf-8") as f:
-        for line in f:
-            if not line.strip():
-                continue
-            try:
-                rec = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if not isinstance(rec, dict):
-                continue
-            records += 1
-            if model is None:
-                m = rec.get("model")
-                if isinstance(m, str):
-                    model = m
-            if config_hash is None:
-                c = rec.get("config_hash")
-                if isinstance(c, str):
-                    config_hash = c
-            ts = rec.get("created_at")
-            if isinstance(ts, str) and ts:
-                if first_ts is None:
-                    first_ts = ts
-                last_ts = ts
+    for rec in iter_jsonl(src):
+        records += 1
+        if model is None:
+            m = rec.get("model")
+            if isinstance(m, str):
+                model = m
+        if config_hash is None:
+            c = rec.get("config_hash")
+            if isinstance(c, str):
+                config_hash = c
+        ts = rec.get("created_at")
+        if isinstance(ts, str) and ts:
+            if first_ts is None:
+                first_ts = ts
+            last_ts = ts
 
     return {
         "records": records,

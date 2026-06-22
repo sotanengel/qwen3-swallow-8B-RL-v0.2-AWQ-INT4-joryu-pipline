@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-import yaml
+from joryu.yaml_util import load_yaml_mapping
 
 
 @dataclass(frozen=True)
@@ -20,7 +20,7 @@ def load_styles(path: str | Path) -> dict[str, StylePreset]:
     p = Path(path)
     if not p.exists():
         raise FileNotFoundError(f"styles file not found: {p}")
-    raw = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+    raw = load_yaml_mapping(p)
     styles_raw = raw.get("styles") or {}
     if not isinstance(styles_raw, dict):
         raise ValueError("styles.yaml: 'styles' must be a mapping")

@@ -69,8 +69,8 @@ def build_compose_run_command(repo_root: Path, spec: DistillJobSpec) -> list[str
 
 
 def build_docker_delegate_command(repo_root: Path, spec: DistillJobSpec) -> list[str]:
-    from joryu.config import load_config
-    from joryu.docker_delegate import DEFAULT_IMAGE, build_docker_command, hf_cache_dir
+    from joryu.docker_delegate import DEFAULT_IMAGE, build_docker_command
+    from joryu.docker_runtime import prepare_distill_docker_mounts
 
     host_root = resolve_host_repo_root(repo_root)
 
@@ -78,39 +78,35 @@ def build_docker_delegate_command(repo_root: Path, spec: DistillJobSpec) -> list
         return map_path_for_docker(path, repo_root=repo_root, host_repo_root=host_root)
 
     config_path = (repo_root / spec.config).resolve()
-    cfg = load_config(config_path)
-    data_dir = repo_root / "data"
-    data_dir.mkdir(parents=True, exist_ok=True)
-    dashboard_public = repo_root / "dashboard" / "public"
-    dashboard_public.mkdir(parents=True, exist_ok=True)
-    src_dir = (repo_root / "src").resolve()
-
     if should_use_api_docker_delegate():
         hf_cache: Path | str = "hf-cache"
     else:
+        from joryu.docker_delegate import hf_cache_dir
+
         hf_cache_path = hf_cache_dir()
         hf_cache_path.mkdir(parents=True, exist_ok=True)
         hf_cache = _map(hf_cache_path)
 
-    styles_path = None
-    styles_rel = None
-    if spec.style:
-        styles_rel = cfg.distill.styles_file
-        candidate = (config_path.parent / styles_rel).resolve()
-        if candidate.exists():
-            styles_path = candidate
+    mounts = prepare_distill_docker_mounts(
+        repo_root,
+        config_path,
+        config_rel=spec.config.replace("\\", "/"),
+        map_path=_map,
+        hf_cache=hf_cache,
+        mount_styles=bool(spec.style),
+    )
 
     cmd = build_docker_command(
         image=DEFAULT_IMAGE,
         cwd=host_root,
-        config_path=_map(config_path),
-        config_rel=spec.config.replace("\\", "/"),
-        src_dir=_map(src_dir),
-        data_dir=_map(data_dir),
-        dashboard_public_dir=_map(dashboard_public),
-        hf_cache=hf_cache,
-        styles_path=_map(styles_path) if styles_path is not None else None,
-        styles_rel=styles_rel,
+        config_path=mounts.config_path,
+        config_rel=mounts.config_rel,
+        src_dir=mounts.src_dir,
+        data_dir=mounts.data_dir,
+        dashboard_public_dir=mounts.dashboard_public,
+        hf_cache=mounts.hf_cache,
+        styles_path=mounts.styles_path,
+        styles_rel=mounts.styles_rel,
         allocate_tty=False,
         extra_args=spec.to_distill_argv(),
     )

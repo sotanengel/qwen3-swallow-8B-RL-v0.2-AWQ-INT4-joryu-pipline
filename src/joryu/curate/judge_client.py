@@ -6,9 +6,11 @@
 
 from __future__ import annotations
 
+import json
 import logging
+import re
 from collections.abc import Callable
-from typing import Literal, Protocol
+from typing import Any, Literal, Protocol
 
 from joryu.vllm_client import SupportsChat
 
@@ -177,6 +179,24 @@ def _default_neutral_scores() -> dict[str, int]:
     return {k: 3 for k in RUBRIC_KEYS}
 
 
+def _extract_json_object(text: str) -> dict[str, Any] | None:
+    """LLM レスポンスから最初の JSON object を抽出する。"""
+    if not text:
+        return None
+    candidate = text.strip()
+    if candidate.startswith("```"):
+        candidate = re.sub(r"^```[a-zA-Z]*\s*", "", candidate)
+        candidate = re.sub(r"\s*```$", "", candidate)
+    match = re.search(r"\{[^{}]*\}", candidate, re.DOTALL)
+    if not match:
+        return None
+    try:
+        parsed = json.loads(match.group(0))
+    except json.JSONDecodeError:
+        return None
+    return parsed if isinstance(parsed, dict) else None
+
+
 def parse_rubric_response(text: str) -> dict[str, int]:
     """LLM レスポンスから rubric JSON を頑健に抽出。
 
@@ -184,23 +204,8 @@ def parse_rubric_response(text: str) -> dict[str, int]:
     - 最初の `{...}` ブロックを正規表現で拾う
     - パース失敗時は neutral (3,3,3,3,3) を返す
     """
-    import json
-    import re
-
-    if not text:
-        return _default_neutral_scores()
-    candidate = text.strip()
-    if candidate.startswith("```"):
-        candidate = re.sub(r"^```[a-zA-Z]*\s*", "", candidate)
-        candidate = re.sub(r"\s*```$", "", candidate)
-    match = re.search(r"\{[^{}]*\}", candidate, re.DOTALL)
-    if not match:
-        return _default_neutral_scores()
-    try:
-        parsed = json.loads(match.group(0))
-    except json.JSONDecodeError:
-        return _default_neutral_scores()
-    if not isinstance(parsed, dict):
+    parsed = _extract_json_object(text)
+    if parsed is None:
         return _default_neutral_scores()
     out: dict[str, int] = {}
     for k in RUBRIC_KEYS:
@@ -254,23 +259,8 @@ def get_default_rubric_prompt() -> str:
 
 def parse_pair_response(text: str) -> PairWinner:
     """LLM レスポンスから `{"winner": ...}` を頑健に抽出。fallback = "tie"."""
-    import json
-    import re
-
-    if not text:
-        return "tie"
-    candidate = text.strip()
-    if candidate.startswith("```"):
-        candidate = re.sub(r"^```[a-zA-Z]*\s*", "", candidate)
-        candidate = re.sub(r"\s*```$", "", candidate)
-    match = re.search(r"\{[^{}]*\}", candidate, re.DOTALL)
-    if not match:
-        return "tie"
-    try:
-        parsed = json.loads(match.group(0))
-    except json.JSONDecodeError:
-        return "tie"
-    if not isinstance(parsed, dict):
+    parsed = _extract_json_object(text)
+    if parsed is None:
         return "tie"
     winner = parsed.get("winner")
     if isinstance(winner, str):
@@ -282,23 +272,8 @@ def parse_pair_response(text: str) -> PairWinner:
 
 def parse_self_response(text: str) -> float:
     """LLM レスポンスから `{"score": float}` を頑健に抽出。fallback = 0.5."""
-    import json
-    import re
-
-    if not text:
-        return 0.5
-    candidate = text.strip()
-    if candidate.startswith("```"):
-        candidate = re.sub(r"^```[a-zA-Z]*\s*", "", candidate)
-        candidate = re.sub(r"\s*```$", "", candidate)
-    match = re.search(r"\{[^{}]*\}", candidate, re.DOTALL)
-    if not match:
-        return 0.5
-    try:
-        parsed = json.loads(match.group(0))
-    except json.JSONDecodeError:
-        return 0.5
-    if not isinstance(parsed, dict):
+    parsed = _extract_json_object(text)
+    if parsed is None:
         return 0.5
     s = parsed.get("score")
     try:

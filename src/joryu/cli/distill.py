@@ -7,13 +7,13 @@ import re
 import sys
 import time
 
+from joryu.cli.common import add_config_argument
 from joryu.config import load_config
 from joryu.distill import default_stats_refresher, load_style_presets_from_config, run_distill
 from joryu.docker_delegate import DEFAULT_IMAGE, run_in_docker, should_use_docker
-from joryu.variants import parse_comma_list, parse_float_list
+from joryu.jobs.models import DistillJobSpec
+from joryu.variants import parse_float_list
 from joryu.vllm_client import SupportsChat
-
-DEFAULT_CONFIG = "config.yaml"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -21,11 +21,7 @@ def build_parser() -> argparse.ArgumentParser:
         prog="joryu-distill",
         description="Qwen3-Swallow-8B-RL-v0.2-AWQ-INT4 で JSONL prompt bank を蒸留する。",
     )
-    p.add_argument(
-        "--config",
-        default=DEFAULT_CONFIG,
-        help=f"設定ファイル (既定: {DEFAULT_CONFIG})",
-    )
+    add_config_argument(p)
     p.add_argument(
         "--bank",
         default="",
@@ -94,67 +90,46 @@ def parse_duration(text: str | None) -> int | None:
     return total
 
 
-def _docker_extra_args(args: argparse.Namespace) -> list[str]:
-    out: list[str] = ["--count", str(args.count)]
-    if args.duration:
-        out.extend(["--duration", args.duration])
-    if args.bank:
-        out.extend(["--bank", args.bank])
-    if args.out:
-        out.extend(["--out", args.out])
-    if args.mode:
-        out.extend(["--mode", args.mode])
-    if args.style:
-        out.extend(["--style", args.style])
-    if args.temperature:
-        out.extend(["--temperature", args.temperature])
-    if args.top_p:
-        out.extend(["--top-p", args.top_p])
-    return out
-
-
 def main(argv: list[str] | None = None, *, _client: SupportsChat | None = None) -> int:
     args = build_parser().parse_args(argv)
+    spec = DistillJobSpec.from_cli_namespace(args)
 
     if should_use_docker(force_docker=args.docker, force_native=args.no_docker):
         return run_in_docker(
             image=args.image,
-            config=args.config,
-            extra_args=_docker_extra_args(args),
+            config=spec.config,
+            extra_args=spec.to_distill_argv(bank=args.bank, out=args.out),
         )
 
     try:
-        cfg = load_config(args.config)
-        if args.mode is not None:
-            cfg.model.mode = args.mode
+        cfg = load_config(spec.config)
+        if spec.mode is not None:
+            cfg.model.mode = spec.mode
 
-        style_ids = parse_comma_list(args.style)
-        style_presets = load_style_presets_from_config(cfg, style_ids)
+        style_presets = load_style_presets_from_config(cfg, spec.style)
         temperatures = parse_float_list(
-            args.temperature, min_val=0.5, max_val=1.0, name="temperature"
+            spec.temperature, min_val=0.5, max_val=1.0, name="temperature"
         )
-        top_ps = parse_float_list(args.top_p, min_val=0.8, max_val=0.95, name="top_p")
+        top_ps = parse_float_list(spec.top_p, min_val=0.8, max_val=0.95, name="top_p")
     except (FileNotFoundError, ValueError) as exc:
         print(f"[joryu-distill] error: {exc}", file=sys.stderr)
         return 2
 
     deadline = None
     try:
-        secs = parse_duration(args.duration)
+        secs = parse_duration(spec.duration)
     except ValueError as exc:
         print(f"[joryu-distill] error: {exc}", file=sys.stderr)
         return 2
     if secs is not None:
         deadline = time.time() + secs
 
-    bank = args.bank or None
-    out = args.out or None
     run_distill(
         cfg,
-        bank_path=bank,
-        out_path=out,
+        bank_path=args.bank or None,
+        out_path=args.out or None,
         client=_client,
-        count=args.count,
+        count=spec.count,
         deadline=deadline,
         style_presets=style_presets or None,
         temperatures=temperatures,

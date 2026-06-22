@@ -7,13 +7,14 @@ from __future__ import annotations
 
 import argparse
 import os
-import subprocess
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from joryu.config import Config, load_config
+from joryu.cli.common import add_config_argument, resolve_cli_config
+from joryu.config import Config
+from joryu.curate.artifacts import find_latest_run_artifact
 from joryu.curate.best_of_n import apply_best_of_n, parse_strategy
 from joryu.curate.cache import (
     CacheCounters,
@@ -48,7 +49,8 @@ from joryu.curate.signals.stat import (
 from joryu.curate.stats import DEFAULT_CURATION_OUTPUT, write_curation_json
 from joryu.curate.style_presets import load_style_rules
 from joryu.curate.writer import CurateWriter
-from joryu.stats import resolve_repo_root
+from joryu.paths import resolve_distill_output, resolve_repo_root
+from joryu.preflight import git_head_at
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -56,7 +58,7 @@ def build_parser() -> argparse.ArgumentParser:
         prog="joryu-curate",
         description="蒸留 JSONL から高品質サブセットを抽出する。",
     )
-    p.add_argument("--config", default="config.yaml")
+    add_config_argument(p)
     p.add_argument(
         "--src",
         default="",
@@ -124,27 +126,13 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _resolve_paths(cfg: Config, args: argparse.Namespace) -> tuple[Path, Path]:
-    src = Path(args.src) if args.src else Path(cfg.distill.out_dir) / cfg.distill.out_file
+    src = resolve_distill_output(cfg, args.src or None)
     if args.dst:
         dst = Path(args.dst)
     else:
         ts = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
         dst = Path(cfg.curate.out_dir) / ts
     return src, dst
-
-
-def _git_sha() -> str | None:
-    try:
-        out = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
-            check=True,
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        return out.stdout.strip() or None
-    except (FileNotFoundError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
-        return None
 
 
 def _build_judge(cfg: Config, args: argparse.Namespace) -> JudgeClient | None:
@@ -176,8 +164,7 @@ def main(
 ) -> int:
     log = _print if _print is not None else print
     args = build_parser().parse_args(argv)
-    cfg_path = Path(args.config)
-    cfg = load_config(cfg_path) if cfg_path.exists() else Config()
+    cfg = resolve_cli_config(args)
 
     # CLI 引数で curate config を上書き
     if args.threshold is not None:
@@ -415,7 +402,7 @@ def main(
         judge_mode=cfg.curate.judge_mode,
         signal_versions=signal_versions,
         cli_args=vars(args),
-        git_sha=_git_sha(),
+        git_sha=git_head_at(Path.cwd()),
         llm_calls_total=llm_calls,
         incremental=incremental,
     )
@@ -518,22 +505,11 @@ def _resolve_dup_index_path(args: argparse.Namespace, dst: Path) -> Path | None:
             last = last.parent
         candidate = last / DEFAULT_INDEX_FILENAME
         return candidate if candidate.exists() else None
-    # 自動検出
-    root = dst.parent
-    if not root.exists() or not root.is_dir():
-        return None
-    candidates: list[tuple[float, Path]] = []
-    current_resolved = dst.resolve()
-    for child in root.iterdir():
-        if not child.is_dir() or child.resolve() == current_resolved:
-            continue
-        idx = child / DEFAULT_INDEX_FILENAME
-        if idx.exists():
-            candidates.append((idx.stat().st_mtime, idx))
-    if not candidates:
-        return None
-    candidates.sort(reverse=True)
-    return candidates[0][1]
+    return find_latest_run_artifact(
+        dst.parent,
+        exclude=dst,
+        marker=DEFAULT_INDEX_FILENAME,
+    )
 
 
 def _collect_signal_versions(

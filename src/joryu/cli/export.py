@@ -6,10 +6,8 @@ import argparse
 import sys
 from pathlib import Path
 
-from joryu.config import load_config
+from joryu.cli.common import add_config_argument, resolve_cli_config, resolve_cli_distill_input
 from joryu.export import DEFAULT_LEVEL, export_jsonl
-
-DEFAULT_CONFIG = "config.yaml"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -19,11 +17,7 @@ def build_parser() -> argparse.ArgumentParser:
             "蒸留 JSONL を zstd 圧縮し、meta.json + SHA256SUMS をつけて exports/<ts>/ に出力する。"
         ),
     )
-    p.add_argument(
-        "--config",
-        default=DEFAULT_CONFIG,
-        help=f"設定ファイル (既定: {DEFAULT_CONFIG})",
-    )
+    add_config_argument(p)
     p.add_argument(
         "--input",
         default="",
@@ -50,17 +44,9 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    cfg = resolve_cli_config(args)
 
-    cfg_path = Path(args.config)
-    if cfg_path.exists():
-        cfg = load_config(cfg_path)
-    else:
-        # config が無くても --input / --out-dir があれば動く。
-        from joryu.config import Config
-
-        cfg = Config()
-
-    src = Path(args.input) if args.input else Path(cfg.distill.out_dir) / cfg.distill.out_file
+    src = resolve_cli_distill_input(args, cfg)
     out_dir = Path(args.out_dir) if args.out_dir else Path(cfg.export.out_dir)
     level = args.level if args.level > 0 else (cfg.export.level or DEFAULT_LEVEL)
     bundle_tar = args.bundle_tar or cfg.export.bundle_tar

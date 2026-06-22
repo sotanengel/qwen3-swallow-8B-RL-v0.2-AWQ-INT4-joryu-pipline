@@ -9,20 +9,17 @@ import pytest
 
 from joryu.config import Config
 from joryu.distill import run_distill
+from tests.helpers.jsonl import read_jsonl, write_jsonl
 
 from .conftest import FakeVllmClient
 
 
 def _write_bank(path: Path, rows: list[dict]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        "\n".join(json.dumps(r, ensure_ascii=False) for r in rows) + "\n",
-        encoding="utf-8",
-    )
+    write_jsonl(path, rows)
 
 
 def _load_jsonl(path: Path) -> list[dict]:
-    return [json.loads(ln) for ln in path.read_text(encoding="utf-8").splitlines() if ln.strip()]
+    return read_jsonl(path)
 
 
 def test_run_distill_writes_records(tmp_path: Path) -> None:
