@@ -49,7 +49,8 @@ uv run joryu-up --detach
 
 # 6b. ブラウザで http://localhost:3000/jobs から蒸留ジョブを投入
 #     API: http://localhost:8000  (ローカル専用・認証なし)
-#     GPU 蒸留実行には `uv run joryu-up --full` で joryu イメージも起動する
+#     ジョブ実行用 joryu:latest は joryu-up が自動 build する
+#     vLLM 常駐コンテナとして up する場合は `uv run joryu-up --full`
 ```
 
 ## フロント + バックエンドの起動 / 停止
@@ -69,7 +70,7 @@ uv run joryu-down                # 停止 (volume は残す)
 uv run joryu-down --volumes      # HF キャッシュ含めて完全に削除
 ```
 
-`joryu-up` は git 作業ツリーの差分と、前回起動時の HEAD からのコミット差分（`git pull` 後など）から rebuild 対象を自動判定する。初回起動時は up 対象をすべて build する。dashboard を起動した場合は http://localhost:3000 が ready になったらブラウザを自動で開く (`--no-open` で無効化)。joryu ビルド時はホスト空き **25 GB** 以上を要求し、不足時は中止する (`--force` で続行可)。
+`joryu-up` は git 作業ツリーの差分と、前回起動時の HEAD からのコミット差分（`git pull` 後など）から rebuild 対象を自動判定する。初回起動時は up 対象をすべて build し、API ジョブ用の `joryu:latest` も未作成なら build する。dashboard を起動した場合は http://localhost:3000 が ready になったらブラウザを自動で開く (`--no-open` で無効化)。joryu ビルド時はホスト空き **25 GB** 以上を要求し、不足時は中止する (`--force` で続行可)。
 
 ## ジョブ API とダッシュボード
 

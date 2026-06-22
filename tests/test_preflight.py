@@ -12,6 +12,7 @@ from joryu.preflight import (
     PreflightError,
     changed_services_from_git,
     check_disk_space,
+    docker_image_exists,
     ensure_dashboard_data_paths,
     path_affects_service,
     required_disk_gb,
@@ -26,6 +27,7 @@ from joryu.preflight import (
         ("src/joryu/cli/up.py", {"joryu"}),
         ("src/joryu/distill.py", {"api", "joryu"}),
         ("src/joryu/docker_delegate.py", {"api", "joryu"}),
+        ("src/joryu/docker_runtime.py", {"api", "joryu"}),
         ("src/joryu/stats.py", {"api", "joryu"}),
         ("docker-compose.yml", {"api", "joryu"}),
         ("src/joryu/jobs/models.py", {"api"}),
@@ -87,7 +89,39 @@ def test_services_to_build_first_run_builds_all_up_targets() -> None:
         set(),
         no_build=False,
         first_run=True,
-    ) == ["dashboard", "api"]
+    ) == ["dashboard", "api", "joryu"]
+
+
+def test_services_to_build_builds_joryu_when_image_missing() -> None:
+    assert services_to_build(
+        ["dashboard", "api"],
+        set(),
+        no_build=False,
+        inspect_runner=lambda *_args, **_kwargs: _InspectResult(returncode=1),
+    ) == ["joryu"]
+
+
+def test_services_to_build_skips_joryu_when_image_exists_and_no_diff() -> None:
+    assert (
+        services_to_build(
+            ["dashboard", "api"],
+            set(),
+            no_build=False,
+            inspect_runner=lambda *_args, **_kwargs: _InspectResult(returncode=0),
+        )
+        == []
+    )
+
+
+def test_docker_image_exists() -> None:
+    assert docker_image_exists(
+        "joryu:latest",
+        inspect_runner=lambda *_args, **_kwargs: _InspectResult(returncode=0),
+    )
+    assert not docker_image_exists(
+        "joryu:latest",
+        inspect_runner=lambda *_args, **_kwargs: _InspectResult(returncode=1),
+    )
 
 
 def test_services_to_build_force_build() -> None:
@@ -121,11 +155,24 @@ def test_resolve_up_services_full() -> None:
 
 
 def test_services_to_build_intersection() -> None:
+    def _image_exists(*_args: object, **_kwargs: object) -> _InspectResult:
+        return _InspectResult(returncode=0)
+
     assert services_to_build(["dashboard", "joryu"], {"joryu"}, no_build=False) == ["joryu"]
     assert services_to_build(["dashboard"], {"joryu"}, no_build=False) == []
     assert services_to_build(["dashboard"], {"dashboard"}, no_build=True) == []
-    assert services_to_build(["dashboard", "api"], {"joryu"}, no_build=False) == ["joryu"]
-    assert services_to_build(["dashboard", "api"], {"dashboard", "joryu"}, no_build=False) == [
+    assert services_to_build(
+        ["dashboard", "api"],
+        {"joryu"},
+        no_build=False,
+        inspect_runner=_image_exists,
+    ) == ["joryu"]
+    assert services_to_build(
+        ["dashboard", "api"],
+        {"dashboard", "joryu"},
+        no_build=False,
+        inspect_runner=_image_exists,
+    ) == [
         "dashboard",
         "joryu",
     ]
@@ -186,4 +233,9 @@ def test_ensure_dashboard_data_paths_creates_jsonl_and_symlink(tmp_path: Path) -
 class _GitResult:
     def __init__(self, stdout: str = "", returncode: int = 0) -> None:
         self.stdout = stdout
+        self.returncode = returncode
+
+
+class _InspectResult:
+    def __init__(self, returncode: int = 0) -> None:
         self.returncode = returncode
