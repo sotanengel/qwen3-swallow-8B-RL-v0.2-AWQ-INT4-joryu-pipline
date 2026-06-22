@@ -3,6 +3,8 @@
 import dynamic from "next/dynamic";
 import { useState } from "react";
 
+import { HeatmapTable } from "@/components/HeatmapTable";
+import { RejectedSamplesTable } from "@/components/RejectedSamplesTable";
 import {
   EMPTY_CURATION,
   curationDataChanged,
@@ -64,6 +66,10 @@ export default function CurationPage() {
     }))
     .sort((a, b) => b.count - a.count);
 
+  const modeEntries = Object.entries(cur.by_mode).sort(([a], [b]) =>
+    a.localeCompare(b),
+  );
+
   return (
     <>
       {loaded && cur.total === 0 && (
@@ -88,6 +94,35 @@ export default function CurationPage() {
       </section>
 
       <section className="section">
+        <h2>mode 別 スコア分布</h2>
+        {modeEntries.length === 0 ? (
+          <p style={{ color: "var(--muted)" }}>データなし</p>
+        ) : (
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: `repeat(${Math.min(modeEntries.length, 2)}, 1fr)`,
+              gap: "1rem",
+            }}
+          >
+            {modeEntries.map(([mode, v]) => (
+              <div key={mode}>
+                <h3 style={{ fontSize: "0.95rem", color: "var(--muted)" }}>
+                  {mode} (n={v.total}, 採用率 {(v.keep_rate * 100).toFixed(1)}%)
+                </h3>
+                <HistogramChart
+                  data={v.score_bins.map((b) => ({
+                    name: `${b.lo}–${b.hi ?? "∞"}`,
+                    count: b.count,
+                  }))}
+                />
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="section">
         <h2>棄却理由 Top-N</h2>
         <HistogramChart data={reasonBars} />
       </section>
@@ -106,6 +141,16 @@ export default function CurationPage() {
       <section className="section">
         <h2>style 別採用率 (%)</h2>
         <HistogramChart data={styleBars} />
+      </section>
+
+      <section className="section">
+        <h2>sampling × style 採用率ヒートマップ</h2>
+        <HeatmapTable cells={cur.by_sampling_style} />
+      </section>
+
+      <section className="section">
+        <h2>棄却サンプル</h2>
+        <RejectedSamplesTable samples={cur.rejected_samples} />
       </section>
     </>
   );

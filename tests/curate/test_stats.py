@@ -103,3 +103,116 @@ def test_write_curation_json_creates_file(tmp_path: Path) -> None:
     payload = json.loads(dst.read_text(encoding="utf-8"))
     assert payload["total"] == 1
     assert "_meta" in payload
+
+
+# ---------- R-18 残要素 (by_sampling / by_sampling_style / by_mode / rejected_samples) ----------
+
+
+def test_compute_curation_stats_by_sampling(tmp_path: Path) -> None:
+    src = tmp_path / "scores.jsonl"
+    rows = [
+        _score_row(
+            sampling={"temperature": 0.6, "top_p": 0.95},
+            accepted=True,
+            style_id="polite",
+        ),
+        _score_row(
+            sampling={"temperature": 0.6, "top_p": 0.95},
+            accepted=False,
+            rejected_by=["LEN-A"],
+            style_id="polite",
+        ),
+        _score_row(
+            sampling={"temperature": 0.9, "top_p": 0.8},
+            accepted=True,
+            style_id="casual",
+        ),
+    ]
+    _write(src, rows)
+    stats = compute_curation_stats(src)
+    assert "t=0.6,p=0.95" in stats["by_sampling"]
+    assert stats["by_sampling"]["t=0.6,p=0.95"]["total"] == 2
+    assert stats["by_sampling"]["t=0.6,p=0.95"]["kept"] == 1
+    assert stats["by_sampling"]["t=0.9,p=0.8"]["keep_rate"] == 1.0
+
+
+def test_compute_curation_stats_by_sampling_style_cells(tmp_path: Path) -> None:
+    src = tmp_path / "scores.jsonl"
+    rows = [
+        _score_row(
+            sampling={"temperature": 0.6, "top_p": 0.95},
+            accepted=True,
+            style_id="polite",
+        ),
+        _score_row(
+            sampling={"temperature": 0.6, "top_p": 0.95},
+            accepted=False,
+            rejected_by=["LEN-A"],
+            style_id="casual",
+        ),
+    ]
+    _write(src, rows)
+    stats = compute_curation_stats(src)
+    cells = stats["by_sampling_style"]
+    assert isinstance(cells, list)
+    matched = {(c["sampling"], c["style_id"]): c for c in cells}
+    assert matched[("t=0.6,p=0.95", "polite")]["kept"] == 1
+    assert matched[("t=0.6,p=0.95", "casual")]["kept"] == 0
+
+
+def test_compute_curation_stats_by_mode(tmp_path: Path) -> None:
+    src = tmp_path / "scores.jsonl"
+    rows = [
+        _score_row(mode="thinking", final_score=0.9, accepted=True),
+        _score_row(mode="thinking", final_score=0.2, accepted=False, rejected_by=["TRUNC"]),
+        _score_row(mode="nothinking", final_score=0.7, accepted=True),
+    ]
+    _write(src, rows)
+    stats = compute_curation_stats(src)
+    assert stats["by_mode"]["thinking"]["total"] == 2
+    assert stats["by_mode"]["nothinking"]["total"] == 1
+    # mode 別 score_bins が存在
+    assert isinstance(stats["by_mode"]["thinking"]["score_bins"], list)
+
+
+def test_rejected_samples_deterministic_with_seed(tmp_path: Path) -> None:
+    src = tmp_path / "scores.jsonl"
+    rows = [
+        _score_row(
+            record_hash=f"h{i}",
+            prompt=f"prompt {i}",
+            accepted=False,
+            rejected_by=["LEN-A"],
+        )
+        for i in range(10)
+    ]
+    _write(src, rows)
+    stats1 = compute_curation_stats(src, rejected_sample_n=5)
+    stats2 = compute_curation_stats(src, rejected_sample_n=5)
+    # 同一 seed なので決定的
+    hashes1 = [s["record_hash"] for s in stats1["rejected_samples"]]
+    hashes2 = [s["record_hash"] for s in stats2["rejected_samples"]]
+    assert hashes1 == hashes2
+    assert len(stats1["rejected_samples"]) == 5
+
+
+def test_rejected_samples_excludes_accepted(tmp_path: Path) -> None:
+    src = tmp_path / "scores.jsonl"
+    rows = [
+        _score_row(record_hash="acc", accepted=True),
+        _score_row(record_hash="rej", accepted=False, rejected_by=["LEN-A"]),
+    ]
+    _write(src, rows)
+    stats = compute_curation_stats(src, rejected_sample_n=5)
+    hashes = [s["record_hash"] for s in stats["rejected_samples"]]
+    assert "acc" not in hashes
+    assert "rej" in hashes
+
+
+def test_empty_stats_includes_new_fields() -> None:
+    # ファイル不在時のフォールバック構造に新フィールドが含まれている
+    stats = compute_curation_stats("/nonexistent.jsonl")
+    assert "by_sampling" in stats
+    assert "by_sampling_style" in stats
+    assert "by_mode" in stats
+    assert "rejected_samples" in stats

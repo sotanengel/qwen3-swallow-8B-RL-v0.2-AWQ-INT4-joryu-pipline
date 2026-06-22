@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 from joryu.config import CurateSignalThresholds
+from joryu.curate.scoring import CompositeScore
 from joryu.curate.signals.stat import (
+    SAMP_OUT_CODE,
+    SAMP_OUT_VERSION,
     DupGlobal,
     LangJapanese,
     LenAnswer,
@@ -11,10 +14,13 @@ from joryu.curate.signals.stat import (
     RatioTA,
     RepeatChar,
     RepeatNGram,
+    StyleAdherence,
     ThinkTag,
     Truncated,
+    apply_samp_out_filter,
     build_default_stat_signals,
 )
+from joryu.curate.style_presets import DEFAULT_STYLE_RULES
 
 
 def _rec(**overrides):
@@ -171,4 +177,89 @@ def test_build_default_stat_signals_returns_all_codes():
         "REPEAT-NG",
         "REPEAT-CHAR",
         "DUP-GLOB",
+        "STYLE-ADH",
     ]
+
+
+# ---------- STYLE-ADH ----------
+
+
+def test_style_adh_no_style_id_returns_neutral():
+    sig = StyleAdherence(th=CurateSignalThresholds(), rules=DEFAULT_STYLE_RULES)
+    r = sig.evaluate(_rec(answer="どんな文体でも。"))
+    assert r.hard_reject is False
+    assert r.score == 1.0
+
+
+def test_style_adh_polite_match_passes():
+    sig = StyleAdherence(th=CurateSignalThresholds(), rules=DEFAULT_STYLE_RULES)
+    polite_text = (
+        "本日はお越しいただきありがとうございます。"
+        "資料を共有いたします。"
+        "ご不明な点があればお知らせください。"
+    )
+    r = sig.evaluate(_rec(style_id="polite", answer=polite_text))
+    assert r.hard_reject is False
+    assert r.score >= 0.3
+
+
+def test_style_adh_polite_violates_when_casual_text():
+    sig = StyleAdherence(th=CurateSignalThresholds(), rules=DEFAULT_STYLE_RULES)
+    casual_text = "今日は超楽しいだよ。マジでヤバいかな。明日もそうだね。"
+    r = sig.evaluate(_rec(style_id="polite", answer=casual_text))
+    assert r.hard_reject is True
+
+
+def test_style_adh_unknown_style_returns_neutral():
+    sig = StyleAdherence(th=CurateSignalThresholds(), rules=DEFAULT_STYLE_RULES)
+    r = sig.evaluate(_rec(style_id="unknown_preset", answer="something"))
+    assert r.hard_reject is False
+    assert r.score == 1.0
+
+
+# ---------- SAMP-OUT (batch) ----------
+
+
+def _make_composite(final_score: float) -> CompositeScore:
+    return CompositeScore(
+        stat_score=final_score,
+        llm_score=None,
+        final_score=final_score,
+        hard_rejected_by=[],
+        signal_versions={},
+        signal_scores={},
+        signal_raw={},
+    )
+
+
+def test_samp_out_marks_low_outlier_in_bucket():
+    # 同一 (temperature=0.6, top_p=0.95) bucket に 6 件、うち 1 件だけ極端に低い
+    records = [_rec(sampling={"temperature": 0.6, "top_p": 0.95}) for _ in range(6)]
+    composites = [_make_composite(0.8) for _ in range(5)] + [_make_composite(0.1)]
+    added = apply_samp_out_filter(records, composites, z_min=-1.5, min_bucket_size=3)
+    assert added == 1
+    assert SAMP_OUT_CODE in composites[-1].hard_rejected_by
+    assert all(SAMP_OUT_CODE not in c.hard_rejected_by for c in composites[:-1])
+
+
+def test_samp_out_skip_small_bucket():
+    records = [_rec(sampling={"temperature": 0.6, "top_p": 0.95}) for _ in range(3)]
+    composites = [_make_composite(0.8), _make_composite(0.85), _make_composite(0.1)]
+    added = apply_samp_out_filter(records, composites, z_min=-1.0, min_bucket_size=5)
+    assert added == 0  # bucket size 3 < 5 なので評価 skip
+
+
+def test_samp_out_records_signal_version():
+    records = [_rec(sampling={"temperature": 0.6, "top_p": 0.95}) for _ in range(2)]
+    composites = [_make_composite(0.8), _make_composite(0.8)]
+    apply_samp_out_filter(records, composites, min_bucket_size=2)
+    for c in composites:
+        assert c.signal_versions.get(SAMP_OUT_CODE) == SAMP_OUT_VERSION
+
+
+def test_samp_out_ignores_records_without_sampling():
+    records = [_rec(sampling=None), _rec(sampling={"temperature": 0.6, "top_p": 0.95})]
+    composites = [_make_composite(0.5), _make_composite(0.8)]
+    added = apply_samp_out_filter(records, composites, min_bucket_size=1)
+    # sampling 欠損は bucket 評価対象外。残り 1 件だけ bucket だが std=0 → 追加棄却なし
+    assert added == 0

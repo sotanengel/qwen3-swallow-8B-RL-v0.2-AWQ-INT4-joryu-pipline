@@ -17,6 +17,36 @@ export interface CurationByStyle {
   keep_rate: number;
 }
 
+export interface CurationBySampling {
+  total: number;
+  kept: number;
+  keep_rate: number;
+}
+
+export interface CurationSamplingStyleCell {
+  sampling: string;
+  style_id: string;
+  total: number;
+  kept: number;
+  keep_rate: number;
+}
+
+export interface CurationByMode {
+  total: number;
+  kept: number;
+  keep_rate: number;
+  score_bins: LengthBin[];
+}
+
+export interface CurationRejectedSample {
+  record_hash?: string | null;
+  prompt: string;
+  style_id?: string | null;
+  mode?: string | null;
+  rejected_by: string[];
+  final_score?: number | null;
+}
+
 export interface CurationStats {
   total: number;
   accepted: number;
@@ -27,6 +57,10 @@ export interface CurationStats {
   rubric_avg: RubricAvg;
   rubric_count: number;
   by_style: Record<string, CurationByStyle>;
+  by_sampling: Record<string, CurationBySampling>;
+  by_sampling_style: CurationSamplingStyleCell[];
+  by_mode: Record<string, CurationByMode>;
+  rejected_samples: CurationRejectedSample[];
   _meta?: {
     source_path?: string;
     generated_at?: string;
@@ -43,6 +77,10 @@ export const EMPTY_CURATION: CurationStats = {
   rubric_avg: {},
   rubric_count: 0,
   by_style: {},
+  by_sampling: {},
+  by_sampling_style: [],
+  by_mode: {},
+  rejected_samples: [],
 };
 
 export function mergeCuration(data: Partial<CurationStats>): CurationStats {
@@ -54,6 +92,11 @@ export function mergeCuration(data: Partial<CurationStats>): CurationStats {
       data.rejected_reasons_top ?? EMPTY_CURATION.rejected_reasons_top,
     rubric_avg: data.rubric_avg ?? EMPTY_CURATION.rubric_avg,
     by_style: data.by_style ?? EMPTY_CURATION.by_style,
+    by_sampling: data.by_sampling ?? EMPTY_CURATION.by_sampling,
+    by_sampling_style:
+      data.by_sampling_style ?? EMPTY_CURATION.by_sampling_style,
+    by_mode: data.by_mode ?? EMPTY_CURATION.by_mode,
+    rejected_samples: data.rejected_samples ?? EMPTY_CURATION.rejected_samples,
   };
 }
 

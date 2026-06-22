@@ -9,9 +9,15 @@ from joryu.curate.judge_client import (
     RUBRIC_KEYS,
     FakeJudgeClient,
     VllmJudgeClient,
+    parse_pair_response,
     parse_rubric_response,
+    parse_self_response,
 )
-from joryu.curate.signals.llm_judge import LLMRubricSignal
+from joryu.curate.signals.llm_judge import (
+    LLMPairSignalContext,
+    LLMRubricSignal,
+    LLMSelfSignal,
+)
 
 
 def test_parse_rubric_response_clean_json():
@@ -105,3 +111,133 @@ def test_vllm_judge_client_neutral_on_chat_exception():
     judge = VllmJudgeClient(ErrChat(), rubric_prompt="x")
     scores = judge.score_rubric("p", "a")
     assert all(v == 3 for v in scores.values())
+
+
+# ---------- LLM-PAIR ----------
+
+
+def test_parse_pair_response_valid():
+    assert parse_pair_response('{"winner": "a"}') == "a"
+    assert parse_pair_response('{"winner": "b"}') == "b"
+    assert parse_pair_response('{"winner": "tie"}') == "tie"
+
+
+def test_parse_pair_response_fallback_on_garbage():
+    assert parse_pair_response("not json") == "tie"
+    assert parse_pair_response('{"winner": "unknown"}') == "tie"
+
+
+def test_fake_judge_compare_pair_default_tie():
+    fj = FakeJudgeClient()
+    assert fj.compare_pair("p", "a", "b") == "tie"
+    assert fj.pair_calls == [{"prompt": "p", "a": "a", "b": "b"}]
+
+
+def test_fake_judge_compare_pair_with_scorer():
+    fj = FakeJudgeClient(pair_scorer=lambda p, a, b: "a" if len(a) > len(b) else "b")
+    assert fj.compare_pair("p", "long", "x") == "a"
+
+
+def test_llm_pair_context_pairwise_winrate():
+    # 3 件のグループで、a > b > c となる scorer を仕込む
+    def scorer(prompt: str, a: str, b: str):
+        priority = {"A": 3, "B": 2, "C": 1}
+        if priority[a] > priority[b]:
+            return "a"
+        if priority[a] < priority[b]:
+            return "b"
+        return "tie"
+
+    fj = FakeJudgeClient(pair_scorer=scorer)
+    ctx = LLMPairSignalContext(judge=fj)
+    records = [
+        {"prompt": "p", "answer": "A"},
+        {"prompt": "p", "answer": "B"},
+        {"prompt": "p", "answer": "C"},
+    ]
+    winrate = ctx.evaluate_group(records, [0, 1, 2])
+    # A: 2/2 = 1.0, B: 1/2 = 0.5, C: 0/2 = 0.0
+    assert winrate[0] == 1.0
+    assert winrate[1] == 0.5
+    assert winrate[2] == 0.0
+
+
+def test_llm_pair_context_singleton_returns_one():
+    fj = FakeJudgeClient()
+    ctx = LLMPairSignalContext(judge=fj)
+    winrate = ctx.evaluate_group([{"prompt": "p", "answer": "a"}], [0])
+    assert winrate == {0: 1.0}
+    assert fj.pair_calls == []  # 比較不要
+
+
+# ---------- LLM-SELF ----------
+
+
+def test_parse_self_response_valid():
+    assert parse_self_response('{"score": 0.85}') == 0.85
+    assert parse_self_response('{"score": 1}') == 1.0
+    assert parse_self_response('{"score": -1}') == 0.0
+    assert parse_self_response('{"score": 2}') == 1.0
+
+
+def test_parse_self_response_fallback():
+    assert parse_self_response("no json") == 0.5
+    assert parse_self_response('{"score": "bad"}') == 0.5
+
+
+def test_llm_self_signal_thinking_mode_uses_judge():
+    fj = FakeJudgeClient(self_score=0.9)
+    sig = LLMSelfSignal(judge=fj)
+    r = sig.evaluate({"prompt": "p", "answer": "a", "thinking_trace": "t", "mode": "thinking"})
+    assert r.score == 0.9
+    assert r.hard_reject is False
+    assert fj.self_calls[0]["prompt"] == "p"
+
+
+def test_llm_self_signal_nothinking_skips_call():
+    fj = FakeJudgeClient(self_score=0.1)
+    sig = LLMSelfSignal(judge=fj, hard_min=0.5)
+    r = sig.evaluate({"prompt": "p", "answer": "a", "mode": "nothinking"})
+    assert r.score == 1.0
+    assert r.hard_reject is False
+    assert fj.self_calls == []
+
+
+def test_llm_self_signal_hard_reject_below_min():
+    fj = FakeJudgeClient(self_score=0.2)
+    sig = LLMSelfSignal(judge=fj, hard_min=0.5)
+    r = sig.evaluate({"prompt": "p", "answer": "a", "thinking_trace": "t", "mode": "thinking"})
+    assert r.hard_reject is True
+
+
+def test_vllm_judge_client_pair_calls_chat():
+    class StubChat:
+        def __init__(self):
+            self.calls = []
+
+        def chat_via_template(self, messages, *, enable_thinking=True, **sampling):
+            self.calls.append({"messages": messages, "enable_thinking": enable_thinking})
+            return (None, '{"winner": "b"}')
+
+    chat = StubChat()
+    judge = VllmJudgeClient(chat, rubric_prompt=DEFAULT_RUBRIC_PROMPT, judge_mode="nothinking")
+    w = judge.compare_pair("p", "ans-a", "ans-b")
+    assert w == "b"
+    assert chat.calls[0]["enable_thinking"] is False
+
+
+def test_vllm_judge_client_self_uses_thinking():
+    class StubChat:
+        def __init__(self):
+            self.calls = []
+
+        def chat_via_template(self, messages, *, enable_thinking=True, **sampling):
+            self.calls.append({"enable_thinking": enable_thinking})
+            return (None, '{"score": 0.7}')
+
+    chat = StubChat()
+    judge = VllmJudgeClient(chat, rubric_prompt=DEFAULT_RUBRIC_PROMPT, judge_mode="nothinking")
+    s = judge.score_self_consistency("p", "thinking text", "answer text")
+    assert s == 0.7
+    # self_consistency は常に thinking モード固定
+    assert chat.calls[0]["enable_thinking"] is True
