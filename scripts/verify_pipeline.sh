@@ -74,4 +74,24 @@ test -s "$stats" || { echo "[verify] FAIL: stats.json empty"; exit 1; }
 total=$(uv run python -c "import json,sys; print(json.load(open(sys.argv[1], encoding='utf-8'))['total'])" "$stats")
 echo "[verify]  -> stats.total=$total" >&2
 
+echo "[verify] step 4: joryu-curate (FakeJudgeClient via env flag)" >&2
+curate_dst="$work/curated"
+JORYU_CURATE_FAKE_JUDGE=1 uv run joryu-curate \
+  --config "$cfg" --src "$out" --dst "$curate_dst" --threshold 0.0
+test -f "$curate_dst/responses.high_quality.jsonl" || {
+  echo "[verify] FAIL: high_quality.jsonl missing"; exit 1
+}
+test -f "$curate_dst/scores.jsonl" || { echo "[verify] FAIL: scores.jsonl missing"; exit 1; }
+test -f "$curate_dst/curation_meta.json" || {
+  echo "[verify] FAIL: curation_meta.json missing"; exit 1
+}
+kept=$(uv run python -c "import json,sys; print(json.load(open(sys.argv[1], encoding='utf-8'))['summary']['kept'])" "$curate_dst/curation_meta.json")
+echo "[verify]  -> curate kept=$kept" >&2
+
+echo "[verify] step 5: joryu-stats --curation" >&2
+uv run joryu-stats --config "$cfg" --input "$out" --output "$stats" \
+  --curation "$curate_dst" --curation-output "$work/curation.json"
+test -s "$work/curation.json" || { echo "[verify] FAIL: curation.json empty"; exit 1; }
+echo "[verify]  -> curation.json written" >&2
+
 echo "[verify] OK: end-to-end smoke passed" >&2

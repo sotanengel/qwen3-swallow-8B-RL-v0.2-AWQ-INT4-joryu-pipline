@@ -14,6 +14,7 @@ dependencies = [
 joryu-distill = "joryu.cli.distill:main"
 joryu-export = "joryu.cli.export:main"
 joryu-stats = "joryu.cli.stats:main"
+joryu-curate = "joryu.cli.curate:main"
 joryu-up = "joryu.cli.up:main"
 joryu-down = "joryu.cli.down:main"
 joryu-serve = "joryu.cli.serve:main"

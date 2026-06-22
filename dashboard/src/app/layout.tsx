@@ -23,6 +23,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <Link href="/">概要</Link>
             <Link href="/search">検索</Link>
             <Link href="/distributions">分布</Link>
+            <Link href="/curation">高品質抽出</Link>
             <Link href="/jobs">ジョブ</Link>
           </nav>
         </header>

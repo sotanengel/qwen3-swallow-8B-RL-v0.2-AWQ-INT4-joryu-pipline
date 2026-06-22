@@ -33,6 +33,7 @@ dashboard/node_modules/
 dashboard/out/
 dashboard/public/responses.jsonl
 dashboard/public/stats.json
+dashboard/public/curation.json
 
 # Secrets / local env
 .env

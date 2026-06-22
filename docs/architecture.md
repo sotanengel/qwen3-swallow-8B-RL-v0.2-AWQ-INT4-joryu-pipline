@@ -24,17 +24,32 @@ styles.yaml ──┤
               ▼
    data/distilled/responses.jsonl
               │
-       ┌──────┴──────────────────┐
-       ▼                         ▼
-   export.py                  stats.py
-   (zstd + SHA256             (category / mode /
-    + meta.json + tar)         length / sampling /
-       │                       timeline ヒストグラム)
-       ▼                         ▼
-   exports/<ts>/             dashboard/public/stats.json
-   responses.jsonl.zst              │
+       ┌──────┴──────────────────┬─────────────────┐
+       ▼                         ▼                 ▼
+   export.py                  stats.py        curate/loader.py
+   (zstd + SHA256             (category /         │
+    + meta.json + tar)         mode / length /    ▼
+       │                       sampling /     curate/signals/stat.py (R-10)
+       │                       timeline)          │
+       ▼                                          ▼ (第一段通過分のみ)
+   exports/<ts>/                              curate/signals/llm_judge.py (R-11)
+   responses.jsonl.zst                            │
+                                                  ▼
+                                              curate/scoring.py + writer.py
+                                                  │
+                                       ┌──────────┴──────────┐
+                                       ▼                     ▼
+                                   responses.high_quality   responses.rejected
+                                   .jsonl                   .jsonl (+ rejected_by)
+                                       │
+                                       ▼
+                                   scores.jsonl + curation_meta.json
+                                       │
+                                       ▼
+                          dashboard/public/{stats,curation}.json
+                                    │
                                     ▼
-                          Next.js (recharts, 検索, /jobs)
+                          Next.js (recharts, 検索, /jobs, /curation)
                           http://localhost:3000
                                     ▲
                                     │ POST/GET /api/jobs
@@ -72,7 +87,8 @@ styles.yaml ──┤
 |---|---|
 | `joryu-distill` | 蒸留ループ実行 (Windows なら auto Docker) |
 | `joryu-export` | zstd 圧縮 + meta + SHA256 + tar |
-| `joryu-stats` | dashboard JSON 生成 |
+| `joryu-stats` | dashboard JSON 生成 (`--curation <run_dir>` で curation.json も) |
+| `joryu-curate` | 蒸留 JSONL から高品質サブセットを抽出 |
 | `joryu-api` | 蒸留ジョブ REST API (FastAPI, :8000) |
 | `joryu-up` | git 差分 → `compose build` → `compose up` (既定: dashboard + api) |
 | `joryu-up --full` | dashboard + api + joryu を up、差分がある方だけ build |
