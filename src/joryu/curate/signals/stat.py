@@ -13,8 +13,13 @@ from dataclasses import dataclass
 from typing import Any
 
 from joryu.config import CurateSignalThresholds
+from joryu.curate.minhash_index import GlobalDuplicateIndex
+from joryu.curate.style_presets import DEFAULT_STYLE_RULES, StyleRule
 
 from . import Signal, SignalResult
+
+SAMP_OUT_CODE = "SAMP-OUT"
+SAMP_OUT_VERSION = "v1"
 
 _KANA_HIRA = re.compile(r"[぀-ゟ゠-ヿ一-鿿]")
 _THINK_OPEN = re.compile(r"<think>")
@@ -197,34 +202,156 @@ class RepeatChar:
 
 
 class DupGlobal:
-    """同一ラン内の `answer` 完全重複検出。
+    """`answer` のラン跨ぎグローバル重複検出 (R-24 MinHash 永続化対応)。
 
-    MVP では MinHash 永続化なしで、1 ラン内の SHA1 短縮ハッシュ集合のみを保持する。
-    本要件 R-24 (MinHash 永続化 + ラン跨ぎ) は後続 PR で実装。
+    既定では in-memory の `GlobalDuplicateIndex` を内部で 1 つ持つ。CLI 側で
+    永続化済みの index を `inject_index()` で差し込むことで、過去ラン分も含めた
+    重複判定が可能になる。datasketch 未インストール環境では SHA1 完全一致に
+    フォールバック (`GlobalDuplicateIndex` 側で吸収)。
     """
 
     code = "DUP-GLOB"
-    version = "v1"
+    version = "v2"  # MinHash 対応で v1 → v2
 
-    def __init__(self) -> None:
-        self._seen: set[str] = set()
+    def __init__(self, *, index: GlobalDuplicateIndex | None = None) -> None:
+        self._index = index or GlobalDuplicateIndex()
+
+    @property
+    def index(self) -> GlobalDuplicateIndex:
+        return self._index
+
+    def inject_index(self, index: GlobalDuplicateIndex) -> None:
+        self._index = index
 
     def evaluate(self, record: dict[str, Any]) -> SignalResult:
         text = (record.get("answer") or "").strip()
         if not text:
             return SignalResult(self.code, self.version, 0.0, "empty", True)
-        h = hashlib.sha1(text.encode("utf-8"), usedforsecurity=False).hexdigest()
-        if h in self._seen:
-            return SignalResult(self.code, self.version, 0.0, h, True)
-        self._seen.add(h)
-        return SignalResult(self.code, self.version, 1.0, h, False)
+        rh = (
+            record.get("_record_hash")
+            or hashlib.sha1(text.encode("utf-8"), usedforsecurity=False).hexdigest()
+        )
+        is_dup, dup_with = self._index.query_and_insert(str(rh), text)
+        if is_dup:
+            return SignalResult(self.code, self.version, 0.0, {"dup_with": dup_with}, True)
+        return SignalResult(self.code, self.version, 1.0, None, False)
 
 
-def build_default_stat_signals(th: CurateSignalThresholds) -> list[Signal]:
+# ---------- STYLE-ADH (per-record) ----------
+
+
+@dataclass
+class StyleAdherence:
+    """指定 `style_id` のプリセットに対する文末/キーワード一致率。
+
+    `record["style_id"]` が None またはルール未定義の場合は中立 (score=1.0, hard=False)
+    を返す。styles.yaml に declarations のあるプリセットだけ対象になる。
+    """
+
+    code: str = "STYLE-ADH"
+    version: str = "v1"
+    th: CurateSignalThresholds = None  # type: ignore[assignment]
+    rules: dict[str, StyleRule] | None = None
+
+    def evaluate(self, record: dict[str, Any]) -> SignalResult:
+        style_id = record.get("style_id")
+        rules = self.rules or DEFAULT_STYLE_RULES
+        if not isinstance(style_id, str) or style_id not in rules:
+            return SignalResult(self.code, self.version, 1.0, None, False)
+        text = record.get("answer") or ""
+        if not text:
+            return SignalResult(self.code, self.version, 0.0, 0.0, True)
+        rule = rules[style_id]
+        adh = rule.adherence(text)
+        hard = adh < rule.min_adherence
+        return SignalResult(self.code, self.version, adh, adh, hard)
+
+
+# ---------- SAMP-OUT (batch / post-hoc) ----------
+
+
+def _samp_bucket_key(record: dict[str, Any]) -> tuple[float, float] | None:
+    """`sampling.temperature × sampling.top_p` の組をキー化。
+
+    どちらか欠損していたら None (= bucket 評価対象外)。
+    """
+    sampling = record.get("sampling") or {}
+    if not isinstance(sampling, dict):
+        return None
+    t = sampling.get("temperature")
+    p = sampling.get("top_p")
+    if not isinstance(t, int | float) or not isinstance(p, int | float):
+        return None
+    return (float(t), float(p))
+
+
+def apply_samp_out_filter(
+    records: list[dict[str, Any]],
+    composites: list[Any],
+    *,
+    z_min: float = -2.0,
+    min_bucket_size: int = 5,
+) -> int:
+    """`(temperature, top_p)` bucket 内の z-score `< z_min` を SAMP-OUT で hard_reject。
+
+    in-place で `composite.hard_rejected_by` に "SAMP-OUT" を追記し、`signal_versions`
+    にも `SAMP-OUT` を記録する。バケットサイズが `min_bucket_size` 未満なら評価をスキップ
+    (分布が安定しないため)。戻り値 = 追加棄却件数。
+
+    `composites[i]` には少なくとも `final_score` / `hard_rejected_by` / `signal_versions`
+    属性が必要 (CompositeScore 想定だが ducktyping)。
+    """
+    if len(records) != len(composites):
+        raise ValueError("records と composites の長さが一致しません")
+
+    # bucket ごとにインデックスとスコアを集める
+    buckets: dict[tuple[float, float], list[int]] = {}
+    for i, rec in enumerate(records):
+        key = _samp_bucket_key(rec)
+        if key is None:
+            continue
+        buckets.setdefault(key, []).append(i)
+
+    added = 0
+    for _key, idxs in buckets.items():
+        if len(idxs) < min_bucket_size:
+            for i in idxs:
+                _annotate_samp_version(composites[i])
+            continue
+        scores = [float(composites[i].final_score) for i in idxs]
+        mean = sum(scores) / len(scores)
+        var = sum((s - mean) ** 2 for s in scores) / len(scores)
+        std = var**0.5
+        if std == 0:
+            for i in idxs:
+                _annotate_samp_version(composites[i])
+            continue
+        for i in idxs:
+            z = (composites[i].final_score - mean) / std
+            _annotate_samp_version(composites[i])
+            if z < z_min and SAMP_OUT_CODE not in composites[i].hard_rejected_by:
+                composites[i].hard_rejected_by.append(SAMP_OUT_CODE)
+                added += 1
+    return added
+
+
+def _annotate_samp_version(composite: Any) -> None:
+    """composite.signal_versions に SAMP-OUT のエントリを追加 (記録目的)。"""
+    versions = getattr(composite, "signal_versions", None)
+    if isinstance(versions, dict):
+        versions[SAMP_OUT_CODE] = SAMP_OUT_VERSION
+
+
+def build_default_stat_signals(
+    th: CurateSignalThresholds,
+    *,
+    style_rules: dict[str, StyleRule] | None = None,
+) -> list[Signal]:
     """既定の統計シグナル群を組み立てる。
 
     順序が `scores.jsonl` のシグナル並びになる。決定的な並びを保証するために
-    1 ラン内で固定。
+    1 ラン内で固定。`SAMP-OUT` は per-record では評価できないので含めない
+    (代わりに `apply_samp_out_filter` を CLI 側で post-hoc 適用)。
     """
     return [
         LenAnswer(th=th),
@@ -236,6 +363,7 @@ def build_default_stat_signals(th: CurateSignalThresholds) -> list[Signal]:
         RepeatNGram(th=th),
         RepeatChar(th=th),
         DupGlobal(),
+        StyleAdherence(th=th, rules=style_rules),
     ]
 
 
@@ -247,7 +375,11 @@ __all__ = [
     "RatioTA",
     "RepeatChar",
     "RepeatNGram",
+    "SAMP_OUT_CODE",
+    "SAMP_OUT_VERSION",
+    "StyleAdherence",
     "ThinkTag",
     "Truncated",
+    "apply_samp_out_filter",
     "build_default_stat_signals",
 ]

@@ -68,6 +68,7 @@ class CurateWriter:
             "mode": record.get("mode"),
             "style_id": record.get("style_id"),
             "category": record.get("category"),
+            "sampling": record.get("sampling"),
             "final_score": final_score,
             "accepted": accepted,
             "rejected_by": rejected_by,

@@ -77,6 +77,9 @@ class CurateSignalThresholds:
     repeat_ng_max: float = 0.25
     repeat_char_max: int = 30
     dup_glob_jaccard: float = 0.9
+    samp_out_z_min: float = -2.0
+    samp_out_min_bucket_size: int = 5  # この件数未満のサンプリング条件は z-score 評価を skip
+    style_adh_default_min: float = 0.3
 
 
 @dataclass
@@ -162,7 +165,8 @@ def _merge_section(default: Any, override: dict[str, Any] | None) -> Any:
         return default
     cls = type(default)
     fields = {f for f in default.__dataclass_fields__}  # type: ignore[attr-defined]
-    kwargs = {k: v for k, v in asdict(default).items()}
+    # shallow copy: ネスト dataclass を dict 化しないよう getattr ベースで構築
+    kwargs = {k: getattr(default, k) for k in fields}
     for k, v in override.items():
         if k in fields:
             kwargs[k] = v

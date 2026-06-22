@@ -36,3 +36,41 @@ export:
   compression: "zstd"
   level: 19
   bundle_tar: false
+
+# joryu-curate (高品質サブセット抽出) 設定。
+# 詳細は要件定義書 R-09〜R-25 を参照。
+# 設定変更は 3 層ハッシュ (signal/judge/scoring) で検知され、
+# 影響範囲だけが再計算される (--rescore-only で閾値のみ調整可)。
+curate:
+  # 合成スコア重み (要件 6.3)
+  weights_stat: 0.4
+  weights_llm: 0.6
+
+  # 採否しきい値 (--top-k / --keep-rate でも上書き可)
+  threshold: 0.7
+  top_k: null
+  keep_rate: null
+
+  # judge (LLM 評価器) 設定
+  judge_model: "joryu"
+  judge_mode: "nothinking"      # "thinking" | "nothinking"
+  skip_llm: false               # true で統計シグナルのみ
+
+  # 出力先 (子ディレクトリ <YYYYMMDD_HHMMSS>/ が自動付与される)
+  out_dir: "data/curated"
+
+  # 統計シグナルのハード棄却閾値 (要件 6.1)
+  thresholds:
+    len_a_min: 30
+    len_a_max: 4000
+    len_t_min: 20
+    len_t_max: 8000
+    ratio_ta_min: 0.05
+    ratio_ta_max: 10.0
+    lang_ja_min: 0.6
+    repeat_ng_max: 0.25
+    repeat_char_max: 30
+    dup_glob_jaccard: 0.9
+    samp_out_z_min: -2.0
+    samp_out_min_bucket_size: 5
+    style_adh_default_min: 0.3
