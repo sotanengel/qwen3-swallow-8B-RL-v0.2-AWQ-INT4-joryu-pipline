@@ -34,6 +34,7 @@ def _patch_runner(
     monkeypatch.setattr("joryu.cli.up.save_up_state", lambda *_args: None)
     # 空き容量チェックは環境依存なので既定で no-op 化 (insufficient disk テストでは上書き)
     monkeypatch.setattr("joryu.cli.up.check_disk_space", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("joryu.cli.up.ensure_prompt_bank", lambda *_args, **_kwargs: None)
     monkeypatch.setattr("joryu.preflight.docker_image_exists", lambda *_args, **_kwargs: True)
     return calls
 
@@ -252,6 +253,35 @@ def test_up_foreground_schedules_browser_before_compose(monkeypatch: pytest.Monk
     monkeypatch.setattr("joryu.compose.subprocess.run", _fake_run)
     cli_up.main([])
     assert order == ["schedule", "compose"]
+
+
+def test_up_aborts_when_prompt_bank_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = _patch_runner(monkeypatch)
+    monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: set())
+
+    def _fail_prompt_bank(_root: object) -> None:
+        from joryu.preflight import PreflightError
+
+        raise PreflightError("prompt bank missing")
+
+    monkeypatch.setattr("joryu.cli.up.ensure_prompt_bank", _fail_prompt_bank)
+    rc = cli_up.main([])
+    assert rc == 1
+    assert calls == []
+
+
+def test_up_frontend_only_skips_prompt_bank(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = _patch_runner(monkeypatch)
+    monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: set())
+    prompt_calls: list[object] = []
+    monkeypatch.setattr(
+        "joryu.cli.up.ensure_prompt_bank",
+        lambda repo_root: prompt_calls.append(repo_root),
+    )
+    rc = cli_up.main(["--frontend-only"])
+    assert rc == 0
+    assert prompt_calls == []
+    assert calls[0] == ["docker", "compose", "up", "dashboard"]
 
 
 def test_down_default(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -23,6 +23,8 @@ vllm:
 
 distill:
   prompt_bank: "data/prompts/training_prompts.jsonl"
+  # joryu-up: bank 未作成時に CSV から自動生成 (任意。空なら JORYU_PROMPT_CSV / 既定パス)
+  prompt_csv: ""
   out_dir: "data/distilled"
   out_file: "responses.jsonl"
   min_interval_sec: 0.5

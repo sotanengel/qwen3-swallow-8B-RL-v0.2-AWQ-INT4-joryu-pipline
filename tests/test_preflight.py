@@ -14,8 +14,11 @@ from joryu.preflight import (
     check_disk_space,
     docker_image_exists,
     ensure_dashboard_data_paths,
+    ensure_prompt_bank,
     path_affects_service,
     required_disk_gb,
+    resolve_prompt_bank_seed_path,
+    resolve_prompt_csv_path,
     resolve_up_services,
     services_to_build,
 )
@@ -210,6 +213,120 @@ def test_check_disk_space_skipped_with_force() -> None:
         force=True,
         disk_usage_fn=lambda _p: (100, 100, free_bytes),
     )
+
+
+def test_resolve_prompt_bank_seed_path_uses_default_seed(tmp_path: Path) -> None:
+    seed = tmp_path / "scripts" / "seeds" / "training_prompts.jsonl"
+    seed.parent.mkdir(parents=True)
+    seed.write_text('{"prompt":"seed"}\n', encoding="utf-8")
+    from joryu.config import Config
+
+    assert resolve_prompt_bank_seed_path(tmp_path, Config()) == seed.resolve()
+
+
+def test_ensure_prompt_bank_copies_zst_seed(tmp_path: Path) -> None:
+    import zstandard as zstd
+
+    payload = b'{"prompt":"seed"}\n'
+    seed = tmp_path / "scripts" / "seeds" / "training_prompts.jsonl.zst"
+    seed.parent.mkdir(parents=True)
+    seed.write_bytes(zstd.ZstdCompressor(level=3).compress(payload))
+    (tmp_path / "config.yaml").write_text(
+        'distill:\n  prompt_bank: "data/prompts/training_prompts.jsonl"\n',
+        encoding="utf-8",
+    )
+
+    ensure_prompt_bank(tmp_path)
+
+    bank = tmp_path / "data" / "prompts" / "training_prompts.jsonl"
+    assert bank.read_bytes() == payload
+
+
+def test_ensure_prompt_bank_copies_seed_jsonl(tmp_path: Path) -> None:
+    seed = tmp_path / "scripts" / "seeds" / "training_prompts.jsonl"
+    seed.parent.mkdir(parents=True)
+    seed.write_text('{"prompt":"seed"}\n', encoding="utf-8")
+    (tmp_path / "config.yaml").write_text(
+        'distill:\n  prompt_bank: "data/prompts/training_prompts.jsonl"\n',
+        encoding="utf-8",
+    )
+    messages: list[str] = []
+
+    ensure_prompt_bank(tmp_path, log=lambda msg: messages.append(msg))
+
+    bank = tmp_path / "data" / "prompts" / "training_prompts.jsonl"
+    assert bank.read_text(encoding="utf-8") == '{"prompt":"seed"}\n'
+    assert any("copied from" in msg for msg in messages)
+
+
+def test_resolve_prompt_csv_path_prefers_config(tmp_path: Path) -> None:
+    csv_path = tmp_path / "src.csv"
+    csv_path.write_text("分野,プロンプト\n国語,桜\n", encoding="utf-8")
+    cfg_path = tmp_path / "config.yaml"
+    cfg_path.write_text(
+        f'distill:\n  prompt_csv: "{csv_path.as_posix()}"\n',
+        encoding="utf-8",
+    )
+    from joryu.paths import resolve_optional_config
+
+    cfg = resolve_optional_config(cfg_path)
+    assert resolve_prompt_csv_path(tmp_path, cfg) == csv_path.resolve()
+
+
+def test_resolve_prompt_csv_path_uses_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    csv_path = tmp_path / "env.csv"
+    csv_path.write_text("分野,プロンプト\n国語,桜\n", encoding="utf-8")
+    monkeypatch.setenv("JORYU_PROMPT_CSV", str(csv_path))
+    from joryu.config import Config
+
+    assert resolve_prompt_csv_path(tmp_path, Config()) == csv_path.resolve()
+
+
+def test_ensure_prompt_bank_generates_from_csv(tmp_path: Path) -> None:
+    csv_path = tmp_path / "prompts.csv"
+    csv_path.write_text("分野,プロンプト\n国語,桜\n数学,1+1\n", encoding="utf-8")
+    cfg_path = tmp_path / "config.yaml"
+    cfg_path.write_text(
+        f'distill:\n  prompt_bank: "data/prompts/training_prompts.jsonl"\n'
+        f'  prompt_csv: "{csv_path.as_posix()}"\n',
+        encoding="utf-8",
+    )
+    messages: list[str] = []
+
+    ensure_prompt_bank(tmp_path, log=lambda msg: messages.append(msg))
+
+    bank = tmp_path / "data" / "prompts" / "training_prompts.jsonl"
+    assert bank.is_file()
+    assert bank.read_text(encoding="utf-8").count("\n") == 2
+    assert any("2 rows" in msg for msg in messages)
+
+
+def test_ensure_prompt_bank_skips_when_exists(tmp_path: Path) -> None:
+    bank = tmp_path / "data" / "prompts" / "training_prompts.jsonl"
+    bank.parent.mkdir(parents=True)
+    bank.write_text('{"prompt":"existing"}\n', encoding="utf-8")
+    csv_path = tmp_path / "prompts.csv"
+    csv_path.write_text("分野,プロンプト\n国語,桜\n", encoding="utf-8")
+    (tmp_path / "config.yaml").write_text(
+        f'distill:\n  prompt_bank: "data/prompts/training_prompts.jsonl"\n'
+        f'  prompt_csv: "{csv_path.as_posix()}"\n',
+        encoding="utf-8",
+    )
+    messages: list[str] = []
+
+    ensure_prompt_bank(tmp_path, log=lambda msg: messages.append(msg))
+
+    assert bank.read_text(encoding="utf-8") == '{"prompt":"existing"}\n'
+    assert messages == []
+
+
+def test_ensure_prompt_bank_raises_when_missing_source(tmp_path: Path) -> None:
+    (tmp_path / "config.yaml").write_text(
+        'distill:\n  prompt_bank: "data/prompts/training_prompts.jsonl"\n',
+        encoding="utf-8",
+    )
+    with pytest.raises(PreflightError, match="prompt bank"):
+        ensure_prompt_bank(tmp_path)
 
 
 def test_ensure_dashboard_data_paths_creates_jsonl_and_symlink(tmp_path: Path) -> None:

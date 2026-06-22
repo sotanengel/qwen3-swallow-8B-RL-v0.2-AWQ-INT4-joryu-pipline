@@ -34,6 +34,7 @@ from joryu.preflight import (
     changed_services_from_git,
     check_disk_space,
     ensure_dashboard_data_paths,
+    ensure_prompt_bank,
     git_head_at,
     is_first_up_run,
     resolve_up_services,
@@ -120,6 +121,13 @@ def main(argv: list[str] | None = None) -> int:
 
     if "dashboard" in up_services:
         ensure_dashboard_data_paths(repo_root)
+
+    if "api" in up_services or "joryu" in up_services:
+        try:
+            ensure_prompt_bank(repo_root)
+        except PreflightError as exc:
+            print(exc, file=sys.stderr)
+            return 1
 
     if build_services:
         rc = run(compose_build_command(services=build_services))
