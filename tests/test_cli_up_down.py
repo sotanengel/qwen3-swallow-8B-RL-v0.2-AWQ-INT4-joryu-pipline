@@ -32,6 +32,8 @@ def _patch_runner(
     monkeypatch.setattr("joryu.cli.up.is_first_up_run", lambda _root: False)
     monkeypatch.setattr("joryu.cli.up.git_head_at", lambda _root: "abc")
     monkeypatch.setattr("joryu.cli.up.save_up_state", lambda *_args: None)
+    # 空き容量チェックは環境依存なので既定で no-op 化 (insufficient disk テストでは上書き)
+    monkeypatch.setattr("joryu.cli.up.check_disk_space", lambda *_args, **_kwargs: None)
     return calls
 
 
