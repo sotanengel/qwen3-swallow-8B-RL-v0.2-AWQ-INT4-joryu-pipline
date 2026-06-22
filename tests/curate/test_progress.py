@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 from joryu.curate.progress import (
@@ -10,14 +9,11 @@ from joryu.curate.progress import (
     clear_existing_outputs,
     load_resume_state,
 )
+from tests.helpers.jsonl import write_jsonl
 
 
 def _write_scores(p: Path, rows: list[dict]) -> None:
-    p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(
-        "\n".join(json.dumps(r, ensure_ascii=False) for r in rows),
-        encoding="utf-8",
-    )
+    write_jsonl(p, rows)
 
 
 def test_load_resume_state_missing_file(tmp_path: Path) -> None:

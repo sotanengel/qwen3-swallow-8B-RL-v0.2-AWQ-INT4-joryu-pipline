@@ -2,14 +2,25 @@
 
 from __future__ import annotations
 
-import json
-import os
 from collections import Counter
-from datetime import UTC, datetime
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-DEFAULT_STATS_OUTPUT = "dashboard/public/stats.json"
+from joryu.dashboard_json import write_dashboard_json
+from joryu.io.jsonl import iter_jsonl
+from joryu.paths import STATS_JSON_REL, resolve_repo_root, resolve_stats_output_path
+
+DEFAULT_STATS_OUTPUT = STATS_JSON_REL
+
+__all__ = [
+    "DEFAULT_STATS_OUTPUT",
+    "compute_stats",
+    "length_bins",
+    "resolve_repo_root",
+    "resolve_stats_output_path",
+    "write_stats_json",
+]
 
 # 文字数ベースのビン (token 換算はモデル依存なので char で近似する)。
 _LENGTH_BIN_EDGES: tuple[int, ...] = (0, 50, 100, 200, 500, 1000, 2000, 5000)
@@ -69,15 +80,7 @@ def compute_stats(jsonl_path: str | Path) -> dict[str, Any]:
     sampling_top_ps: Counter[str] = Counter()
     timeline_daily: Counter[str] = Counter()
 
-    for line in p.read_text(encoding="utf-8").splitlines():
-        if not line.strip():
-            continue
-        try:
-            rec = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if not isinstance(rec, dict):
-            continue
+    for rec in iter_jsonl(p):
         prompt = rec.get("prompt")
         if not (isinstance(prompt, str) and prompt):
             continue
@@ -140,30 +143,6 @@ def _empty_stats() -> dict[str, Any]:
     }
 
 
-def resolve_repo_root(*, out_path: Path | None = None) -> Path | None:
-    """stats.json 出力先を決めるリポジトリルートを返す。特定できなければ None。"""
-    env = os.environ.get("JORYU_REPO_ROOT", "").strip()
-    if env:
-        return Path(env).resolve()
-    if out_path is not None:
-        resolved = out_path.resolve()
-        if len(resolved.parts) >= 3 and resolved.parent.name == "distilled":
-            return resolved.parent.parent.parent
-    return None
-
-
-def resolve_stats_output_path(
-    *,
-    out_path: Path | None = None,
-    repo_root: Path | None = None,
-) -> Path | None:
-    """dashboard/public/stats.json の絶対パスを返す。特定できなければ None。"""
-    root = repo_root or resolve_repo_root(out_path=out_path)
-    if root is None:
-        return None
-    return root / DEFAULT_STATS_OUTPUT
-
-
 def write_stats_json(
     src: str | Path,
     dst: str | Path,
@@ -174,10 +153,9 @@ def write_stats_json(
     src_path = Path(src)
     dst_path = Path(dst)
     stats = compute_stats(src_path)
-    stats["_meta"] = {
-        "source_path": str(src_path),
-        "generated_at": (generated_at or datetime.now(UTC)).isoformat(),
-    }
-    dst_path.parent.mkdir(parents=True, exist_ok=True)
-    dst_path.write_text(json.dumps(stats, ensure_ascii=False, indent=2), encoding="utf-8")
-    return stats
+    return write_dashboard_json(
+        dst_path,
+        stats,
+        source_path=src_path,
+        generated_at=generated_at,
+    )

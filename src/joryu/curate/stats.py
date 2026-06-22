@@ -9,14 +9,16 @@ from __future__ import annotations
 import json
 import random
 from collections import Counter, defaultdict
-from datetime import UTC, datetime
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from joryu.curate.judge_client import RUBRIC_KEYS
+from joryu.dashboard_json import write_dashboard_json
+from joryu.paths import CURATION_JSON_REL
 from joryu.stats import length_bins
 
-DEFAULT_CURATION_OUTPUT = "dashboard/public/curation.json"
+DEFAULT_CURATION_OUTPUT = CURATION_JSON_REL
 DEFAULT_REJECTED_SAMPLE_N = 20
 
 _SCORE_BIN_EDGES: tuple[int, ...] = (0, 10, 20, 30, 40, 50, 60, 70, 80, 90)
@@ -249,10 +251,9 @@ def write_curation_json(
     src_path = Path(scores_jsonl)
     dst_path = Path(dst)
     stats = compute_curation_stats(src_path, rejected_sample_n=rejected_sample_n)
-    stats["_meta"] = {
-        "source_path": str(src_path),
-        "generated_at": (generated_at or datetime.now(UTC)).isoformat(),
-    }
-    dst_path.parent.mkdir(parents=True, exist_ok=True)
-    dst_path.write_text(json.dumps(stats, ensure_ascii=False, indent=2), encoding="utf-8")
-    return stats
+    return write_dashboard_json(
+        dst_path,
+        stats,
+        source_path=src_path,
+        generated_at=generated_at,
+    )

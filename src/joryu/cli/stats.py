@@ -6,11 +6,10 @@ import argparse
 import sys
 from pathlib import Path
 
-from joryu.config import Config, load_config
+from joryu.cli.common import add_config_argument, resolve_cli_config, resolve_cli_distill_input
 from joryu.curate.stats import DEFAULT_CURATION_OUTPUT, write_curation_json
 from joryu.stats import DEFAULT_STATS_OUTPUT, write_stats_json
 
-DEFAULT_CONFIG = "config.yaml"
 DEFAULT_OUTPUT = DEFAULT_STATS_OUTPUT
 
 
@@ -19,11 +18,7 @@ def build_parser() -> argparse.ArgumentParser:
         prog="joryu-stats",
         description="蒸留 JSONL から dashboard 用統計 JSON を生成する。",
     )
-    p.add_argument(
-        "--config",
-        default=DEFAULT_CONFIG,
-        help=f"設定ファイル (既定: {DEFAULT_CONFIG})",
-    )
+    add_config_argument(p)
     p.add_argument(
         "--input",
         default="",
@@ -50,10 +45,9 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    cfg_path = Path(args.config)
-    cfg = load_config(cfg_path) if cfg_path.exists() else Config()
+    cfg = resolve_cli_config(args)
 
-    src = Path(args.input) if args.input else Path(cfg.distill.out_dir) / cfg.distill.out_file
+    src = resolve_cli_distill_input(args, cfg)
     out = Path(args.output)
 
     stats = write_stats_json(src, out)

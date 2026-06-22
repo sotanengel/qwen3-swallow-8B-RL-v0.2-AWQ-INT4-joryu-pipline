@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from joryu.config import Config, Mode
+from joryu.io.jsonl import iter_jsonl
 
 _VALID_MODES = ("thinking", "nothinking")
 _SAMPLING_KEYS = ("temperature", "top_p", "top_k", "max_tokens", "repetition_penalty")
@@ -62,15 +62,7 @@ def load_prompt_bank(path: str | Path) -> list[PromptRow]:
     if not p.exists():
         raise FileNotFoundError(f"prompt bank not found: {p}")
     rows: list[PromptRow] = []
-    for line in p.read_text(encoding="utf-8").splitlines():
-        if not line.strip():
-            continue
-        try:
-            obj = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if not isinstance(obj, dict):
-            continue
+    for obj in iter_jsonl(p):
         rows.append(_parse_row(obj))
     return rows
 

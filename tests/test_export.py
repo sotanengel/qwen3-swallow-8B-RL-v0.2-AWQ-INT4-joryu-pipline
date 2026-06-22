@@ -11,14 +11,7 @@ import pytest
 import zstandard as zstd
 
 from joryu.export import ExportResult, export_jsonl
-
-
-def _write_jsonl(path: Path, records: list[dict]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        "\n".join(json.dumps(r, ensure_ascii=False) for r in records) + "\n",
-        encoding="utf-8",
-    )
+from tests.helpers.jsonl import write_jsonl
 
 
 def test_export_round_trip(tmp_path: Path) -> None:
@@ -27,7 +20,7 @@ def test_export_round_trip(tmp_path: Path) -> None:
         {"prompt": "P1", "answer": "A1", "model": "M", "created_at": "2026-06-21T00:00:00+00:00"},
         {"prompt": "P2", "answer": "A2", "model": "M", "created_at": "2026-06-21T00:00:01+00:00"},
     ]
-    _write_jsonl(src, records)
+    write_jsonl(src, records)
 
     out_dir = tmp_path / "exports"
     res = export_jsonl(src, out_dir=out_dir, level=3)
@@ -50,7 +43,7 @@ def test_export_round_trip(tmp_path: Path) -> None:
 
 def test_meta_has_expected_fields(tmp_path: Path) -> None:
     src = tmp_path / "r.jsonl"
-    _write_jsonl(
+    write_jsonl(
         src,
         [
             {
@@ -88,7 +81,7 @@ def test_meta_has_expected_fields(tmp_path: Path) -> None:
 
 def test_sha256sums_format(tmp_path: Path) -> None:
     src = tmp_path / "r.jsonl"
-    _write_jsonl(src, [{"prompt": "P", "answer": "A", "model": "M"}])
+    write_jsonl(src, [{"prompt": "P", "answer": "A", "model": "M"}])
     res = export_jsonl(src, out_dir=tmp_path / "out")
 
     text = res.sha256sums_path.read_text(encoding="utf-8")
@@ -105,7 +98,7 @@ def test_sha256sums_format(tmp_path: Path) -> None:
 
 def test_bundle_tar(tmp_path: Path) -> None:
     src = tmp_path / "r.jsonl"
-    _write_jsonl(src, [{"prompt": "P", "answer": "A", "model": "M"}])
+    write_jsonl(src, [{"prompt": "P", "answer": "A", "model": "M"}])
     res = export_jsonl(src, out_dir=tmp_path / "out", bundle_tar=True)
 
     assert res.tar_path is not None

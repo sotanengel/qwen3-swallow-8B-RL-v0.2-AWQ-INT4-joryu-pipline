@@ -13,11 +13,13 @@
 
 from __future__ import annotations
 
-import json
 import logging
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
+
+from joryu.curate.artifacts import find_latest_run_artifact
+from joryu.io.jsonl import iter_jsonl
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +104,7 @@ def load_cache_index(paths: Iterable[Path | str]) -> CacheIndex:
             logger.warning("[curate.cache] %s が存在しないのでスキップ", p)
             continue
         try:
-            for row in _iter_rows(p):
+            for row in iter_jsonl(p):
                 rh = row.get("record_hash")
                 if not isinstance(rh, str) or not rh:
                     continue
@@ -123,20 +125,6 @@ def load_cache_index(paths: Iterable[Path | str]) -> CacheIndex:
     return index
 
 
-def _iter_rows(p: Path) -> Iterator[dict[str, object]]:
-    with p.open("r", encoding="utf-8") as fh:
-        for raw_line in fh:
-            line = raw_line.strip()
-            if not line:
-                continue
-            try:
-                row = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(row, dict):
-                yield row
-
-
 def _as_float(value: object) -> float | None:
     if isinstance(value, int | float):
         return float(value)
@@ -148,22 +136,12 @@ def auto_detect_cache_paths(dst_root: Path, *, current_dst: Path) -> list[Path]:
 
     `current_dst` は除外 (同じランは参照しない)。
     """
-    if not dst_root.exists() or not dst_root.is_dir():
-        return []
-    candidates: list[tuple[float, Path]] = []
-    current_resolved = current_dst.resolve()
-    for child in dst_root.iterdir():
-        if not child.is_dir():
-            continue
-        if child.resolve() == current_resolved:
-            continue
-        scores = child / "scores.jsonl"
-        if scores.exists():
-            candidates.append((scores.stat().st_mtime, scores))
-    if not candidates:
-        return []
-    candidates.sort(reverse=True)
-    return [candidates[0][1]]
+    found = find_latest_run_artifact(
+        dst_root,
+        exclude=current_dst,
+        marker="scores.jsonl",
+    )
+    return [found] if found is not None else []
 
 
 def merge_partial_signal_scores(

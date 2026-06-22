@@ -6,6 +6,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from joryu.io.jsonl import iter_jsonl
+
 
 def _round_float(value: Any) -> Any:
     if isinstance(value, float):
@@ -57,19 +59,8 @@ def run_key_from_record(record: dict[str, Any]) -> str | None:
 
 def load_done_keys(path: str | Path) -> set[str]:
     """JSONL レコードから処理済 run キーの set を構築する。"""
-    p = Path(path)
-    if not p.exists():
-        return set()
     done: set[str] = set()
-    for line in p.read_text(encoding="utf-8").splitlines():
-        if not line.strip():
-            continue
-        try:
-            record = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if not isinstance(record, dict):
-            continue
+    for record in iter_jsonl(Path(path)):
         key = run_key_from_record(record)
         if key is not None:
             done.add(key)
@@ -78,19 +69,8 @@ def load_done_keys(path: str | Path) -> set[str]:
 
 def load_done_prompts(path: str | Path) -> set[str]:
     """後方互換: prompt 文字列のみの処理済集合（非推奨）。"""
-    p = Path(path)
-    if not p.exists():
-        return set()
     done: set[str] = set()
-    for line in p.read_text(encoding="utf-8").splitlines():
-        if not line.strip():
-            continue
-        try:
-            record = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if not isinstance(record, dict):
-            continue
+    for record in iter_jsonl(Path(path)):
         prompt = record.get("prompt")
         if isinstance(prompt, str) and prompt:
             done.add(prompt)

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 from joryu.curate.cache import (
@@ -12,11 +11,11 @@ from joryu.curate.cache import (
     load_cache_index,
     signal_result_from_cache,
 )
+from tests.helpers.jsonl import write_jsonl
 
 
 def _write_scores(p: Path, rows: list[dict]) -> None:
-    p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text("\n".join(json.dumps(r, ensure_ascii=False) for r in rows), encoding="utf-8")
+    write_jsonl(p, rows)
 
 
 def _row(rh: str, scores: dict[str, float], versions: dict[str, str], rejected_by=None):

@@ -7,12 +7,11 @@
 
 from __future__ import annotations
 
-import json
 import logging
-from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+
+from joryu.io.jsonl import iter_jsonl
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +46,7 @@ def load_resume_state(scores_jsonl: str | Path) -> ResumeState:
     if not p.exists():
         return ResumeState(hashes, kept, rejected)
     try:
-        for row in _iter_jsonl(p):
+        for row in iter_jsonl(p, logger=logger, log_prefix="[curate.progress]"):
             rh = row.get("record_hash")
             if isinstance(rh, str) and rh:
                 hashes.add(rh)
@@ -58,21 +57,6 @@ def load_resume_state(scores_jsonl: str | Path) -> ResumeState:
     except OSError as exc:
         logger.warning("[curate.progress] %s の読み込みに失敗: %s", p, exc)
     return ResumeState(hashes, kept, rejected)
-
-
-def _iter_jsonl(path: Path) -> Iterator[dict[str, Any]]:
-    with path.open("r", encoding="utf-8") as fh:
-        for lineno, raw_line in enumerate(fh, 1):
-            line = raw_line.strip()
-            if not line:
-                continue
-            try:
-                row = json.loads(line)
-            except json.JSONDecodeError as exc:
-                logger.warning("[curate.progress] skip malformed line %d: %s", lineno, exc)
-                continue
-            if isinstance(row, dict):
-                yield row
 
 
 def clear_existing_outputs(dst_dir: str | Path) -> None:

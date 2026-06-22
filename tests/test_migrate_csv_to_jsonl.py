@@ -3,10 +3,13 @@
 from pathlib import Path
 
 from joryu.migrate import csv_to_jsonl
+from tests.helpers.jsonl import read_jsonl
 
 
 def _read_jsonl(path: Path) -> list[str]:
-    return [ln for ln in path.read_text(encoding="utf-8").splitlines() if ln.strip()]
+    import json
+
+    return [json.dumps(row, ensure_ascii=False) for row in read_jsonl(path)]
 
 
 def test_csv_to_jsonl_basic(tmp_path: Path) -> None:
