@@ -37,6 +37,7 @@ _JORYU_JOB_RUNTIME_PATHS = frozenset(
         "docker-compose.yml",
         "src/joryu/distill.py",
         "src/joryu/docker_delegate.py",
+        "src/joryu/docker_runtime.py",
         "src/joryu/stats.py",
         "src/joryu/cli/distill.py",
         "src/joryu/cli/stats.py",
@@ -69,6 +70,36 @@ class _GitRunner(Protocol):
         text: bool,
         check: bool,
     ) -> subprocess.CompletedProcess[str]: ...
+
+
+class _InspectRunner(Protocol):
+    def __call__(
+        self,
+        args: list[str],
+        *,
+        capture_output: bool,
+        text: bool,
+        check: bool,
+    ) -> subprocess.CompletedProcess[str]: ...
+
+
+JORYU_JOB_IMAGE = "joryu:latest"
+
+
+def docker_image_exists(
+    image: str,
+    *,
+    inspect_runner: _InspectRunner | None = None,
+) -> bool:
+    """ローカルに Docker イメージが存在するか。"""
+    runner = inspect_runner or subprocess.run
+    result = runner(
+        ["docker", "image", "inspect", image],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return result.returncode == 0
 
 
 def path_affects_service(path: str) -> set[str]:
@@ -217,6 +248,7 @@ def services_to_build(
     no_build: bool,
     force_build: bool = False,
     first_run: bool = False,
+    inspect_runner: _InspectRunner | None = None,
 ) -> list[str]:
     """`up` 対象のうち rebuild が必要なサービスだけ build する。"""
     if no_build:
@@ -228,11 +260,16 @@ def services_to_build(
     else:
         candidates = [svc for svc in up_services if svc in changed]
 
-    # 既定 up (dashboard+api) でも API 経由蒸留の joryu イメージを rebuild する。
-    if "api" in up_services and "joryu" in changed and "joryu" not in candidates:
-        candidates.append("joryu")
-    if force_build and "api" in up_services and "joryu" not in candidates:
-        candidates.append("joryu")
+    # api を up する = ジョブが joryu:latest を docker run する。
+    if "api" in up_services and "joryu" not in candidates:
+        needs_joryu = (
+            "joryu" in changed
+            or first_run
+            or force_build
+            or not docker_image_exists(JORYU_JOB_IMAGE, inspect_runner=inspect_runner)
+        )
+        if needs_joryu:
+            candidates.append("joryu")
 
     return [svc for svc in _SERVICE_ORDER if svc in candidates]
 

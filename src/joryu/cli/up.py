@@ -5,7 +5,8 @@ git 差分から rebuild 対象を自動判定し、必要時は `docker compose
 joryu ビルド前にホスト空き容量を検査し、不足時は `--force` なしでは中止する。
 
 **既定は dashboard + api** — `/jobs` から蒸留ジョブを投入できる。
-joryu コンテナ (vLLM + CUDA, 20GB+) は `--full` か `--backend-only` のときだけビルドする。
+API ジョブ用の `joryu:latest` イメージは、初回起動・git 差分・未作成時に自動 build する。
+vLLM 常駐コンテナとして joryu を up する場合は `--full` か `--backend-only` を使う。
 
 簡略コマンド:
     uv run joryu-up                     # dashboard + api (git 差分に応じて build)

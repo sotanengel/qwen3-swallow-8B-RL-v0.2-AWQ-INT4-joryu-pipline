@@ -34,11 +34,12 @@ def _patch_runner(
     monkeypatch.setattr("joryu.cli.up.save_up_state", lambda *_args: None)
     # 空き容量チェックは環境依存なので既定で no-op 化 (insufficient disk テストでは上書き)
     monkeypatch.setattr("joryu.cli.up.check_disk_space", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("joryu.preflight.docker_image_exists", lambda *_args, **_kwargs: True)
     return calls
 
 
 def test_up_default_no_changes_builds_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
-    """git 差分なし・初回でもない → build なし、dashboard + api up。"""
+    """git 差分なし・初回でもない・joryu イメージあり → build なし、dashboard + api up。"""
     calls = _patch_runner(monkeypatch)
     monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: set())
     rc = cli_up.main([])
@@ -142,7 +143,17 @@ def test_up_first_run_builds_up_targets(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: set())
     rc = cli_up.main([])
     assert rc == 0
-    assert calls[0] == ["docker", "compose", "build", "dashboard", "api"]
+    assert calls[0] == ["docker", "compose", "build", "dashboard", "api", "joryu"]
+
+
+def test_up_builds_joryu_when_image_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = _patch_runner(monkeypatch)
+    monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: set())
+    monkeypatch.setattr("joryu.preflight.docker_image_exists", lambda *_args, **_kwargs: False)
+    rc = cli_up.main([])
+    assert rc == 0
+    assert calls[0] == ["docker", "compose", "build", "joryu"]
+    assert calls[1] == ["docker", "compose", "up", "dashboard", "api"]
 
 
 def test_up_aborts_on_insufficient_disk(monkeypatch: pytest.MonkeyPatch) -> None:
