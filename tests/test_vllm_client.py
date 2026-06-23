@@ -11,8 +11,10 @@ import pytest
 
 from joryu.config import Config
 from joryu.vllm_client import (
+    ChatResult,
     SupportsChat,
     VllmClient,
+    compute_effective_max_tokens,
     extract_thinking,
 )
 
@@ -51,6 +53,17 @@ def test_vllm_client_from_config_does_not_load() -> None:
     assert client._llm is None
 
 
+def test_compute_effective_max_tokens_clamps_to_context() -> None:
+    assert (
+        compute_effective_max_tokens(
+            requested_max_tokens=1024,
+            max_model_len=512,
+            prompt_tokens=200,
+        )
+        == 280
+    )
+
+
 def test_supports_chat_protocol_signature() -> None:
     # ダミー実装が SupportsChat を満たすことを確認 (Protocol チェック)
     class _Fake:
@@ -60,13 +73,19 @@ def test_supports_chat_protocol_signature() -> None:
             *,
             enable_thinking: bool = True,
             **sampling_overrides: object,
-        ) -> tuple[str | None, str]:
-            return None, "ok"
+        ) -> ChatResult:
+            return ChatResult(
+                thinking=None,
+                answer="ok",
+                finish_reason="stop",
+                prompt_tokens=1,
+                completion_tokens=1,
+            )
 
     fake: SupportsChat = _Fake()
-    thinking, answer = fake.chat_via_template([{"role": "user", "content": "hi"}])
-    assert thinking is None
-    assert answer == "ok"
+    result = fake.chat_via_template([{"role": "user", "content": "hi"}])
+    assert result.thinking is None
+    assert result.answer == "ok"
 
 
 def test_vllm_client_chat_via_template_requires_vllm() -> None:

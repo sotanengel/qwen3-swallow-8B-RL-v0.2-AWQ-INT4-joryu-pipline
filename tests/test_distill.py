@@ -43,6 +43,9 @@ def test_run_distill_writes_records(tmp_path: Path) -> None:
     assert records[0]["sampling"]["top_p"] == cfg.model.top_p
     assert records[0]["sampling"]["max_tokens"] == cfg.model.num_predict
     assert records[0]["config_hash"].startswith("sha256-")
+    assert records[0]["finish_reason"] == "stop"
+    assert records[0]["prompt_tokens"] == 10
+    assert records[0]["completion_tokens"] == 5
     assert "created_at" in records[0]
 
 
@@ -183,16 +186,54 @@ def test_client_exception_skips_row_continues(tmp_path: Path) -> None:
 
     class _RaisesOnSecond(FakeVllmClient):
         def chat_via_template(self, messages, **kw):  # type: ignore[override]
+            from joryu.vllm_client import ChatResult
+
             self.calls.append({"messages": messages})
             if len(self.calls) == 2:
                 raise RuntimeError("boom")
-            return ("T", "A")
+            return ChatResult(
+                thinking="T",
+                answer="A",
+                finish_reason="stop",
+                prompt_tokens=1,
+                completion_tokens=1,
+            )
 
     client = _RaisesOnSecond()
     n = run_distill(Config(), bank_path=bank, out_path=out, client=client)
     assert n == 2
     records = _load_jsonl(out)
     assert [r["prompt"] for r in records] == ["P1", "P3"]
+
+
+def test_run_distill_redo_truncated_reprocesses_matching_keys(tmp_path: Path) -> None:
+    bank = tmp_path / "bank.jsonl"
+    _write_bank(bank, [{"prompt": "P1"}, {"prompt": "P2"}])
+    out = tmp_path / "out.jsonl"
+    cfg = Config()
+    out.parent.mkdir(parents=True, exist_ok=True)
+    truncated = {
+        "prompt": "P1",
+        "answer": "途中で切れた見出し\n\n## 1. 章",
+        "mode": cfg.model.mode,
+        "style_id": None,
+        "sampling": {"temperature": cfg.model.temperature, "top_p": cfg.model.top_p},
+    }
+    complete = _done_record("P2", cfg)
+    out.write_text(
+        json.dumps(truncated, ensure_ascii=False)
+        + "\n"
+        + json.dumps(complete, ensure_ascii=False)
+        + "\n",
+        encoding="utf-8",
+    )
+    client = FakeVllmClient(answer="完結した回答。")
+    n = run_distill(cfg, bank_path=bank, out_path=out, client=client, redo_truncated=True)
+    assert n == 1
+    assert len(client.calls) == 1
+    assert client.calls[0]["messages"][-1]["content"] == "P1"
+    records = _load_jsonl(out)
+    assert len(records) == 3
 
 
 def test_deadline_stops_loop(tmp_path: Path) -> None:

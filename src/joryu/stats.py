@@ -10,6 +10,7 @@ from typing import Any
 from joryu.dashboard_json import write_dashboard_json
 from joryu.io.jsonl import iter_jsonl
 from joryu.paths import STATS_JSON_REL, resolve_repo_root, resolve_stats_output_path
+from joryu.truncation import record_looks_truncated
 
 DEFAULT_STATS_OUTPUT = STATS_JSON_REL
 
@@ -79,6 +80,7 @@ def compute_stats(jsonl_path: str | Path) -> dict[str, Any]:
     sampling_temps: Counter[str] = Counter()
     sampling_top_ps: Counter[str] = Counter()
     timeline_daily: Counter[str] = Counter()
+    truncated_count = 0
 
     for rec in iter_jsonl(p):
         prompt = rec.get("prompt")
@@ -113,8 +115,14 @@ def compute_stats(jsonl_path: str | Path) -> dict[str, Any]:
         if (day := _ts_day(rec.get("created_at"))) is not None:
             timeline_daily[day] += 1
 
+        if record_looks_truncated(rec):
+            truncated_count += 1
+
+    truncated_rate = (truncated_count / total) if total else 0.0
     return {
         "total": total,
+        "truncated_count": truncated_count,
+        "truncated_rate": truncated_rate,
         "models": dict(models),
         "modes": dict(modes),
         "categories": dict(categories),
@@ -140,6 +148,8 @@ def _empty_stats() -> dict[str, Any]:
         "thinking_length": _summary([]),
         "sampling": {"temperature": {}, "top_p": {}},
         "timeline_daily": {},
+        "truncated_count": 0,
+        "truncated_rate": 0.0,
     }
 
 

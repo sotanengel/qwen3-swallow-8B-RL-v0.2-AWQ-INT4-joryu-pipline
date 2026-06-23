@@ -11,13 +11,13 @@ from pathlib import Path
 from typing import Any
 
 from joryu.config import Config
-from joryu.progress import load_done_keys, run_key_from_parts
+from joryu.progress import load_done_keys, load_truncated_run_keys, run_key_from_parts
 from joryu.progress_reporter import DistillProgressReporter
 from joryu.prompt_bank import EffectiveSampling, PromptRow, load_prompt_bank
 from joryu.stats import resolve_stats_output_path, write_stats_json
 from joryu.styles import StylePreset, load_styles, resolve_style_ids
 from joryu.variants import DistillVariant, expand_variants
-from joryu.vllm_client import SupportsChat, VllmClient
+from joryu.vllm_client import ChatResult, SupportsChat, VllmClient
 from joryu.writer import JsonlAppendWriter
 
 logger = logging.getLogger(__name__)
@@ -33,19 +33,26 @@ def _build_record(
     answer: str,
     model_name: str,
     config_hash: str,
+    chat: ChatResult,
 ) -> dict[str, Any]:
+    sampling = dict(eff.sampling)
+    if chat.effective_max_tokens is not None:
+        sampling["effective_max_tokens"] = chat.effective_max_tokens
     return {
         "prompt": row.prompt,
         "category": row.category,
         "style_id": eff.style_id,
         "mode": eff.mode,
         "system_prompt": eff.system_prompt,
-        "sampling": dict(eff.sampling),
+        "sampling": sampling,
         "thinking_trace": thinking,
         "reasoning": thinking or "",
         "answer": answer,
         "model": model_name,
         "config_hash": config_hash,
+        "finish_reason": chat.finish_reason,
+        "prompt_tokens": chat.prompt_tokens,
+        "completion_tokens": chat.completion_tokens,
         "created_at": datetime.now(UTC).isoformat(),
     }
 
@@ -102,6 +109,7 @@ def run_distill(
     client: SupportsChat | None = None,
     count: int = 0,
     deadline: float | None = None,
+    redo_truncated: bool = False,
     style_presets: list[StylePreset] | None = None,
     temperatures: list[float] | None = None,
     top_ps: list[float] | None = None,
@@ -126,6 +134,14 @@ def run_distill(
         top_ps=top_ps,
     )
     done = load_done_keys(out_p)
+    if redo_truncated and out_p.exists():
+        truncated_keys = load_truncated_run_keys(out_p)
+        if truncated_keys:
+            done -= truncated_keys
+            log(
+                f"[joryu-distill] --redo-truncated: {len(truncated_keys)} 件を再蒸留対象に含める",
+                file=sys.stderr,
+            )
     pending = [v for v in all_variants if variant_run_key(v) not in done]
 
     total_in_bank = len(all_variants)
@@ -172,7 +188,7 @@ def run_distill(
 
             enable_thinking = eff.mode == "thinking"
             try:
-                thinking, answer = client.chat_via_template(
+                chat = client.chat_via_template(
                     messages,
                     enable_thinking=enable_thinking,
                     **eff.sampling,
@@ -187,8 +203,16 @@ def run_distill(
                 continue
 
             if eff.mode == "nothinking":
-                thinking = None
-            final_answer = (answer or "").strip()
+                chat = ChatResult(
+                    thinking=None,
+                    answer=chat.answer,
+                    finish_reason=chat.finish_reason,
+                    prompt_tokens=chat.prompt_tokens,
+                    completion_tokens=chat.completion_tokens,
+                    effective_max_tokens=chat.effective_max_tokens,
+                )
+            thinking = chat.thinking
+            final_answer = (chat.answer or "").strip()
             record = _build_record(
                 row=row,
                 eff=eff,
@@ -196,6 +220,7 @@ def run_distill(
                 answer=final_answer,
                 model_name=config.model.name,
                 config_hash=fingerprint,
+                chat=chat,
             )
             writer.write(record)
             n += 1

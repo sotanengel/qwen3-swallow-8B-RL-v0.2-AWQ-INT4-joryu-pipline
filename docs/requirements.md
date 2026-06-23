@@ -40,7 +40,7 @@ SFT 教師データとして再利用可能な形で配布する。
 
 ## 非機能要件
 
-- **VRAM**: 8GB (RTX 3060 Ti) 想定。`num_ctx=512` / `num_predict=384`
+- **VRAM**: 8GB (RTX 3060 Ti) 想定。`num_ctx=2048` / `num_predict=1024`（`scripts/probe_vllm_limits.py` で OOM 時自動降格）
 - **CPU CI**: vLLM は遅延 import + Fake クライアントでテスト
 - **再現性**: 出力レコードに `config_hash` と effective `sampling` / `mode` を記録
 - **データ非コミット**: `data/` / `exports/` / `models/` は `.gitignore`

@@ -94,13 +94,21 @@ class RatioTA:
 @dataclass
 class Truncated:
     code: str = "TRUNC"
-    version: str = "v1"
+    version: str = "v2"
 
     def evaluate(self, record: dict[str, Any]) -> SignalResult:
+        from joryu.truncation import record_looks_truncated
+
         fr = record.get("finish_reason")
-        truncated = fr == "length"
+        if fr == "length":
+            truncated = True
+        elif fr == "stop":
+            truncated = False
+        else:
+            truncated = record_looks_truncated(record)
+        detail = fr if fr is not None else ("heuristic" if truncated else "ok")
         return SignalResult(
-            self.code, self.version, 0.0 if truncated else 1.0, fr, hard_reject=truncated
+            self.code, self.version, 0.0 if truncated else 1.0, detail, hard_reject=truncated
         )
 
 

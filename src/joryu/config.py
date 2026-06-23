@@ -16,8 +16,9 @@ Mode = Literal["thinking", "nothinking"]
 @dataclass
 class ModelConfig:
     name: str = "Qwen3-Swallow-8B-RL-v0.2-AWQ-INT4"
-    num_ctx: int = 512
-    num_predict: int = 384
+    num_ctx: int = 2048
+    num_predict: int = 1024
+    limits_probe_file: str = "data/vllm_limits.json"
     temperature: float = 0.6
     top_p: float = 0.95
     top_k: int = 20

@@ -11,6 +11,7 @@ import {
   formatRecordMarkdown,
   jsonlDataChanged,
   loadJsonl,
+  recordLooksTruncated,
 } from "@/lib/jsonl";
 import { useIntervalPoll } from "@/lib/useIntervalPoll";
 
@@ -45,6 +46,12 @@ export default function OutputDetailPage() {
         </div>
       ) : (
         <div className="output-detail">
+          {recordLooksTruncated(record) ? (
+            <p className="truncation-warning" role="status">
+              この出力は生成上限で途中切断された可能性があります（finish_reason=
+              {record.finish_reason ?? "不明"}）
+            </p>
+          ) : null}
           <MarkdownView source={markdown} />
         </div>
       )}

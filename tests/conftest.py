@@ -6,6 +6,8 @@ from typing import Any
 
 import pytest
 
+from joryu.vllm_client import ChatResult
+
 
 class FakeVllmClient:
     """SupportsChat 互換のテスト用クライアント。呼び出しを記録する。"""
@@ -25,7 +27,7 @@ class FakeVllmClient:
         *,
         enable_thinking: bool = True,
         **sampling_overrides: Any,
-    ) -> tuple[str | None, str]:
+    ) -> ChatResult:
         self.calls.append(
             {
                 "messages": messages,
@@ -34,7 +36,14 @@ class FakeVllmClient:
             }
         )
         thinking = self.thinking if enable_thinking else None
-        return thinking, self.answer
+        return ChatResult(
+            thinking=thinking,
+            answer=self.answer,
+            finish_reason="stop",
+            prompt_tokens=10,
+            completion_tokens=5,
+            effective_max_tokens=sampling_overrides.get("max_tokens"),
+        )
 
 
 @pytest.fixture()

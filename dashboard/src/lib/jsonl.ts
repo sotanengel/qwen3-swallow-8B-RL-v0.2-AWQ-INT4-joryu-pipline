@@ -13,6 +13,9 @@ export interface DistilledRecord {
   model?: string;
   config_hash?: string;
   created_at?: string;
+  finish_reason?: string | null;
+  prompt_tokens?: number | null;
+  completion_tokens?: number | null;
 }
 
 export function parseJsonl(text: string): DistilledRecord[] {
@@ -123,6 +126,28 @@ export function findRecordById(
   return records.find((r) => recordId(r) === id);
 }
 
+/** レコードが途中打ち切りか判定する (finish_reason 優先、なければヒューリスティック)。 */
+export function recordLooksTruncated(r: DistilledRecord): boolean {
+  if (r.finish_reason === "length") return true;
+  if (r.finish_reason === "stop") return false;
+  return answerLooksTruncated(r.answer);
+}
+
+const END_OK = /[。！？.!?」』）)\]]\s*$/;
+const HEADER_LINE = /^#{1,6}\s+\S/;
+
+function answerLooksTruncated(answer: string): boolean {
+  const ans = answer.trim();
+  if (!ans) return true;
+  if (END_OK.test(ans)) return false;
+  const last = ans.split("\n").pop()?.trim() ?? "";
+  if (HEADER_LINE.test(last)) return true;
+  if (last.includes("|") && !last.endsWith("|")) return true;
+  if (/[、，,：:]\s*$/.test(last)) return true;
+  if (/[\u4e00-\u9fff]$/.test(last) && ans.length > 200) return true;
+  return false;
+}
+
 /** テキストを指定長で切り詰める。 */
 export function truncateText(text: string, maxLen: number): string {
   if (text.length <= maxLen) return text;
@@ -143,6 +168,10 @@ export function formatRecordMarkdown(r: DistilledRecord): string {
     formatMetaLine("model", r.model),
     formatMetaLine("config_hash", r.config_hash),
     formatMetaLine("created_at", r.created_at),
+    formatMetaLine("finish_reason", r.finish_reason),
+    r.prompt_tokens != null ? `- **prompt_tokens**: ${r.prompt_tokens}` : null,
+    r.completion_tokens != null ? `- **completion_tokens**: ${r.completion_tokens}` : null,
+    recordLooksTruncated(r) ? "- **truncated**: はい（生成上限で切断の可能性）" : null,
     r.sampling && Object.keys(r.sampling).length > 0
       ? `- **sampling**: ${JSON.stringify(r.sampling)}`
       : null,
