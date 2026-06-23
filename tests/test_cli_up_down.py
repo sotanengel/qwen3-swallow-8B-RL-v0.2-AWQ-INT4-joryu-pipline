@@ -173,11 +173,33 @@ def test_up_no_build_flag(monkeypatch: pytest.MonkeyPatch) -> None:
     calls = _patch_runner(monkeypatch)
     monkeypatch.setattr(
         "joryu.cli.up.changed_services_from_git",
-        lambda _root: {"dashboard", "joryu"},
+        lambda _root: {"dashboard"},
     )
     cli_up.main(["--no-build", "--full"])
     assert len(calls) == 1
     assert calls[0] == ["docker", "compose", "up", "dashboard", "api", "joryu"]
+
+
+def test_up_no_build_flag_force_recreate_when_joryu_runtime_changed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """--no-build でも api/joryu ランタイム差分時は api コンテナを再作成する。"""
+    calls = _patch_runner(monkeypatch)
+    monkeypatch.setattr(
+        "joryu.cli.up.changed_services_from_git",
+        lambda _root: {"joryu"},
+    )
+    cli_up.main(["--no-build", "--full"])
+    assert len(calls) == 1
+    assert calls[0] == [
+        "docker",
+        "compose",
+        "up",
+        "--force-recreate",
+        "dashboard",
+        "api",
+        "joryu",
+    ]
 
 
 def test_up_build_flag_forces_rebuild(monkeypatch: pytest.MonkeyPatch) -> None:

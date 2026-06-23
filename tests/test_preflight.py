@@ -29,6 +29,7 @@ from joryu.preflight import (
     save_up_state,
     services_missing_build_at_head,
     services_to_build,
+    should_force_recreate,
     vllm_limits_probe_needed,
 )
 
@@ -38,6 +39,8 @@ from joryu.preflight import (
     [
         ("src/joryu/cli/up.py", {"joryu"}),
         ("src/joryu/distill.py", {"api", "joryu"}),
+        ("src/joryu/preflight.py", {"api", "joryu"}),
+        ("src/joryu/jobs/runner.py", {"api"}),
         ("src/joryu/docker_delegate.py", {"api", "joryu"}),
         ("src/joryu/docker_runtime.py", {"api", "joryu"}),
         ("src/joryu/stats.py", {"api", "joryu"}),
@@ -541,6 +544,24 @@ def test_ensure_vllm_limits_runs_probe_when_needed(tmp_path: Path, monkeypatch) 
     rc = ensure_vllm_limits(tmp_path, up_services=["dashboard", "api"])
     assert rc == 0
     assert len(calls) == 1
+
+
+def test_should_force_recreate_when_joryu_runtime_changed() -> None:
+    assert should_force_recreate(
+        ["dashboard", "api"],
+        {"joryu"},
+        [],
+        first_run=False,
+    )
+
+
+def test_should_force_recreate_skips_dashboard_only_change() -> None:
+    assert not should_force_recreate(
+        ["dashboard", "api"],
+        {"dashboard"},
+        [],
+        first_run=False,
+    )
 
 
 def test_ensure_vllm_limits_skips_when_fresh(tmp_path: Path, monkeypatch) -> None:

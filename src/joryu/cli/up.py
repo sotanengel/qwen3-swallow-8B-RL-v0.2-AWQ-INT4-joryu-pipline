@@ -42,6 +42,7 @@ from joryu.preflight import (
     resolve_up_services,
     save_up_state,
     services_to_build,
+    should_force_recreate,
 )
 
 
@@ -101,12 +102,13 @@ def main(argv: list[str] | None = None) -> int:
 
     changed = changed_services_from_git(repo_root)
     up_services = resolve_up_services(args, changed)
+    first_run = is_first_up_run(repo_root)
     build_services = services_to_build(
         up_services,
         changed,
         no_build=args.no_build,
         force_build=args.build,
-        first_run=is_first_up_run(repo_root),
+        first_run=first_run,
         repo_root=repo_root,
     )
 
@@ -156,7 +158,12 @@ def main(argv: list[str] | None = None) -> int:
         services=up_services,
         detach=args.detach,
         build=False,
-        force_recreate=bool(build_services),
+        force_recreate=should_force_recreate(
+            up_services,
+            changed,
+            build_services,
+            first_run=first_run,
+        ),
     )
     open_browser = _should_open_browser(args, up_services)
     if open_browser and not args.detach:

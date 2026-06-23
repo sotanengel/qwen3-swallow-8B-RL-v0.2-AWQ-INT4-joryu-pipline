@@ -74,7 +74,7 @@ uv run joryu-down                # 停止 (volume は残す)
 uv run joryu-down --volumes      # HF キャッシュ含めて完全に削除
 ```
 
-`joryu-up` は git 作業ツリーの差分と、前回起動時の HEAD からのコミット差分（`git pull` 後など）から rebuild 対象を自動判定する。初回起動時は up 対象をすべて build し、API ジョブ用の `joryu:latest` も未作成なら build する。**api / joryu を up する場合**、`data/vllm_limits.json` が無い・設定変更・joryu イメージ rebuild 時は起動前に `joryu-probe-vllm` を自動実行し、GPU 実測に基づく `num_ctx` / `num_predict` クランプを有効化する。dashboard を起動した場合は http://localhost:3000 が ready になったらブラウザを自動で開く (`--no-open` で無効化)。joryu ビルド時はホスト空き **25 GB** 以上を要求し、不足時は中止する (`--force` で続行可)。
+`joryu-up` は git 作業ツリーの差分と、前回起動時の HEAD からのコミット差分（`git pull` 後など）から rebuild 対象を自動判定する。初回起動時は up 対象をすべて build し、API ジョブ用の `joryu:latest` も未作成なら build する。**api / joryu を up する場合**、`data/vllm_limits.json` が無い・設定変更・joryu イメージ rebuild 時は起動前に `joryu-probe-vllm` を自動実行する。ジョブランナー (api) や蒸留ランタイム (joryu) に差分があるときは `docker compose up --force-recreate` で api コンテナを再起動し、マウント済み `src/`（`PYTHONPATH=/workspace/src`）の最新コードを読み込む（**`joryu-down` による手動再起動は不要**）。dashboard を起動した場合は http://localhost:3000 が ready になったらブラウザを自動で開く (`--no-open` で無効化)。joryu ビルド時はホスト空き **25 GB** 以上を要求し、不足時は中止する (`--force` で続行可)。
 
 ## ジョブ API とダッシュボード
 
