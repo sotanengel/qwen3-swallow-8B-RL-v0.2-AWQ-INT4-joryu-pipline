@@ -211,6 +211,17 @@ def build_curate_command(repo_root: Path, spec: CurateJobSpec) -> list[str]:
     return build_compose_run_curate_command(repo_root, spec)
 
 
+def _inject_container_name(cmd: list[str], name: str) -> list[str]:
+    """docker run / docker compose run コマンドに --name を挿入する。"""
+    result = list(cmd)
+    for i, arg in enumerate(result):
+        if arg == "--rm" and i > 0 and result[i - 1] == "run":
+            result.insert(i + 1, name)
+            result.insert(i + 1, "--name")
+            return result
+    return result
+
+
 def _stats_refresh_loop(
     refresh: Callable[[], None],
     stop_event: threading.Event,
@@ -292,6 +303,7 @@ class JobRunner:
         self._queue: list[str] = []
         self._running_id: str | None = None
         self._running_process: subprocess.Popen[str] | None = None
+        self._running_container_name: str | None = None
         self._cancel_requested: set[str] = set()
 
     @property
@@ -320,11 +332,14 @@ class JobRunner:
             if job_id == self._running_id:
                 self._cancel_requested.add(job_id)
                 proc = self._running_process
+                container_name = self._running_container_name
                 if proc is not None and proc.poll() is None:
                     try:
                         proc.terminate()
                     except OSError:
                         pass
+                if container_name:
+                    self._stop_container_async(container_name)
                 return True
         return False
 
@@ -343,11 +358,30 @@ class JobRunner:
         with self._lock:
             self._running_process = proc
 
+    def _stop_container_async(self, container_name: str) -> None:
+        """docker stop を別スレッドで非同期実行してコンテナを強制停止する。"""
+
+        def _stop() -> None:
+            try:
+                subprocess.run(
+                    [resolve_docker_bin(), "stop", "--time", "5", container_name],
+                    check=False,
+                    capture_output=True,
+                )
+            except OSError:
+                pass
+
+        threading.Thread(target=_stop, daemon=True).start()
+
     def _run_job(self, job_id: str) -> None:
         record = self.store.load(job_id)
         record.status = JobStatus.RUNNING
         record.started_at = datetime.now(UTC).isoformat()
         self.store.save(record)
+
+        container_name = f"joryu-job-{job_id}"
+        with self._lock:
+            self._running_container_name = container_name
 
         log_path = self.store.log_path(job_id)
         exit_code = 1
@@ -367,6 +401,7 @@ class JobRunner:
 
         try:
             cmd = self._command_builder(self.repo_root, record)
+            cmd = _inject_container_name(cmd, container_name)
             exit_code = self._run_command(cmd, self.repo_root, log_path, self._set_running_process)
             record.exit_code = exit_code
             if exit_code != 0:
@@ -390,6 +425,7 @@ class JobRunner:
             cancelled = job_id in self._cancel_requested
             self._cancel_requested.discard(job_id)
             self._running_process = None
+            self._running_container_name = None
         if cancelled:
             record.status = JobStatus.CANCELLED
             record.error = "cancelled by user"

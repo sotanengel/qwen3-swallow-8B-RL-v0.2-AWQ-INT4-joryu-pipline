@@ -11,6 +11,7 @@ import pytest
 from joryu.jobs.models import CurateJobSpec, DistillJobSpec, JobKind, JobRecord, JobStatus
 from joryu.jobs.runner import (
     JobRunner,
+    _inject_container_name,
     build_curate_command,
     build_job_command,
     make_refresh_stats,
@@ -392,3 +393,120 @@ def test_run_subprocess_logged_passes_process_to_callback(tmp_path: Path) -> Non
     assert len(captured) == 1
     text = log.read_text(encoding="utf-8")
     assert "hello" in text and "world" in text
+
+
+def test_inject_container_name_docker_run() -> None:
+    cmd = ["docker", "run", "--rm", "--gpus", "all", "joryu:latest", "python"]
+    result = _inject_container_name(cmd, "joryu-job-abc")
+    assert result == [
+        "docker",
+        "run",
+        "--rm",
+        "--name",
+        "joryu-job-abc",
+        "--gpus",
+        "all",
+        "joryu:latest",
+        "python",
+    ]
+
+
+def test_inject_container_name_docker_compose_run() -> None:
+    cmd = [
+        "docker",
+        "compose",
+        "-f",
+        "dc.yml",
+        "--project-directory",
+        "/repo",
+        "run",
+        "--rm",
+        "joryu",
+        "joryu-distill",
+    ]
+    result = _inject_container_name(cmd, "joryu-job-xyz")
+    assert result == [
+        "docker",
+        "compose",
+        "-f",
+        "dc.yml",
+        "--project-directory",
+        "/repo",
+        "run",
+        "--rm",
+        "--name",
+        "joryu-job-xyz",
+        "joryu",
+        "joryu-distill",
+    ]
+
+
+def test_inject_container_name_no_rm_unchanged() -> None:
+    cmd = ["some", "other", "command"]
+    result = _inject_container_name(cmd, "myname")
+    assert result == cmd
+
+
+def test_cancel_running_job_calls_docker_stop(tmp_path: Path, monkeypatch) -> None:
+    """実行中ジョブのキャンセル時に docker stop が呼ばれる。"""
+    monkeypatch.setattr("joryu.jobs.runner.STATS_REFRESH_INTERVAL_SEC", 3600.0)
+    store = JobStore(tmp_path)
+    record = JobRecord.create(DistillJobSpec(count=1))
+    store.save(record)
+
+    fake_proc = _FakeProcess()
+    started = threading.Event()
+    docker_stop_calls: list[list[str]] = []
+
+    def fake_run(cmd, _cwd, log_path, on_process):
+        if on_process is not None:
+            on_process(fake_proc)
+        started.set()
+        fake_proc.wait_for_terminate(timeout=5.0)
+        log_path.write_text("partial\n", encoding="utf-8")
+        return -15
+
+    import subprocess as _subprocess
+
+    original_run = _subprocess.run
+
+    def fake_subprocess_run(cmd, **kwargs):
+        if cmd and "stop" in cmd:
+            docker_stop_calls.append(list(cmd))
+            return type("R", (), {"returncode": 0})()
+        return original_run(cmd, **kwargs)
+
+    monkeypatch.setattr("joryu.jobs.runner.subprocess.run", fake_subprocess_run)
+    monkeypatch.setattr("joryu.jobs.runner.resolve_docker_bin", lambda: "docker")
+
+    runner = JobRunner(
+        store,
+        tmp_path,
+        run_command=fake_run,
+        refresh_stats=lambda _s: 0,
+        command_builder=lambda _root, record: [
+            "fake-distill",
+            *record.spec.to_distill_argv(),  # type: ignore[union-attr]
+        ],
+    )
+    runner.enqueue(record)
+
+    assert started.wait(timeout=5.0)
+    assert runner.cancel(record.id) is True
+
+    deadline = time.time() + 5.0
+    while time.time() < deadline:
+        if store.load(record.id).status == JobStatus.CANCELLED:
+            break
+        time.sleep(0.05)
+
+    assert store.load(record.id).status == JobStatus.CANCELLED
+    # docker stop が非同期で呼ばれるまで少し待つ
+    deadline = time.time() + 2.0
+    while time.time() < deadline and not docker_stop_calls:
+        time.sleep(0.05)
+    assert any("stop" in c for c in docker_stop_calls), (
+        f"docker stop not called: {docker_stop_calls}"
+    )
+    container_name = f"joryu-job-{record.id}"
+    assert any(container_name in c for c in docker_stop_calls)
