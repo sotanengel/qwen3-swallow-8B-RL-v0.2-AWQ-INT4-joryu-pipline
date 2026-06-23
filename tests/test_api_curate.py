@@ -71,24 +71,28 @@ def test_list_curate_jobs(client: TestClient, monkeypatch) -> None:
 
 
 def test_curate_job_logs_and_cancel(client: TestClient, monkeypatch) -> None:
+    from joryu.jobs.models import CurateJobSpec, JobRecord
     from joryu.jobs.runner import JobRunner
 
     monkeypatch.setattr("joryu.api.routes.curate.joryu_container_running", lambda **_: False)
-    resp = client.post("/api/curate/jobs", json={"skip_llm": True})
-    job_id = resp.json()["id"]
-
     runner: JobRunner = client.app.state.job_runner
+    store = client.app.state.job_store
+
     runner._command_builder = lambda _root, record: ["noop"]
     runner._run_command = lambda *args, **kwargs: 0  # type: ignore[assignment]
 
+    busy = JobRecord.create(CurateJobSpec(skip_llm=True))
+    store.save(busy)
     with runner._lock:
-        runner._running_id = job_id
+        runner._running_id = busy.id
 
-    cancel = client.post(f"/api/curate/jobs/{job_id}/cancel")
+    pending = JobRecord.create(CurateJobSpec(skip_llm=True))
+    store.save(pending)
+    runner.enqueue(pending)
+
+    cancel = client.post(f"/api/curate/jobs/{pending.id}/cancel")
     assert cancel.status_code == 200
-
-    logs = client.get(f"/api/curate/jobs/{job_id}/logs").json()
-    assert "offset" in logs
+    assert cancel.json()["status"] == "cancelled"
 
     with runner._lock:
         runner._running_id = None

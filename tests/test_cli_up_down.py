@@ -20,24 +20,34 @@ def _patch_runner(
     calls: list[list[str]] = []
 
     class _Done:
-        def __init__(self) -> None:
-            self.returncode = rc
+        def __init__(self, *, stdout: str = "", returncode: int = 0) -> None:
+            self.returncode = returncode
+            self.stdout = stdout
 
     def _fake_run(cmd: list[str], *args: Any, **kwargs: Any) -> _Done:
-        calls.append(cmd)
+        is_git_capture = kwargs.get("capture_output") and cmd and cmd[0] == "git"
+        if not is_git_capture:
+            calls.append(cmd)
+        if kwargs.get("capture_output"):
+            if len(cmd) >= 3 and cmd[0:3] == ["git", "rev-parse", "HEAD"]:
+                return _Done(stdout="test-head\n")
+            if len(cmd) >= 4 and cmd[0:4] == ["docker", "image", "inspect"]:
+                return _Done(returncode=0)
+            return _Done()
         return _Done()
 
     monkeypatch.setattr("joryu.compose.subprocess.run", _fake_run)
     monkeypatch.setattr("joryu.cli.up.schedule_open_dashboard", lambda **_: None)
     monkeypatch.setattr("joryu.cli.up.open_dashboard_when_ready", lambda **_: None)
     monkeypatch.setattr("joryu.cli.up.is_first_up_run", lambda _root: False)
-    monkeypatch.setattr("joryu.cli.up.git_head_at", lambda _root: "abc")
-    monkeypatch.setattr("joryu.cli.up.save_up_state", lambda *_args: None)
     # 空き容量チェックは環境依存なので既定で no-op 化 (insufficient disk テストでは上書き)
     monkeypatch.setattr("joryu.cli.up.check_disk_space", lambda *_args, **_kwargs: None)
     monkeypatch.setattr("joryu.cli.up.ensure_prompt_bank", lambda *_args, **_kwargs: None)
     monkeypatch.setattr("joryu.cli.up.ensure_stats_json", lambda *_args, **_kwargs: None)
     monkeypatch.setattr("joryu.cli.up.ensure_curation", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("joryu.preflight.services_missing_build_at_head", lambda *_a, **_k: set())
+    monkeypatch.setattr("joryu.preflight.git_head_at", lambda *_a, **_k: "test-head")
+    monkeypatch.setattr("joryu.cli.up.save_up_state", lambda *_args, **_kwargs: None)
     monkeypatch.setattr("joryu.preflight.docker_image_exists", lambda *_args, **_kwargs: True)
     return calls
 
@@ -259,11 +269,14 @@ def test_up_foreground_schedules_browser_before_compose(monkeypatch: pytest.Monk
         order.append("schedule")
 
     def _fake_run(cmd: list[str], *args: object, **kwargs: object) -> object:
-        calls.append(cmd)
-        order.append("compose")
+        is_git_capture = kwargs.get("capture_output") and cmd and cmd[0] == "git"
+        if not is_git_capture:
+            calls.append(cmd)
+            order.append("compose")
 
         class _Done:
             returncode = 0
+            stdout = "test-head\n" if is_git_capture else ""
 
         return _Done()
 

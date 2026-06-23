@@ -106,6 +106,7 @@ def main(argv: list[str] | None = None) -> int:
         no_build=args.no_build,
         force_build=args.build,
         first_run=is_first_up_run(repo_root),
+        repo_root=repo_root,
     )
 
     try:
@@ -151,7 +152,11 @@ def main(argv: list[str] | None = None) -> int:
     if rc == 0:
         head = git_head_at(repo_root)
         if head:
-            save_up_state(repo_root, head)
+            save_up_state(
+                repo_root,
+                head,
+                built_services=build_services if build_services else None,
+            )
     if rc == 0 and open_browser and args.detach:
         open_dashboard_when_ready()
     return rc

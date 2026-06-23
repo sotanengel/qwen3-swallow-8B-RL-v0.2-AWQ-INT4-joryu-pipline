@@ -24,6 +24,8 @@ from joryu.preflight import (
     resolve_prompt_bank_seed_path,
     resolve_prompt_csv_path,
     resolve_up_services,
+    save_up_state,
+    services_missing_build_at_head,
     services_to_build,
 )
 
@@ -114,6 +116,44 @@ def test_services_to_build_skips_joryu_when_image_exists_and_no_diff() -> None:
             ["dashboard", "api"],
             set(),
             no_build=False,
+            inspect_runner=lambda *_args, **_kwargs: _InspectResult(returncode=0),
+        )
+        == []
+    )
+
+
+def test_services_to_build_rebuilds_unbuilt_at_current_head(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("joryu.preflight.git_head_at", lambda _root, **_: "head-abc")
+    save_up_state(tmp_path, "head-abc")
+    assert services_missing_build_at_head(["dashboard", "api"], tmp_path) == {
+        "dashboard",
+        "api",
+    }
+    assert services_to_build(
+        ["dashboard", "api"],
+        set(),
+        no_build=False,
+        first_run=False,
+        repo_root=tmp_path,
+        inspect_runner=lambda *_args, **_kwargs: _InspectResult(returncode=0),
+    ) == ["dashboard", "api"]
+
+
+def test_services_to_build_skips_when_built_at_head(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("joryu.preflight.git_head_at", lambda _root, **_: "head-abc")
+    save_up_state(tmp_path, "head-abc", built_services=["dashboard", "api", "joryu"])
+    assert services_missing_build_at_head(["dashboard", "api"], tmp_path) == set()
+    assert (
+        services_to_build(
+            ["dashboard", "api"],
+            set(),
+            no_build=False,
+            first_run=False,
+            repo_root=tmp_path,
             inspect_runner=lambda *_args, **_kwargs: _InspectResult(returncode=0),
         )
         == []
