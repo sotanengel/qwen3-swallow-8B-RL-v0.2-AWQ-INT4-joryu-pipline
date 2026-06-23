@@ -39,8 +39,15 @@ _JORYU_JOB_RUNTIME_PATHS = frozenset(
         "src/joryu/docker_delegate.py",
         "src/joryu/docker_runtime.py",
         "src/joryu/stats.py",
+        "src/joryu/preflight.py",
+        "src/joryu/paths.py",
+        "src/joryu/vllm_client.py",
+        "src/joryu/vllm_limits.py",
+        "src/joryu/vllm_probe.py",
+        "src/joryu/jobs/runner.py",
         "src/joryu/cli/distill.py",
         "src/joryu/cli/stats.py",
+        "src/joryu/cli/probe_vllm.py",
     }
 )
 _DASHBOARD_PREFIX = "dashboard/"
@@ -304,6 +311,26 @@ def services_to_build(
             candidates.append("joryu")
 
     return [svc for svc in _SERVICE_ORDER if svc in candidates]
+
+
+def should_force_recreate(
+    up_services: list[str],
+    changed: set[str],
+    build_services: list[str],
+    *,
+    first_run: bool,
+) -> bool:
+    """compose up で `--force-recreate` が必要か。
+
+    api コンテナは uvicorn プロセスが Python モジュールをキャッシュするため、
+    ジョブランナー (api) や蒸留ジョブ (joryu) のランタイム差分では再起動が必要。
+    イメージ rebuild 時も再作成する。
+    """
+    if first_run or build_services:
+        return True
+    if "api" in up_services and ("api" in changed or "joryu" in changed):
+        return True
+    return False
 
 
 def required_disk_gb(services: list[str]) -> float:
