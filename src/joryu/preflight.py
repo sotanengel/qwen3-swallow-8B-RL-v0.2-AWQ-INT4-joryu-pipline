@@ -525,6 +525,75 @@ def ensure_curation(
     return curate_main(argv)
 
 
+def resolve_vllm_limits_path(repo_root: Path) -> Path:
+    """config.model.limits_probe_file の絶対パスを返す。"""
+    from joryu.paths import DEFAULT_CONFIG, resolve_limits_probe_path, resolve_optional_config
+
+    cfg = resolve_optional_config(repo_root / DEFAULT_CONFIG)
+    return resolve_limits_probe_path(cfg.model.limits_probe_file, repo_root=repo_root)
+
+
+def vllm_limits_probe_needed(
+    repo_root: Path,
+    *,
+    up_services: list[str],
+    joryu_built: bool = False,
+    force: bool = False,
+) -> bool:
+    """VRAM プローブが必要か。api/joryu を up する場合に limits 未作成・古い・joryu rebuild 時。"""
+    if force:
+        return True
+    if "api" not in up_services and "joryu" not in up_services:
+        return False
+    from joryu.paths import DEFAULT_CONFIG, resolve_optional_config
+    from joryu.vllm_limits import limits_probe_stale, vllm_config_fingerprint
+
+    limits_path = resolve_vllm_limits_path(repo_root)
+    if not limits_path.is_file():
+        return True
+    if joryu_built:
+        return True
+    cfg = resolve_optional_config(repo_root / DEFAULT_CONFIG)
+    return limits_probe_stale(limits_path, vllm_config_fingerprint(cfg))
+
+
+def ensure_vllm_limits(
+    repo_root: Path,
+    *,
+    up_services: list[str],
+    joryu_built: bool = False,
+    force: bool = False,
+    log: Callable[[str], None] | None = None,
+) -> int | None:
+    """GPU 蒸留ジョブ向けに vLLM VRAM 上限をプローブ。不要時は None。"""
+    if not vllm_limits_probe_needed(
+        repo_root,
+        up_services=up_services,
+        joryu_built=joryu_built,
+        force=force,
+    ):
+        return None
+
+    if not docker_image_exists(JORYU_JOB_IMAGE):
+        raise PreflightError(
+            "[joryu-up] joryu:latest が見つかりません。"
+            " VRAM プローブの前に joryu イメージを build してください。"
+        )
+
+    from joryu.paths import DEFAULT_CONFIG
+    from joryu.vllm_probe import run_vllm_probe
+
+    _emit_preflight_log("[joryu-up] joryu-probe-vllm (GPU VRAM 上限)", log)
+    rc = run_vllm_probe(config=str(repo_root / DEFAULT_CONFIG))
+    if rc != 0:
+        raise PreflightError(
+            "[joryu-up] joryu-probe-vllm が失敗しました。\n"
+            "  手動: uv run joryu-probe-vllm\n"
+            "  または data/vllm_limits.json を配置してください。"
+        )
+    return rc
+
+
 def ensure_dashboard_data_paths(repo_root: Path) -> None:
     """蒸留 JSONL を dashboard から参照できるようディレクトリと symlink を整備する。"""
     from joryu.paths import DEFAULT_CONFIG, dashboard_public, resolve_optional_config

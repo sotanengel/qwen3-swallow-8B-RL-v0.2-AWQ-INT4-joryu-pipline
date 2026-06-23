@@ -206,6 +206,27 @@ def test_client_exception_skips_row_continues(tmp_path: Path) -> None:
     assert [r["prompt"] for r in records] == ["P1", "P3"]
 
 
+def test_vllm_load_failure_aborts_job(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    from joryu.vllm_client import VllmError
+
+    bank = tmp_path / "bank.jsonl"
+    _write_bank(bank, [{"prompt": "P1"}, {"prompt": "P2"}])
+    out = tmp_path / "out.jsonl"
+
+    class _LoadFailure(FakeVllmClient):
+        def chat_via_template(self, messages, **kw):  # type: ignore[override]
+            raise VllmError("failed to load vLLM model: Engine core initialization failed")
+
+    client = _LoadFailure()
+    n = run_distill(Config(), bank_path=bank, out_path=out, client=client)
+    assert n == 0
+    assert len(client.calls) == 0
+    err = capsys.readouterr().err
+    assert "vLLM ロード失敗" in err
+    assert "joryu-probe-vllm" in err
+    assert "joryu-up" in err
+
+
 def test_run_distill_redo_truncated_reprocesses_matching_keys(tmp_path: Path) -> None:
     bank = tmp_path / "bank.jsonl"
     _write_bank(bank, [{"prompt": "P1"}, {"prompt": "P2"}])

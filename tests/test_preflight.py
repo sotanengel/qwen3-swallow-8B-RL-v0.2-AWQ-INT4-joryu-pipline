@@ -18,15 +18,18 @@ from joryu.preflight import (
     ensure_dashboard_data_paths,
     ensure_prompt_bank,
     ensure_stats_json,
+    ensure_vllm_limits,
     jsonl_has_content,
     path_affects_service,
     required_disk_gb,
     resolve_prompt_bank_seed_path,
     resolve_prompt_csv_path,
     resolve_up_services,
+    resolve_vllm_limits_path,
     save_up_state,
     services_missing_build_at_head,
     services_to_build,
+    vllm_limits_probe_needed,
 )
 
 
@@ -492,6 +495,72 @@ def test_ensure_curation_runs_with_skip_llm(tmp_path: Path, monkeypatch) -> None
     rc = ensure_curation(tmp_path, ["dashboard", "api"])
     assert rc == 0
     assert calls == [["--config", "config.yaml", "--skip-llm"]]
+
+
+def test_vllm_limits_probe_needed_for_api_without_limits(tmp_path: Path) -> None:
+    (tmp_path / "config.yaml").write_text(
+        "model:\n  limits_probe_file: data/vllm_limits.json\n",
+        encoding="utf-8",
+    )
+    assert vllm_limits_probe_needed(tmp_path, up_services=["dashboard", "api"]) is True
+
+
+def test_vllm_limits_probe_needed_skips_frontend_only(tmp_path: Path) -> None:
+    assert vllm_limits_probe_needed(tmp_path, up_services=["dashboard"]) is False
+
+
+def test_vllm_limits_probe_needed_skips_fresh_limits(tmp_path: Path) -> None:
+    from joryu.config import Config
+    from joryu.vllm_limits import VllmLimits, vllm_config_fingerprint, write_probe_limits
+
+    cfg_yaml = "model:\n  limits_probe_file: data/vllm_limits.json\n"
+    (tmp_path / "config.yaml").write_text(cfg_yaml, encoding="utf-8")
+    cfg = Config()
+    limits_path = resolve_vllm_limits_path(tmp_path)
+    write_probe_limits(
+        limits_path,
+        VllmLimits(num_ctx=1024, num_predict=640),
+        extra={"config_fingerprint": vllm_config_fingerprint(cfg)},
+    )
+    assert vllm_limits_probe_needed(tmp_path, up_services=["dashboard", "api"]) is False
+
+
+def test_ensure_vllm_limits_runs_probe_when_needed(tmp_path: Path, monkeypatch) -> None:
+    (tmp_path / "config.yaml").write_text(
+        "model:\n  limits_probe_file: data/vllm_limits.json\n",
+        encoding="utf-8",
+    )
+    calls: list[str] = []
+
+    def fake_probe(**kwargs) -> int:
+        calls.append(str(kwargs.get("config")))
+        return 0
+
+    monkeypatch.setattr("joryu.vllm_probe.run_vllm_probe", fake_probe)
+    monkeypatch.setattr("joryu.preflight.docker_image_exists", lambda *_args, **_kwargs: True)
+    rc = ensure_vllm_limits(tmp_path, up_services=["dashboard", "api"])
+    assert rc == 0
+    assert len(calls) == 1
+
+
+def test_ensure_vllm_limits_skips_when_fresh(tmp_path: Path, monkeypatch) -> None:
+    from joryu.config import Config
+    from joryu.vllm_limits import VllmLimits, vllm_config_fingerprint, write_probe_limits
+
+    cfg_yaml = "model:\n  limits_probe_file: data/vllm_limits.json\n"
+    (tmp_path / "config.yaml").write_text(cfg_yaml, encoding="utf-8")
+    cfg = Config()
+    write_probe_limits(
+        resolve_vllm_limits_path(tmp_path),
+        VllmLimits(num_ctx=1024, num_predict=640),
+        extra={"config_fingerprint": vllm_config_fingerprint(cfg)},
+    )
+
+    def fail_probe(**kwargs) -> int:
+        raise AssertionError("should not run")
+
+    monkeypatch.setattr("joryu.vllm_probe.run_vllm_probe", fail_probe)
+    assert ensure_vllm_limits(tmp_path, up_services=["dashboard", "api"]) is None
 
 
 class _GitResult:

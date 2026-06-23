@@ -388,6 +388,29 @@ class JobRunner:
         stop_stats = threading.Event()
         stats_thread: threading.Thread | None = None
         if record.kind == JobKind.DISTILL and isinstance(record.spec, DistillJobSpec):
+            from joryu.preflight import PreflightError, ensure_vllm_limits
+
+            def _probe_log(message: str) -> None:
+                self.store.append_log(job_id, message + "\n")
+
+            try:
+                ensure_vllm_limits(
+                    self.repo_root,
+                    up_services=["api", "joryu"],
+                    log=_probe_log,
+                )
+            except PreflightError as exc:
+                self.store.append_log(job_id, f"[joryu-runner] {exc}\n")
+                record.status = JobStatus.FAILED
+                record.error = str(exc)
+                record.exit_code = 1
+                record.finished_at = datetime.now(UTC).isoformat()
+                self.store.save(record)
+                with self._lock:
+                    self._running_id = None
+                    self._running_process = None
+                self._maybe_start_next()
+                return
 
             def _refresh() -> None:
                 self._refresh_stats(record.spec)

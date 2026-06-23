@@ -17,7 +17,7 @@ from joryu.prompt_bank import EffectiveSampling, PromptRow, load_prompt_bank
 from joryu.stats import resolve_stats_output_path, write_stats_json
 from joryu.styles import StylePreset, load_styles, resolve_style_ids
 from joryu.variants import DistillVariant, expand_variants
-from joryu.vllm_client import ChatResult, SupportsChat, VllmClient
+from joryu.vllm_client import ChatResult, SupportsChat, VllmClient, VllmError
 from joryu.writer import JsonlAppendWriter
 
 logger = logging.getLogger(__name__)
@@ -193,6 +193,25 @@ def run_distill(
                     enable_thinking=enable_thinking,
                     **eff.sampling,
                 )
+            except VllmError as exc:
+                if "failed to load vLLM model" in str(exc):
+                    logger.error("[distill] vLLM load failed; aborting job")
+                    log(
+                        "[joryu-distill] vLLM ロード失敗 — ジョブを中止します。"
+                        " `uv run joryu-up` または `uv run joryu-probe-vllm` で"
+                        " GPU 上限を記録してください。",
+                        file=sys.stderr,
+                    )
+                    log(f"[joryu-distill] [{i}/{run_total}] エラー: {exc}", file=sys.stderr)
+                    reporter.update(i)
+                    break
+                logger.warning("[distill] row failed (prompt=%r): %s", row.prompt[:40], exc)
+                log(
+                    f"[joryu-distill] [{i}/{run_total}] エラー: {exc}",
+                    file=sys.stderr,
+                )
+                reporter.update(i)
+                continue
             except Exception as exc:  # noqa: BLE001
                 logger.warning("[distill] row failed (prompt=%r): %s", row.prompt[:40], exc)
                 log(

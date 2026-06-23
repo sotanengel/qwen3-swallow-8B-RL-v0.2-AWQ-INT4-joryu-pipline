@@ -36,6 +36,7 @@ from joryu.preflight import (
     ensure_dashboard_data_paths,
     ensure_prompt_bank,
     ensure_stats_json,
+    ensure_vllm_limits,
     git_head_at,
     is_first_up_run,
     resolve_up_services,
@@ -139,6 +140,17 @@ def main(argv: list[str] | None = None) -> int:
         rc = run(compose_build_command(services=build_services))
         if rc != 0:
             return rc
+
+    if "api" in up_services or "joryu" in up_services:
+        try:
+            ensure_vllm_limits(
+                repo_root,
+                up_services=up_services,
+                joryu_built="joryu" in build_services,
+            )
+        except PreflightError as exc:
+            print(exc, file=sys.stderr)
+            return 1
 
     cmd = compose_up_command(
         services=up_services,
