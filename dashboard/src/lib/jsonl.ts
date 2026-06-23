@@ -85,3 +85,81 @@ export function jsonlDataChanged(
     prevLast.answer !== nextLast.answer
   );
 }
+
+const RECORD_KEY_SEP = "\x1e";
+
+/** レコードの安定キー文字列を構築する。 */
+export function recordKey(r: DistilledRecord): string {
+  return [
+    r.prompt,
+    r.category ?? "",
+    r.mode ?? "",
+    r.style_id ?? "",
+    r.created_at ?? "",
+    r.config_hash ?? "",
+  ].join(RECORD_KEY_SEP);
+}
+
+/** FNV-1a 32-bit ハッシュ (決定論的・URL 安全な base36 文字列)。 */
+function fnv1aHash(text: string): string {
+  let hash = 2166136261;
+  for (let i = 0; i < text.length; i++) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+/** レコードの URL 用 ID を生成する。 */
+export function recordId(r: DistilledRecord): string {
+  return fnv1aHash(recordKey(r));
+}
+
+/** ID からレコードを検索する。 */
+export function findRecordById(
+  records: DistilledRecord[],
+  id: string,
+): DistilledRecord | undefined {
+  return records.find((r) => recordId(r) === id);
+}
+
+/** テキストを指定長で切り詰める。 */
+export function truncateText(text: string, maxLen: number): string {
+  if (text.length <= maxLen) return text;
+  return `${text.slice(0, maxLen)}…`;
+}
+
+function formatMetaLine(label: string, value: string | null | undefined): string | null {
+  if (value == null || value === "") return null;
+  return `- **${label}**: ${value}`;
+}
+
+/** レコードを Markdown 文書に整形する。 */
+export function formatRecordMarkdown(r: DistilledRecord): string {
+  const metaLines = [
+    formatMetaLine("category", r.category),
+    formatMetaLine("mode", r.mode),
+    formatMetaLine("style_id", r.style_id),
+    formatMetaLine("model", r.model),
+    formatMetaLine("config_hash", r.config_hash),
+    formatMetaLine("created_at", r.created_at),
+    r.sampling && Object.keys(r.sampling).length > 0
+      ? `- **sampling**: ${JSON.stringify(r.sampling)}`
+      : null,
+  ].filter((line): line is string => line !== null);
+
+  const sections = [
+    "## メタデータ",
+    metaLines.join("\n"),
+    "## プロンプト",
+    r.prompt,
+  ];
+
+  const thinking = r.thinking_trace?.trim();
+  if (thinking) {
+    sections.push("## 思考過程", thinking);
+  }
+
+  sections.push("## 回答", r.answer);
+  return sections.join("\n\n");
+}

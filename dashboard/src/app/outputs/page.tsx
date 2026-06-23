@@ -1,0 +1,151 @@
+"use client";
+
+import Link from "next/link";
+import { useMemo, useState } from "react";
+
+import {
+  DistilledRecord,
+  jsonlDataChanged,
+  loadJsonl,
+  recordId,
+  searchRecords,
+  truncateText,
+} from "@/lib/jsonl";
+import { useIntervalPoll } from "@/lib/useIntervalPoll";
+
+const PAGE_SIZE = 25;
+
+export default function OutputsPage() {
+  const [loaded, setLoaded] = useState(false);
+  const records = useIntervalPoll(
+    async () => {
+      const rows = await loadJsonl();
+      setLoaded(true);
+      return rows;
+    },
+    [] as DistilledRecord[],
+    { shouldUpdate: jsonlDataChanged },
+  );
+  const [query, setQuery] = useState("");
+  const [mode, setMode] = useState<"all" | "thinking" | "nothinking">("all");
+  const [category, setCategory] = useState("");
+  const [page, setPage] = useState(0);
+
+  const categories = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of records) {
+      if (r.category) set.add(r.category);
+    }
+    return [...set].sort();
+  }, [records]);
+
+  const filtered = useMemo(
+    () =>
+      searchRecords(records, {
+        query,
+        mode,
+        category: category || undefined,
+      }),
+    [records, query, mode, category],
+  );
+
+  const pageRows = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+
+  return (
+    <>
+      <section className="section">
+        <h2>出力一覧</h2>
+      </section>
+
+      <section className="search-bar">
+        <input
+          type="search"
+          placeholder="prompt / answer / thinking_trace を検索"
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setPage(0);
+          }}
+        />
+        <select
+          value={mode}
+          onChange={(e) => {
+            setMode(e.target.value as typeof mode);
+            setPage(0);
+          }}
+        >
+          <option value="all">mode: all</option>
+          <option value="thinking">thinking</option>
+          <option value="nothinking">nothinking</option>
+        </select>
+        <select
+          value={category}
+          onChange={(e) => {
+            setCategory(e.target.value);
+            setPage(0);
+          }}
+        >
+          <option value="">category: all</option>
+          {categories.map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+        </select>
+      </section>
+
+      {!loaded ? (
+        <p style={{ color: "var(--muted)" }}>
+          responses.jsonl を読み込み中…
+          <br />
+          (dashboard/public/responses.jsonl にシンボリックリンクまたはコピーを置いてください)
+        </p>
+      ) : (
+        <p style={{ color: "var(--muted)", fontSize: "0.9rem" }}>
+          {filtered.length.toLocaleString()} / {records.length.toLocaleString()} 件 ヒット (ページ{" "}
+          {page + 1} / {totalPages})
+        </p>
+      )}
+
+      <table>
+        <thead>
+          <tr>
+            <th>category</th>
+            <th>mode</th>
+            <th>prompt</th>
+            <th>created_at</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {pageRows.map((r) => (
+            <tr key={recordId(r)} className="output-list-row">
+              <td style={{ verticalAlign: "top" }}>{r.category ?? ""}</td>
+              <td style={{ verticalAlign: "top" }}>{r.mode ?? ""}</td>
+              <td>{truncateText(r.prompt, 80)}</td>
+              <td style={{ verticalAlign: "top", whiteSpace: "nowrap" }}>
+                {r.created_at ?? "-"}
+              </td>
+              <td style={{ verticalAlign: "top" }}>
+                <Link href={`/outputs/${recordId(r)}`}>詳細</Link>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <div style={{ display: "flex", gap: "0.5rem", marginTop: "1rem" }}>
+        <button onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0}>
+          ‹ 前へ
+        </button>
+        <button
+          onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+          disabled={page >= totalPages - 1}
+        >
+          次へ ›
+        </button>
+      </div>
+    </>
+  );
+}

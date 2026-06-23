@@ -275,3 +275,103 @@ pre.snippet {
 .row-selected td {
   background: var(--accent-soft);
 }
+
+.output-list-row {
+  cursor: pointer;
+}
+
+.output-list-row:hover td {
+  background: var(--accent-soft);
+}
+
+.output-detail-back {
+  display: inline-block;
+  color: var(--accent);
+  text-decoration: none;
+  margin-bottom: 1.5rem;
+  font-size: 0.9rem;
+}
+
+.output-detail-back:hover {
+  text-decoration: underline;
+}
+
+.output-detail {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1.5rem;
+}
+
+.markdown-body {
+  line-height: 1.6;
+  font-size: 0.95rem;
+}
+
+.markdown-body h2 {
+  font-size: 1.1rem;
+  margin: 1.5rem 0 0.75rem;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.markdown-body h2:first-child {
+  margin-top: 0;
+}
+
+.markdown-body h3 {
+  font-size: 1rem;
+  margin: 1.25rem 0 0.5rem;
+}
+
+.markdown-body p {
+  margin: 0.5rem 0;
+}
+
+.markdown-body ul,
+.markdown-body ol {
+  margin: 0.5rem 0;
+  padding-left: 1.5rem;
+}
+
+.markdown-body li {
+  margin: 0.25rem 0;
+}
+
+.markdown-body code {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 0.15rem 0.35rem;
+  font-size: 0.85em;
+}
+
+.markdown-body pre {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.75rem 1rem;
+  overflow-x: auto;
+  font-size: 0.85rem;
+}
+
+.markdown-body pre code {
+  background: none;
+  border: none;
+  padding: 0;
+}
+
+.markdown-body blockquote {
+  margin: 0.5rem 0;
+  padding-left: 1rem;
+  border-left: 3px solid var(--border);
+  color: var(--muted);
+}
+
+.markdown-body table {
+  margin: 0.5rem 0;
+}
+
+.markdown-body a {
+  color: var(--accent);
+}

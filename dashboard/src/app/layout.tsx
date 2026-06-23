@@ -21,7 +21,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <h1>joryu dashboard</h1>
           <nav>
             <Link href="/">概要</Link>
-            <Link href="/search">検索</Link>
+            <Link href="/outputs">出力一覧</Link>
             <Link href="/distributions">分布</Link>
             <Link href="/curation">高品質抽出</Link>
             <Link href="/jobs">ジョブ</Link>
