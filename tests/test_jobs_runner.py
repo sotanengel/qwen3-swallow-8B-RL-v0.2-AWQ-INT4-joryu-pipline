@@ -14,6 +14,7 @@ from joryu.jobs.runner import (
     _inject_container_name,
     build_curate_command,
     build_job_command,
+    curate_job_dst_rel,
     make_refresh_stats,
     resolve_docker_bin,
     should_use_api_docker_delegate,
@@ -52,10 +53,27 @@ def test_build_curate_command_api_delegate(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr("joryu.jobs.runner.resolve_host_repo_root", lambda _root: host_root)
     (tmp_path / "config.yaml").write_text("x: 1\n", encoding="utf-8")
     spec = CurateJobSpec(skip_llm=True)
-    cmd = build_curate_command(tmp_path, spec)
+    job_id = "abc-123"
+    cmd = build_curate_command(tmp_path, spec, job_id=job_id)
     assert cmd[0:3] == ["/usr/bin/docker", "run", "--rm"]
     assert "joryu.cli.curate" in cmd
     assert "--skip-llm" in cmd
+    assert "--dst" in cmd
+    assert cmd[cmd.index("--dst") + 1] == curate_job_dst_rel(job_id)
+
+
+def test_build_curate_command_injects_job_dst_via_build_job_command(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setenv("JORYU_USE_COMPOSE_RUN", "1")
+    monkeypatch.setattr("joryu.jobs.runner.resolve_docker_bin", lambda: "/usr/bin/docker")
+    host_root = Path("C:/repo")
+    monkeypatch.setattr("joryu.jobs.runner.resolve_host_repo_root", lambda _root: host_root)
+    (tmp_path / "config.yaml").write_text("x: 1\n", encoding="utf-8")
+    record = JobRecord.create(CurateJobSpec(skip_llm=True))
+    cmd = build_job_command(tmp_path, record)
+    assert "--dst" in cmd
+    assert cmd[cmd.index("--dst") + 1] == curate_job_dst_rel(record.id)
 
 
 def test_should_use_compose_run_env(monkeypatch) -> None:
@@ -396,7 +414,7 @@ def test_cancel_running_job_terminates_process(tmp_path: Path, monkeypatch) -> N
     loaded = store.load(record.id)
     assert loaded.status == JobStatus.CANCELLED
     assert loaded.error == "cancelled by user"
-    assert stats_called == []  # refresh_stats はキャンセル時に呼ばれない
+    assert stats_called[-1] == record.spec
 
 
 def test_cancel_unknown_job_returns_false(tmp_path: Path) -> None:
@@ -559,3 +577,78 @@ def test_cancel_running_job_calls_docker_stop(tmp_path: Path, monkeypatch) -> No
     )
     container_name = f"joryu-job-{record.id}"
     assert any(container_name in c for c in docker_stop_calls)
+
+
+def test_runner_refreshes_curation_during_curate_job(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr("joryu.jobs.runner.STATS_REFRESH_INTERVAL_SEC", 0.05)
+    store = JobStore(tmp_path)
+    spec = CurateJobSpec(skip_llm=True)
+    record = JobRecord.create(spec)
+    store.save(record)
+
+    curation_calls: list[tuple[CurateJobSpec, str]] = []
+    gate = threading.Event()
+
+    def fake_run(cmd, _cwd, log_path, _on_process):
+        gate.wait(timeout=5.0)
+        log_path.write_text("ok\n", encoding="utf-8")
+        return 0
+
+    def fake_refresh_curation(s: CurateJobSpec, job_id: str) -> int:
+        curation_calls.append((s, job_id))
+        return 0
+
+    runner = JobRunner(
+        store,
+        tmp_path,
+        run_command=fake_run,
+        refresh_curation=fake_refresh_curation,
+        command_builder=lambda _root, rec: ["fake-curate", *rec.spec.to_curate_argv()],  # type: ignore[union-attr]
+    )
+    runner.enqueue(record)
+
+    deadline = time.time() + 5.0
+    while time.time() < deadline and len(curation_calls) < 2:
+        time.sleep(0.02)
+
+    assert len(curation_calls) >= 2
+    gate.set()
+
+    while time.time() < deadline:
+        loaded = store.load(record.id)
+        if loaded.status == JobStatus.SUCCEEDED:
+            break
+        time.sleep(0.05)
+
+    assert store.load(record.id).status == JobStatus.SUCCEEDED
+    assert curation_calls[-1] == (spec, record.id)
+
+
+def test_runner_ensure_dashboard_data_paths_on_distill_start(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr("joryu.jobs.runner.STATS_REFRESH_INTERVAL_SEC", 3600.0)
+    called: list[Path] = []
+    monkeypatch.setattr(
+        "joryu.preflight.ensure_dashboard_data_paths",
+        lambda root: called.append(root),
+    )
+
+    store = JobStore(tmp_path)
+    record = JobRecord.create(DistillJobSpec(count=1))
+    store.save(record)
+
+    runner = JobRunner(
+        store,
+        tmp_path,
+        run_command=lambda *_args, **_kwargs: 0,
+        refresh_stats=lambda _s: 0,
+        command_builder=lambda _root, rec: ["fake-distill"],
+    )
+    runner.enqueue(record)
+
+    deadline = time.time() + 5.0
+    while time.time() < deadline:
+        if store.load(record.id).status == JobStatus.SUCCEEDED:
+            break
+        time.sleep(0.05)
+
+    assert called == [tmp_path]

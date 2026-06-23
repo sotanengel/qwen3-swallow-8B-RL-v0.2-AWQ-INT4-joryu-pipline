@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
+import { useIntervalPoll } from "@/lib/useIntervalPoll";
+import { useDistillJobFastPoll } from "@/lib/useDistillJobFastPoll";
 import {
   DistilledRecord,
   jsonlDataChanged,
@@ -11,12 +13,12 @@ import {
   searchRecords,
   truncateText,
 } from "@/lib/jsonl";
-import { useIntervalPoll } from "@/lib/useIntervalPoll";
 
 const PAGE_SIZE = 25;
 
 export default function OutputsPage() {
   const [loaded, setLoaded] = useState(false);
+  const fastPoll = useDistillJobFastPoll();
   const records = useIntervalPoll(
     async () => {
       const rows = await loadJsonl();
@@ -24,7 +26,7 @@ export default function OutputsPage() {
       return rows;
     },
     [] as DistilledRecord[],
-    { shouldUpdate: jsonlDataChanged },
+    { shouldUpdate: jsonlDataChanged, intervalMs: fastPoll ? 1000 : 3000 },
   );
   const [query, setQuery] = useState("");
   const [mode, setMode] = useState<"all" | "thinking" | "nothinking">("all");

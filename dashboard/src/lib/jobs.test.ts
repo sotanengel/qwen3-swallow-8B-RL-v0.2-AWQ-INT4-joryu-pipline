@@ -6,14 +6,26 @@ describe("parseJobRecord", () => {
   it("normalizes API payload", () => {
     const job = parseJobRecord({
       id: "abc",
+      kind: "distill",
       spec: { count: 3, style: ["polite"], mode: "thinking" },
       status: "queued",
       created_at: "2025-01-01T00:00:00+00:00",
     });
     expect(job.id).toBe("abc");
+    expect(job.kind).toBe("distill");
     expect(job.spec.count).toBe(3);
     expect(job.spec.style).toEqual(["polite"]);
     expect(job.status).toBe("queued");
+  });
+
+  it("defaults kind to distill when omitted", () => {
+    const job = parseJobRecord({
+      id: "abc",
+      spec: { count: 1 },
+      status: "queued",
+      created_at: "2025-01-01T00:00:00+00:00",
+    });
+    expect(job.kind).toBe("distill");
   });
 });
 

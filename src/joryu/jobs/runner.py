@@ -16,6 +16,8 @@ from joryu.docker_paths import map_path_for_docker, resolve_host_repo_root
 from joryu.jobs.models import CurateJobSpec, DistillJobSpec, JobKind, JobRecord, JobStatus
 from joryu.jobs.store import JobStore
 
+CURATE_JOBS_REL = "data/curated/jobs"
+
 
 def default_jobs_dir(repo_root: Path) -> Path:
     return repo_root / "data" / "jobs"
@@ -115,10 +117,23 @@ def build_docker_delegate_command(repo_root: Path, spec: DistillJobSpec) -> list
     return cmd
 
 
+def curate_job_dst(repo_root: Path, job_id: str) -> Path:
+    """API 経由 curate ジョブの固定出力ディレクトリ。"""
+    return repo_root / CURATE_JOBS_REL / job_id
+
+
+def curate_job_dst_rel(job_id: str) -> str:
+    return f"{CURATE_JOBS_REL}/{job_id}".replace("\\", "/")
+
+
+def _curate_argv_with_dst(spec: CurateJobSpec, job_id: str) -> list[str]:
+    return [*spec.to_curate_argv(), "--dst", curate_job_dst_rel(job_id)]
+
+
 def build_job_command(repo_root: Path, record: JobRecord) -> list[str]:
     if record.kind == JobKind.CURATE:
         assert isinstance(record.spec, CurateJobSpec)
-        return build_curate_command(repo_root, record.spec)
+        return build_curate_command(repo_root, record.spec, job_id=record.id)
     assert isinstance(record.spec, DistillJobSpec)
     return build_distill_command(repo_root, record.spec)
 
@@ -133,7 +148,12 @@ def build_distill_command(repo_root: Path, spec: DistillJobSpec) -> list[str]:
     return build_compose_run_command(repo_root, spec)
 
 
-def build_compose_run_curate_command(repo_root: Path, spec: CurateJobSpec) -> list[str]:
+def build_compose_run_curate_command(
+    repo_root: Path,
+    spec: CurateJobSpec,
+    *,
+    job_id: str,
+) -> list[str]:
     host_root = resolve_host_repo_root(repo_root)
     compose_file = host_root / "docker-compose.yml"
     return [
@@ -149,11 +169,16 @@ def build_compose_run_curate_command(repo_root: Path, spec: CurateJobSpec) -> li
         "joryu-curate",
         "--config",
         spec.config,
-        *spec.to_curate_argv(),
+        *_curate_argv_with_dst(spec, job_id),
     ]
 
 
-def build_curate_docker_delegate_command(repo_root: Path, spec: CurateJobSpec) -> list[str]:
+def build_curate_docker_delegate_command(
+    repo_root: Path,
+    spec: CurateJobSpec,
+    *,
+    job_id: str,
+) -> list[str]:
     from joryu.docker_delegate import DEFAULT_IMAGE, build_docker_command
     from joryu.docker_runtime import prepare_distill_docker_mounts
 
@@ -193,7 +218,7 @@ def build_curate_docker_delegate_command(repo_root: Path, spec: CurateJobSpec) -
         styles_path=mounts.styles_path,
         styles_rel=mounts.styles_rel,
         allocate_tty=False,
-        extra_args=spec.to_curate_argv(),
+        extra_args=_curate_argv_with_dst(spec, job_id),
         cli_module="joryu.cli.curate",
         native_flag=None,
     )
@@ -201,14 +226,14 @@ def build_curate_docker_delegate_command(repo_root: Path, spec: CurateJobSpec) -
     return cmd
 
 
-def build_curate_command(repo_root: Path, spec: CurateJobSpec) -> list[str]:
+def build_curate_command(repo_root: Path, spec: CurateJobSpec, *, job_id: str) -> list[str]:
     if should_use_api_docker_delegate():
-        return build_curate_docker_delegate_command(repo_root, spec)
+        return build_curate_docker_delegate_command(repo_root, spec, job_id=job_id)
     if should_use_compose_run():
-        return build_compose_run_curate_command(repo_root, spec)
+        return build_compose_run_curate_command(repo_root, spec, job_id=job_id)
     if platform.system() == "Windows":
-        return build_curate_docker_delegate_command(repo_root, spec)
-    return build_compose_run_curate_command(repo_root, spec)
+        return build_curate_docker_delegate_command(repo_root, spec, job_id=job_id)
+    return build_compose_run_curate_command(repo_root, spec, job_id=job_id)
 
 
 def _inject_container_name(cmd: list[str], name: str) -> list[str]:
@@ -226,9 +251,10 @@ def _stats_refresh_loop(
     refresh: Callable[[], None],
     stop_event: threading.Event,
     *,
-    interval_sec: float = STATS_REFRESH_INTERVAL_SEC,
+    interval_sec: float | None = None,
 ) -> None:
-    while not stop_event.wait(interval_sec):
+    interval = STATS_REFRESH_INTERVAL_SEC if interval_sec is None else interval_sec
+    while not stop_event.wait(interval):
         refresh()
 
 
@@ -292,12 +318,14 @@ class JobRunner:
         *,
         run_command: RunCommand | None = None,
         refresh_stats: Callable[[DistillJobSpec], int] | None = None,
+        refresh_curation: Callable[[CurateJobSpec, str], int] | None = None,
         command_builder: Callable[[Path, JobRecord], list[str]] | None = None,
     ) -> None:
         self.store = store
         self.repo_root = repo_root
         self._run_command: RunCommand = run_command or _default_run_command(repo_root)
         self._refresh_stats = refresh_stats or make_refresh_stats(repo_root)
+        self._refresh_curation = refresh_curation or make_refresh_curation(repo_root)
         self._command_builder = command_builder or build_job_command
         self._lock = threading.Lock()
         self._queue: list[str] = []
@@ -385,10 +413,16 @@ class JobRunner:
 
         log_path = self.store.log_path(job_id)
         exit_code = 1
-        stop_stats = threading.Event()
-        stats_thread: threading.Thread | None = None
+        stop_refresh = threading.Event()
+        refresh_thread: threading.Thread | None = None
         if record.kind == JobKind.DISTILL and isinstance(record.spec, DistillJobSpec):
-            from joryu.preflight import PreflightError, ensure_vllm_limits
+            from joryu.preflight import (
+                PreflightError,
+                ensure_dashboard_data_paths,
+                ensure_vllm_limits,
+            )
+
+            ensure_dashboard_data_paths(self.repo_root)
 
             def _probe_log(message: str) -> None:
                 self.store.append_log(job_id, message + "\n")
@@ -412,15 +446,27 @@ class JobRunner:
                 self._maybe_start_next()
                 return
 
-            def _refresh() -> None:
+            def _refresh_stats_loop() -> None:
                 self._refresh_stats(record.spec)
 
-            stats_thread = threading.Thread(
+            refresh_thread = threading.Thread(
                 target=_stats_refresh_loop,
-                args=(_refresh, stop_stats),
+                args=(_refresh_stats_loop, stop_refresh),
                 daemon=True,
             )
-            stats_thread.start()
+            refresh_thread.start()
+        elif record.kind == JobKind.CURATE and isinstance(record.spec, CurateJobSpec):
+            curate_spec = record.spec
+
+            def _refresh_curation_loop() -> None:
+                self._refresh_curation(curate_spec, job_id)
+
+            refresh_thread = threading.Thread(
+                target=_stats_refresh_loop,
+                args=(_refresh_curation_loop, stop_refresh),
+                daemon=True,
+            )
+            refresh_thread.start()
 
         try:
             cmd = self._command_builder(self.repo_root, record)
@@ -439,9 +485,9 @@ class JobRunner:
             self.store.append_log(job_id, f"[joryu-runner] error: {exc}\n")
             record.error = str(exc)
         finally:
-            stop_stats.set()
-            if stats_thread is not None:
-                stats_thread.join(timeout=1.0)
+            stop_refresh.set()
+            if refresh_thread is not None:
+                refresh_thread.join(timeout=1.0)
 
         record.finished_at = datetime.now(UTC).isoformat()
         with self._lock:
@@ -457,9 +503,10 @@ class JobRunner:
             record.status = JobStatus.SUCCEEDED if exit_code == 0 else JobStatus.FAILED
         self.store.save(record)
 
-        if record.status == JobStatus.SUCCEEDED:
-            if record.kind == JobKind.DISTILL and isinstance(record.spec, DistillJobSpec):
-                self._refresh_stats(record.spec)
+        if record.kind == JobKind.DISTILL and isinstance(record.spec, DistillJobSpec):
+            self._refresh_stats(record.spec)
+        elif record.kind == JobKind.CURATE and isinstance(record.spec, CurateJobSpec):
+            self._refresh_curation(record.spec, job_id)
 
         with self._lock:
             self._running_id = None
@@ -480,6 +527,23 @@ def make_refresh_stats(repo_root: Path) -> Callable[[DistillJobSpec], int]:
         return stats_main(["--config", str(cfg), "--output", str(out)])
 
     return refresh_stats
+
+
+def make_refresh_curation(repo_root: Path) -> Callable[[CurateJobSpec, str], int]:
+    """curate ジョブ実行中/終了時に curation.json を更新する。"""
+
+    def refresh_curation(_spec: CurateJobSpec, job_id: str) -> int:
+        from joryu.curate.stats import write_curation_json
+        from joryu.paths import CURATION_JSON_REL
+
+        scores = curate_job_dst(repo_root, job_id) / "scores.jsonl"
+        if not scores.exists():
+            return 0
+        out = repo_root / CURATION_JSON_REL
+        write_curation_json(scores, out)
+        return 0
+
+    return refresh_curation
 
 
 def _default_refresh_stats(spec: DistillJobSpec) -> int:
