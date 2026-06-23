@@ -60,6 +60,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_IMAGE,
         help=f"Docker イメージ (既定: {DEFAULT_IMAGE})",
     )
+    p.add_argument(
+        "--redo-truncated",
+        action="store_true",
+        help="finish_reason=length またはヒューリスティックで打ち切りと判定された run を再蒸留",
+    )
     g = p.add_mutually_exclusive_group()
     g.add_argument("--docker", action="store_true", help="常に Docker delegate を使う")
     g.add_argument("--no-docker", action="store_true", help="Docker delegate を無効化")
@@ -131,6 +136,7 @@ def main(argv: list[str] | None = None, *, _client: SupportsChat | None = None) 
         client=_client,
         count=spec.count,
         deadline=deadline,
+        redo_truncated=bool(getattr(args, "redo_truncated", False)),
         style_presets=style_presets or None,
         temperatures=temperatures,
         top_ps=top_ps,

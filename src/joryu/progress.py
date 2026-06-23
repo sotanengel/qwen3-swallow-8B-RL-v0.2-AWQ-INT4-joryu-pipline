@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from joryu.io.jsonl import iter_jsonl
+from joryu.truncation import record_looks_truncated
 
 
 def _round_float(value: Any) -> Any:
@@ -65,6 +66,18 @@ def load_done_keys(path: str | Path) -> set[str]:
         if key is not None:
             done.add(key)
     return done
+
+
+def load_truncated_run_keys(path: str | Path) -> set[str]:
+    """途中打ち切りと判定されたレコードの run キーを返す。"""
+    keys: set[str] = set()
+    for record in iter_jsonl(Path(path)):
+        if not record_looks_truncated(record):
+            continue
+        key = run_key_from_record(record)
+        if key is not None:
+            keys.add(key)
+    return keys
 
 
 def load_done_prompts(path: str | Path) -> set[str]:

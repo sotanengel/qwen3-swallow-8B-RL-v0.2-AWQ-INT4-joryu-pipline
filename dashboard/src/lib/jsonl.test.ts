@@ -6,6 +6,7 @@ import {
   jsonlDataChanged,
   parseJsonl,
   recordId,
+  recordLooksTruncated,
   searchRecords,
   truncateText,
 } from "./jsonl";
@@ -105,6 +106,21 @@ describe("findRecordById", () => {
 
   it("returns undefined when not found", () => {
     expect(findRecordById(recs, "nonexistent")).toBeUndefined();
+  });
+});
+
+describe("recordLooksTruncated", () => {
+  it("detects finish_reason length", () => {
+    expect(recordLooksTruncated({ ...NOTHINKING_RECORD, finish_reason: "length" })).toBe(true);
+  });
+
+  it("detects heuristic header truncation", () => {
+    expect(
+      recordLooksTruncated({
+        ...NOTHINKING_RECORD,
+        answer: "導入\n\n## 1. 章",
+      }),
+    ).toBe(true);
   });
 });
 

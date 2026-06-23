@@ -1,12 +1,14 @@
 # joryu 既定設定。RTX 3060 Ti (8GB VRAM) + AWQ-INT4 (awq_marlin) を想定。
 # 互換性メモ:
 #   - dtype は bfloat16 必須 (fp16 だと awq_marlin が token=0 を吐く既知バグ)
-#   - num_ctx=512 / num_predict=384 は 8GB 制約 (KV キャッシュ)
+#   - num_ctx=2048 / num_predict=1024 は長文論述向け (VRAM プローブで自動降格可)
+#   - scripts/probe_vllm_limits.py で GPU 上限を data/vllm_limits.json に記録
 #   - VLLM_USE_FLASHINFER_SAMPLER=0 を実行環境で設定 (Docker delegate が自動)
 model:
   name: "Qwen3-Swallow-8B-RL-v0.2-AWQ-INT4"
-  num_ctx: 512
-  num_predict: 384
+  num_ctx: 2048
+  num_predict: 1024
+  limits_probe_file: "data/vllm_limits.json"
   temperature: 0.6
   top_p: 0.95
   top_k: 20

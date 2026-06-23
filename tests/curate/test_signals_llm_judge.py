@@ -84,15 +84,20 @@ def test_llm_rubric_signal_neutral_when_judge_fails():
 
 
 def test_vllm_judge_client_calls_chat_with_no_thinking():
+    from joryu.vllm_client import ChatResult
+
     class StubChat:
         def __init__(self):
             self.calls = []
 
         def chat_via_template(self, messages, *, enable_thinking=True, **sampling):
             self.calls.append({"messages": messages, "enable_thinking": enable_thinking})
-            return (
-                None,
-                '{"accuracy":4,"completeness":4,"fluency":4,"instruction_following":4,"safety":4}',
+            return ChatResult(
+                thinking=None,
+                answer='{"accuracy":4,"completeness":4,"fluency":4,"instruction_following":4,"safety":4}',
+                finish_reason="stop",
+                prompt_tokens=1,
+                completion_tokens=1,
             )
 
     chat = StubChat()
@@ -211,13 +216,21 @@ def test_llm_self_signal_hard_reject_below_min():
 
 
 def test_vllm_judge_client_pair_calls_chat():
+    from joryu.vllm_client import ChatResult
+
     class StubChat:
         def __init__(self):
             self.calls = []
 
         def chat_via_template(self, messages, *, enable_thinking=True, **sampling):
             self.calls.append({"messages": messages, "enable_thinking": enable_thinking})
-            return (None, '{"winner": "b"}')
+            return ChatResult(
+                thinking=None,
+                answer='{"winner": "b"}',
+                finish_reason="stop",
+                prompt_tokens=1,
+                completion_tokens=1,
+            )
 
     chat = StubChat()
     judge = VllmJudgeClient(chat, rubric_prompt=DEFAULT_RUBRIC_PROMPT, judge_mode="nothinking")
@@ -227,13 +240,21 @@ def test_vllm_judge_client_pair_calls_chat():
 
 
 def test_vllm_judge_client_self_uses_thinking():
+    from joryu.vllm_client import ChatResult
+
     class StubChat:
         def __init__(self):
             self.calls = []
 
         def chat_via_template(self, messages, *, enable_thinking=True, **sampling):
             self.calls.append({"enable_thinking": enable_thinking})
-            return (None, '{"score": 0.7}')
+            return ChatResult(
+                thinking=None,
+                answer='{"score": 0.7}',
+                finish_reason="stop",
+                prompt_tokens=1,
+                completion_tokens=1,
+            )
 
     chat = StubChat()
     judge = VllmJudgeClient(chat, rubric_prompt=DEFAULT_RUBRIC_PROMPT, judge_mode="nothinking")

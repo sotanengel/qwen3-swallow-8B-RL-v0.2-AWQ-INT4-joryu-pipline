@@ -114,7 +114,7 @@ class VllmJudgeClient:
             {"role": "user", "content": user_msg},
         ]
         try:
-            _thinking, body = self._chat.chat_via_template(
+            result = self._chat.chat_via_template(
                 messages,
                 enable_thinking=self._enable_thinking,
                 max_tokens=self._max_tokens,
@@ -123,7 +123,7 @@ class VllmJudgeClient:
         except Exception as exc:  # noqa: BLE001
             logger.warning("[curate.judge] chat failed: %s", exc)
             return _default_neutral_scores()
-        return parse_rubric_response(body)
+        return parse_rubric_response(result.answer)
 
     def compare_pair(self, prompt: str, answer_a: str, answer_b: str) -> PairWinner:
         messages = [
@@ -138,7 +138,7 @@ class VllmJudgeClient:
             },
         ]
         try:
-            _thinking, body = self._chat.chat_via_template(
+            result = self._chat.chat_via_template(
                 messages,
                 enable_thinking=self._enable_thinking,
                 max_tokens=self._max_tokens,
@@ -147,7 +147,7 @@ class VllmJudgeClient:
         except Exception as exc:  # noqa: BLE001
             logger.warning("[curate.judge.pair] chat failed: %s", exc)
             return "tie"
-        return parse_pair_response(body)
+        return parse_pair_response(result.answer)
 
     def score_self_consistency(self, prompt: str, thinking: str, answer: str) -> float:
         # thinking モードで自己評価。bias を抑えるため thinking モード固定。
@@ -163,7 +163,7 @@ class VllmJudgeClient:
             },
         ]
         try:
-            _thinking, body = self._chat.chat_via_template(
+            result = self._chat.chat_via_template(
                 messages,
                 enable_thinking=True,
                 max_tokens=self._max_tokens,
@@ -172,7 +172,7 @@ class VllmJudgeClient:
         except Exception as exc:  # noqa: BLE001
             logger.warning("[curate.judge.self] chat failed: %s", exc)
             return 0.5
-        return parse_self_response(body)
+        return parse_self_response(result.answer)
 
 
 def _default_neutral_scores() -> dict[str, int]:

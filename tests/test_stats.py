@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from joryu.stats import compute_stats, length_bins
 
 
@@ -125,6 +127,21 @@ def test_time_histogram_by_day(tmp_path: Path) -> None:
     stats = compute_stats(p)
     assert stats["timeline_daily"]["2026-06-21"] == 2
     assert stats["timeline_daily"]["2026-06-22"] == 1
+
+
+def test_truncated_rate(tmp_path: Path) -> None:
+    p = tmp_path / "r.jsonl"
+    _write(
+        p,
+        [
+            {"prompt": "P1", "answer": "完結した回答です。"},
+            {"prompt": "P2", "answer": "途中\n\n## 1. 見出し"},
+            {"prompt": "P3", "answer": "a", "finish_reason": "length"},
+        ],
+    )
+    stats = compute_stats(p)
+    assert stats["truncated_count"] == 2
+    assert stats["truncated_rate"] == pytest.approx(2 / 3)
 
 
 def test_missing_file_returns_empty(tmp_path: Path) -> None:

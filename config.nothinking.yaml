@@ -2,8 +2,9 @@
 # config.yaml との差分は model.mode のみ。
 model:
   name: "Qwen3-Swallow-8B-RL-v0.2-AWQ-INT4"
-  num_ctx: 512
-  num_predict: 384
+  num_ctx: 2048
+  num_predict: 1024
+  limits_probe_file: "data/vllm_limits.json"
   temperature: 0.6
   top_p: 0.95
   top_k: 20

@@ -88,6 +88,13 @@ def test_truncated_finish_reason_stop_ok():
     assert r.hard_reject is False
 
 
+def test_truncated_heuristic_header_end():
+    sig = Truncated()
+    r = sig.evaluate(_rec(answer="導入\n\n## 1. 再犯率"))
+    assert r.hard_reject is True
+    assert r.raw == "heuristic"
+
+
 def test_think_tag_symmetric_when_nothinking_passes():
     sig = ThinkTag()
     r = sig.evaluate(_rec(mode="nothinking", answer="ok"))
