@@ -35,6 +35,21 @@ def test_is_vram_limit_error_unrelated() -> None:
     assert not is_vram_limit_error(RuntimeError("connection refused"))
 
 
+def test_is_vram_limit_error_engine_core_wrapper() -> None:
+    """vLLM v1 が KV cache 不足を EngineCore RuntimeError に包むケース。"""
+    exc = RuntimeError(
+        "Engine core initialization failed. See root cause above. Failed core proc(s): {}"
+    )
+    assert is_vram_limit_error(exc)
+
+
+def test_is_vram_limit_error_chained_kv_cache() -> None:
+    inner = ValueError(KV_CACHE_VALUE_ERROR)
+    outer = RuntimeError("Engine core initialization failed")
+    outer.__cause__ = inner
+    assert is_vram_limit_error(outer)
+
+
 def test_load_probe_limits_missing(tmp_path) -> None:
     assert load_probe_limits(tmp_path / "nope.json") is None
 
