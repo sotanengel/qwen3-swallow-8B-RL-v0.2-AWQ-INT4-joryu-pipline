@@ -22,6 +22,7 @@ import {
   loadCuration,
 } from "@/lib/curation";
 import { useIntervalPoll } from "@/lib/useIntervalPoll";
+import { useCurateJobFastPoll } from "@/lib/useJobFastPoll";
 
 const HistogramChart = dynamic(
   () =>
@@ -55,6 +56,7 @@ export default function CurationPage() {
   const [skipLlm, setSkipLlm] = useState(false);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
 
+  const fastPoll = useCurateJobFastPoll();
   const cur = useIntervalPoll(
     async () => {
       const data = await loadCuration();
@@ -62,7 +64,7 @@ export default function CurationPage() {
       return data;
     },
     EMPTY_CURATION,
-    { shouldUpdate: curationDataChanged },
+    { shouldUpdate: curationDataChanged, intervalMs: fastPoll ? 1000 : 3000 },
   );
 
   const refreshJobs = useCallback(async () => {

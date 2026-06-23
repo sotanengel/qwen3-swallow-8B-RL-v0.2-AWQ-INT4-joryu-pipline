@@ -104,7 +104,8 @@ export async function loadCuration(
   url = "/curation.json",
 ): Promise<CurationStats> {
   try {
-    const r = await fetch(url, { cache: "no-store" });
+    const bust = `${url}${url.includes("?") ? "&" : "?"}t=${Date.now()}`;
+    const r = await fetch(bust, { cache: "no-store" });
     if (!r.ok) return EMPTY_CURATION;
     const data = (await r.json()) as Partial<CurationStats>;
     return mergeCuration(data);

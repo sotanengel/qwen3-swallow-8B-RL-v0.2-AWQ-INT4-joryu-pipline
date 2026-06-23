@@ -13,6 +13,7 @@ export type DistillJobSpec = {
 
 export type JobRecord = {
   id: string;
+  kind: string;
   spec: DistillJobSpec;
   status: JobStatus;
   created_at: string;
@@ -75,6 +76,7 @@ export function parseJobRecord(data: unknown): JobRecord {
   const row = data as JobRecord;
   return {
     id: String(row.id),
+    kind: String(row.kind ?? "distill"),
     spec: {
       count: Number(row.spec?.count ?? 0),
       duration: String(row.spec?.duration ?? ""),

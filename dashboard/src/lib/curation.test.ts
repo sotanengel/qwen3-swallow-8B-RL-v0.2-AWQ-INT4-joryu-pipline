@@ -1,8 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   EMPTY_CURATION,
   curationDataChanged,
+  loadCuration,
   mergeCuration,
 } from "./curation";
 
@@ -50,5 +51,21 @@ describe("curationDataChanged", () => {
     const prev = mergeCuration({ total: 1, _meta: { generated_at: "t1" } });
     const next = mergeCuration({ total: 1, _meta: { generated_at: "t1" } });
     expect(curationDataChanged(prev, next)).toBe(false);
+  });
+});
+
+describe("loadCuration", () => {
+  it("appends cache-bust query parameter", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ total: 1, accepted: 1 }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await loadCuration("/curation.json");
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const url = String(fetchMock.mock.calls[0][0]);
+    expect(url).toMatch(/^\/curation\.json\?t=\d+$/);
   });
 });
