@@ -21,6 +21,11 @@ from joryu.jobs.runner import (
 from joryu.jobs.store import JobStore
 
 
+@pytest.fixture(autouse=True)
+def _skip_vllm_probe_in_runner(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("joryu.preflight.ensure_vllm_limits", lambda *_args, **_kwargs: None)
+
+
 def test_build_job_command_api_delegate(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("JORYU_USE_COMPOSE_RUN", "1")
     monkeypatch.setattr("joryu.jobs.runner.resolve_docker_bin", lambda: "/usr/bin/docker")
@@ -109,6 +114,50 @@ def test_runner_executes_queued_job(tmp_path: Path, monkeypatch) -> None:
     assert loaded.exit_code == 0
     assert calls
     assert stats_called[-1] == spec
+
+
+def test_runner_distill_fails_when_vllm_probe_preflight_fails(tmp_path: Path, monkeypatch) -> None:
+    from joryu.preflight import PreflightError
+
+    monkeypatch.setattr("joryu.jobs.runner.STATS_REFRESH_INTERVAL_SEC", 3600.0)
+
+    def fail_probe(*_args, **_kwargs) -> None:
+        raise PreflightError("probe failed")
+
+    monkeypatch.setattr("joryu.preflight.ensure_vllm_limits", fail_probe)
+
+    store = JobStore(tmp_path)
+    spec = DistillJobSpec(count=1)
+    record = JobRecord.create(spec)
+    store.save(record)
+
+    calls: list[list[str]] = []
+
+    def fake_run(cmd, _cwd, log_path, _on_process):
+        calls.append(cmd)
+        return 0
+
+    runner = JobRunner(
+        store,
+        tmp_path,
+        run_command=fake_run,
+        refresh_stats=lambda _s: 0,
+        command_builder=lambda _root, rec: ["fake-distill"],
+    )
+    runner.enqueue(record)
+
+    deadline = time.time() + 5.0
+    while time.time() < deadline:
+        loaded = store.load(record.id)
+        if loaded.status in (JobStatus.SUCCEEDED, JobStatus.FAILED):
+            break
+        time.sleep(0.05)
+
+    loaded = store.load(record.id)
+    assert loaded.status == JobStatus.FAILED
+    assert loaded.error == "probe failed"
+    assert calls == []
+    assert "probe failed" in store.log_path(record.id).read_text(encoding="utf-8")
 
 
 def test_runner_executes_curate_job(tmp_path: Path, monkeypatch) -> None:

@@ -39,6 +39,19 @@ def resolve_repo_root(*, out_path: Path | None = None) -> Path | None:
     return None
 
 
+def resolve_limits_probe_path(
+    path: str | Path,
+    *,
+    repo_root: Path | None = None,
+) -> Path:
+    """limits_probe_file をリポジトリルート基準の絶対パスに解決する。"""
+    p = Path(path)
+    if p.is_absolute():
+        return p.resolve()
+    root = repo_root or resolve_repo_root() or Path.cwd()
+    return (root / p).resolve()
+
+
 def dashboard_public(repo_root: Path, *, mkdir: bool = True) -> Path:
     """dashboard/public の絶対パス。mkdir=True なら存在保証。"""
     path = repo_root / DASHBOARD_PUBLIC_DIR

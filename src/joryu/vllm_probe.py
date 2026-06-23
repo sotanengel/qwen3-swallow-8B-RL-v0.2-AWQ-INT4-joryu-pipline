@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 from joryu.config import load_config
-from joryu.paths import DEFAULT_CONFIG, resolve_repo_root
+from joryu.paths import DEFAULT_CONFIG, resolve_limits_probe_path, resolve_repo_root
 from joryu.vllm_limits import (
     PROBE_CANDIDATES,
     VllmLimits,
@@ -87,15 +87,16 @@ def probe_limits(
 
 def run_probe(*, config: str | Path, out: str | Path | None = None) -> int:
     """config からプローブを実行し limits JSON を書き出す。"""
-    repo = resolve_repo_root()
+    repo = resolve_repo_root() or Path.cwd()
     cfg_path = Path(config)
     if not cfg_path.is_absolute():
         cfg_path = repo / cfg_path
     cfg = load_config(cfg_path)
 
-    out_path = Path(out) if out else Path(cfg.model.limits_probe_file)
-    if not out_path.is_absolute():
-        out_path = repo / out_path
+    if out:
+        out_path = Path(out)
+    else:
+        out_path = resolve_limits_probe_path(cfg.model.limits_probe_file, repo_root=repo)
 
     limits = probe_limits(
         model_path=cfg.vllm.model_path,

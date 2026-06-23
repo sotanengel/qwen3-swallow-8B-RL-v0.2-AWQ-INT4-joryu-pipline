@@ -14,10 +14,10 @@ import os
 import re
 import threading
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any, Protocol
 
 from joryu.config import ModelConfig, VllmConfig
+from joryu.paths import resolve_limits_probe_path
 from joryu.vllm_limits import clamp_model_limits, load_probe_limits
 
 __all__ = [
@@ -235,15 +235,28 @@ class VllmClient:
 
     @classmethod
     def from_config(cls, model_cfg: ModelConfig, vllm_cfg: VllmConfig) -> VllmClient:
-        probe_path = model_cfg.limits_probe_file
-        if probe_path and not Path(probe_path).is_absolute():
-            probe_path = str(Path(probe_path))
+        probe_path = resolve_limits_probe_path(model_cfg.limits_probe_file)
         probe = load_probe_limits(probe_path)
         num_ctx, num_predict = clamp_model_limits(
             requested_ctx=model_cfg.num_ctx,
             requested_predict=model_cfg.num_predict,
             probe=probe,
         )
+        if probe is None and model_cfg.limits_probe_file:
+            logger.warning(
+                "[vllm] limits probe file missing: %s; using num_ctx=%s num_predict=%s",
+                probe_path,
+                num_ctx,
+                num_predict,
+            )
+        elif probe is not None and (
+            num_ctx < model_cfg.num_ctx or num_predict < model_cfg.num_predict
+        ):
+            logger.info(
+                "[vllm] effective limits from probe: num_ctx=%s num_predict=%s",
+                num_ctx,
+                num_predict,
+            )
         return cls(
             model_path=vllm_cfg.model_path,
             max_model_len=num_ctx,
@@ -257,7 +270,7 @@ class VllmClient:
             max_tokens=num_predict,
             seed=model_cfg.seed,
             quantization=vllm_cfg.quantization,
-            limits_probe_file=probe_path,
+            limits_probe_file=str(probe_path),
         )
 
     def close(self) -> None:

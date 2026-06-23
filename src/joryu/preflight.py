@@ -527,13 +527,10 @@ def ensure_curation(
 
 def resolve_vllm_limits_path(repo_root: Path) -> Path:
     """config.model.limits_probe_file の絶対パスを返す。"""
-    from joryu.paths import DEFAULT_CONFIG, resolve_optional_config
+    from joryu.paths import DEFAULT_CONFIG, resolve_limits_probe_path, resolve_optional_config
 
     cfg = resolve_optional_config(repo_root / DEFAULT_CONFIG)
-    path = Path(cfg.model.limits_probe_file)
-    if not path.is_absolute():
-        path = repo_root / path
-    return path.resolve()
+    return resolve_limits_probe_path(cfg.model.limits_probe_file, repo_root=repo_root)
 
 
 def vllm_limits_probe_needed(
