@@ -41,6 +41,16 @@ def compose_down_command(*, volumes: bool) -> list[str]:
     return cmd
 
 
+def builder_prune_command() -> list[str]:
+    """`docker builder prune -f`。タグ付きイメージから参照されない層のみ削除する。
+
+    `joryu-up` の build 直後に呼ぶことで、世代毎に発生する 16GB 規模の
+    中間 vLLM ビルドキャッシュがディスクに溜まり続けるのを防ぐ。
+    タグ付きイメージ (joryu:latest など) の層は参照中なので残る。
+    """
+    return ["docker", "builder", "prune", "-f"]
+
+
 def run(cmd: list[str]) -> int:
     """ログ出しつつ subprocess.run で実行し、返り値を返す。"""
     print(f"[joryu] {' '.join(cmd)}", file=sys.stderr)

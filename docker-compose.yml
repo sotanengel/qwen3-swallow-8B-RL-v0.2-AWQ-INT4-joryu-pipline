@@ -8,6 +8,9 @@ services:
       dockerfile: Dockerfile
     image: joryu:latest
     container_name: joryu
+    # vLLM v1 はワーカ IPC で /dev/shm を使う。デフォルト 64MB だと
+    # prefix cache / KV swap が詰まることがあるため 2GiB に拡張。
+    shm_size: "2gb"
     environment:
       - VLLM_USE_DEEP_GEMM=0
       - VLLM_DEEP_GEMM_WARMUP=skip

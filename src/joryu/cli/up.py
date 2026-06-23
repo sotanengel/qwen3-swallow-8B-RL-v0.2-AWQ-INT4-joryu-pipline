@@ -27,7 +27,12 @@ import sys
 from pathlib import Path
 
 from joryu.browser import open_dashboard_when_ready, schedule_open_dashboard
-from joryu.compose import compose_build_command, compose_up_command, run
+from joryu.compose import (
+    builder_prune_command,
+    compose_build_command,
+    compose_up_command,
+    run,
+)
 from joryu.preflight import (
     PreflightError,
     changed_services_from_git,
@@ -142,6 +147,9 @@ def main(argv: list[str] | None = None) -> int:
         rc = run(compose_build_command(services=build_services))
         if rc != 0:
             return rc
+        # 旧ビルドの中間キャッシュ層を即時回収 (タグ付きイメージから参照される層は残る)。
+        # これを呼ばないと毎回 build の度に十数 GB のキャッシュが累積する。
+        run(builder_prune_command())
 
     if "api" in up_services or "joryu" in up_services:
         try:

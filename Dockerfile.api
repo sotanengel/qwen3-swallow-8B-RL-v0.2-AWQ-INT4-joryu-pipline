@@ -5,8 +5,10 @@ FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
 # (.:/workspace だとイメージ内の .venv が隠れて joryu-api が見つからなくなる)
 WORKDIR /app
 
-ENV UV_COMPILE_BYTECODE=1 \
-    UV_LINK_MODE=copy \
+# UV_COMPILE_BYTECODE は外す。並列 build (joryu + api + dashboard) の CPU 競合で
+# Python 起動が 60s タイムアウトして uv sync が exit 2 する事象を回避するため。
+# 起動時の lazy compile に任せる (api コンテナの初回応答が数百 ms 遅れる程度)。
+ENV UV_LINK_MODE=copy \
     JORYU_REPO_ROOT=/workspace \
     JORYU_USE_COMPOSE_RUN=1
 

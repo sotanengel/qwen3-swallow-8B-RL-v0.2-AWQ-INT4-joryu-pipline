@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from joryu.compose import compose_build_command, compose_down_command, compose_up_command
+from joryu.compose import (
+    builder_prune_command,
+    compose_build_command,
+    compose_down_command,
+    compose_up_command,
+)
 
 
 def test_build_single_service() -> None:
@@ -57,6 +62,11 @@ def test_down_default() -> None:
 def test_down_with_volumes() -> None:
     cmd = compose_down_command(volumes=True)
     assert "-v" in cmd or "--volumes" in cmd
+
+
+def test_builder_prune_command_is_force() -> None:
+    """build キャッシュ累積防止のため `-f` 付きで unused 層を回収する。"""
+    assert builder_prune_command() == ["docker", "builder", "prune", "-f"]
 
 
 def test_up_force_recreate_after_build() -> None:

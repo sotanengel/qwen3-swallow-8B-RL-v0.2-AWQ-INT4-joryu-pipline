@@ -96,6 +96,36 @@ def test_vllm_config_fingerprint_changes_with_num_ctx() -> None:
     assert fp_a.startswith("sha256-")
 
 
+def test_vllm_config_fingerprint_changes_with_memory_savers() -> None:
+    """KV cache dtype や prefix caching を変えるとプローブ結果は再取得すべき。"""
+    from joryu.config import Config
+
+    cfg_a = Config()
+    cfg_b = Config()
+    cfg_b.vllm.kv_cache_dtype = "auto"
+    assert vllm_config_fingerprint(cfg_a) != vllm_config_fingerprint(cfg_b)
+
+    cfg_c = Config()
+    cfg_c.vllm.enable_prefix_caching = False
+    assert vllm_config_fingerprint(cfg_a) != vllm_config_fingerprint(cfg_c)
+
+    cfg_d = Config()
+    cfg_d.vllm.max_num_seqs = 8
+    assert vllm_config_fingerprint(cfg_a) != vllm_config_fingerprint(cfg_d)
+
+
+def test_probe_candidates_descend_from_4k() -> None:
+    """プローブ候補はメモリ節約後の上限を狙えるよう 4096 から降順で並ぶ。"""
+    from joryu.vllm_limits import PROBE_CANDIDATES
+
+    assert PROBE_CANDIDATES[0] == (4096, 2048)
+    # 既存の (2048, 1024) は保険として必ず含まれる
+    assert (2048, 1024) in PROBE_CANDIDATES
+    # num_ctx は厳密に降順
+    ctxs = [c for c, _ in PROBE_CANDIDATES]
+    assert ctxs == sorted(ctxs, reverse=True)
+
+
 def test_limits_probe_stale_missing_file(tmp_path) -> None:
     assert limits_probe_stale(tmp_path / "missing.json", "sha256-abc") is True
 

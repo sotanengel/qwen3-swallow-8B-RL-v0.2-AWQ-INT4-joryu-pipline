@@ -14,6 +14,10 @@ from joryu.config import Config
 logger = logging.getLogger(__name__)
 
 PROBE_CANDIDATES: tuple[tuple[int, int], ...] = (
+    # KV cache FP8 + max_num_seqs=1 + prefix caching が効くと
+    # 2048 上限を超える領域もプローブできるようになる。
+    (4096, 2048),
+    (3072, 1536),
     (2048, 1024),
     (1536, 768),
     (1280, 640),

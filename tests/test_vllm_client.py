@@ -53,6 +53,20 @@ def test_vllm_client_from_config_does_not_load() -> None:
     assert client._llm is None
 
 
+def test_vllm_client_from_config_propagates_memory_savers() -> None:
+    """KV FP8 / prefix cache / max_num_seqs / swap が VllmClient に渡る。"""
+    cfg = Config()
+    cfg.vllm.kv_cache_dtype = "fp8"
+    cfg.vllm.enable_prefix_caching = True
+    cfg.vllm.max_num_seqs = 1
+    cfg.vllm.swap_space_gib = 4
+    client = VllmClient.from_config(cfg.model, cfg.vllm)
+    assert client._kv_cache_dtype == "fp8"
+    assert client._enable_prefix_caching is True
+    assert client._max_num_seqs == 1
+    assert client._swap_space_gib == 4
+
+
 def test_compute_effective_max_tokens_clamps_to_context() -> None:
     assert (
         compute_effective_max_tokens(

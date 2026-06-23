@@ -16,13 +16,17 @@ COPY styles.yaml ./styles.yaml
 COPY README.md ./README.md
 RUN uv sync --frozen --no-dev
 
-# cu130 + vLLM ランタイム
-FROM nvidia/cuda:13.0.0-runtime-ubuntu24.04
+# cu130 + vLLM ランタイム。
+# devel イメージ (nvcc 同梱) を使うのは FlashInfer が FP8 KV キャッシュ用の
+# attention カーネルを JIT ビルドする際に /usr/local/cuda/bin/nvcc を必要とするため。
+# runtime イメージだと kv_cache_dtype="fp8" の vLLM 起動が exit 127 で死ぬ。
+FROM nvidia/cuda:13.0.0-devel-ubuntu24.04
 
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
+    ninja-build \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /usr/local /usr/local

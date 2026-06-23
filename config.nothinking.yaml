@@ -18,6 +18,10 @@ vllm:
   quantization: "awq_marlin"
   gpu_memory_utilization: 0.85
   enforce_eager: true
+  kv_cache_dtype: "fp8"
+  enable_prefix_caching: true
+  max_num_seqs: 1
+  swap_space_gib: 4
 
 distill:
   prompt_bank: "data/prompts/training_prompts.jsonl"

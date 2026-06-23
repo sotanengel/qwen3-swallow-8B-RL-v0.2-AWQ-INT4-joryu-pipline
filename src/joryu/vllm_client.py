@@ -110,6 +110,10 @@ class VllmClient:
         max_tokens: int,
         seed: int,
         quantization: str | None,
+        kv_cache_dtype: str = "auto",
+        enable_prefix_caching: bool = False,
+        max_num_seqs: int | None = None,
+        swap_space_gib: int = 0,
         limits_probe_file: str | None = None,
     ) -> None:
         self._model_path = model_path
@@ -124,6 +128,10 @@ class VllmClient:
         self._max_tokens = max_tokens
         self._seed = seed
         self._quantization = quantization
+        self._kv_cache_dtype = kv_cache_dtype
+        self._enable_prefix_caching = enable_prefix_caching
+        self._max_num_seqs = max_num_seqs
+        self._swap_space_gib = swap_space_gib
         self._limits_probe_file = limits_probe_file
         self._llm: Any = None
         self._lock = threading.Lock()
@@ -149,6 +157,14 @@ class VllmClient:
             }
             if self._quantization:
                 llm_kwargs["quantization"] = self._quantization
+            if self._kv_cache_dtype and self._kv_cache_dtype != "auto":
+                llm_kwargs["kv_cache_dtype"] = self._kv_cache_dtype
+            if self._enable_prefix_caching:
+                llm_kwargs["enable_prefix_caching"] = True
+            if self._max_num_seqs is not None and self._max_num_seqs > 0:
+                llm_kwargs["max_num_seqs"] = self._max_num_seqs
+            if self._swap_space_gib and self._swap_space_gib > 0:
+                llm_kwargs["swap_space"] = self._swap_space_gib
             try:
                 self._llm = LLM(**llm_kwargs)
             except Exception as exc:
@@ -270,6 +286,10 @@ class VllmClient:
             max_tokens=num_predict,
             seed=model_cfg.seed,
             quantization=vllm_cfg.quantization,
+            kv_cache_dtype=vllm_cfg.kv_cache_dtype,
+            enable_prefix_caching=vllm_cfg.enable_prefix_caching,
+            max_num_seqs=vllm_cfg.max_num_seqs,
+            swap_space_gib=vllm_cfg.swap_space_gib,
             limits_probe_file=str(probe_path),
         )
 
