@@ -8,7 +8,9 @@ from joryu.vllm_limits import (
     VllmLimits,
     clamp_model_limits,
     is_vram_limit_error,
+    limits_probe_stale,
     load_probe_limits,
+    vllm_config_fingerprint,
     write_probe_limits,
 )
 
@@ -65,3 +67,30 @@ def test_clamp_model_limits_with_probe(tmp_path) -> None:
     )
     assert ctx == 768
     assert predict == 512
+
+
+def test_vllm_config_fingerprint_changes_with_num_ctx() -> None:
+    from joryu.config import Config
+
+    cfg_a = Config()
+    cfg_b = Config()
+    cfg_b.model.num_ctx = 1024
+    fp_a = vllm_config_fingerprint(cfg_a)
+    fp_b = vllm_config_fingerprint(cfg_b)
+    assert fp_a != fp_b
+    assert fp_a.startswith("sha256-")
+
+
+def test_limits_probe_stale_missing_file(tmp_path) -> None:
+    assert limits_probe_stale(tmp_path / "missing.json", "sha256-abc") is True
+
+
+def test_limits_probe_stale_mismatch(tmp_path) -> None:
+    path = tmp_path / "limits.json"
+    write_probe_limits(
+        path,
+        VllmLimits(num_ctx=1024, num_predict=640),
+        extra={"config_fingerprint": "sha256-old"},
+    )
+    assert limits_probe_stale(path, "sha256-new") is True
+    assert limits_probe_stale(path, "sha256-old") is False

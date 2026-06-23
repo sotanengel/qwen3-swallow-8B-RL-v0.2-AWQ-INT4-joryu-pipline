@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
+
+from joryu.config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +43,29 @@ def is_vram_limit_error(exc: BaseException) -> bool:
 class VllmLimits:
     num_ctx: int
     num_predict: int
+
+
+def vllm_config_fingerprint(cfg: Config) -> str:
+    """model / vllm 設定の SHA256。プローブ結果の鮮度判定に使う。"""
+    payload = json.dumps(
+        {"model": asdict(cfg.model), "vllm": asdict(cfg.vllm)},
+        sort_keys=True,
+        ensure_ascii=False,
+    )
+    return "sha256-" + hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def limits_probe_stale(path: Path, fingerprint: str) -> bool:
+    """limits ファイルが無いか、記録 fingerprint と不一致なら True。"""
+    if not path.is_file():
+        return True
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return True
+    if not isinstance(raw, dict):
+        return True
+    return raw.get("config_fingerprint") != fingerprint
 
 
 def load_probe_limits(path: str | Path | None) -> VllmLimits | None:

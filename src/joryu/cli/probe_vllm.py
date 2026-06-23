@@ -6,8 +6,8 @@ import argparse
 import sys
 
 from joryu.cli.common import add_config_argument
-from joryu.docker_delegate import DEFAULT_IMAGE, run_in_docker, should_use_docker
-from joryu.vllm_probe import run_probe
+from joryu.docker_delegate import DEFAULT_IMAGE
+from joryu.vllm_probe import run_vllm_probe
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -34,20 +34,13 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    extra: list[str] = []
-    if args.out:
-        extra.extend(["--out", args.out])
-
-    if should_use_docker(force_docker=args.docker, force_native=args.no_docker):
-        return run_in_docker(
-            image=args.image,
-            config=args.config,
-            extra_args=extra,
-            cli_module="joryu.cli.probe_vllm",
-            native_flag="--no-docker",
-        )
-
-    return run_probe(config=args.config, out=args.out or None)
+    return run_vllm_probe(
+        config=args.config,
+        out=args.out or None,
+        image=args.image,
+        force_docker=args.docker,
+        force_native=args.no_docker,
+    )
 
 
 if __name__ == "__main__":  # pragma: no cover

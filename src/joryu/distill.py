@@ -198,7 +198,8 @@ def run_distill(
                     logger.error("[distill] vLLM load failed; aborting job")
                     log(
                         "[joryu-distill] vLLM ロード失敗 — ジョブを中止します。"
-                        " `uv run joryu-probe-vllm` で GPU 上限を記録してください。",
+                        " `uv run joryu-up` または `uv run joryu-probe-vllm` で"
+                        " GPU 上限を記録してください。",
                         file=sys.stderr,
                     )
                     log(f"[joryu-distill] [{i}/{run_total}] エラー: {exc}", file=sys.stderr)

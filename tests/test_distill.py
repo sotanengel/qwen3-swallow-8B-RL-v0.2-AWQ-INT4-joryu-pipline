@@ -224,6 +224,7 @@ def test_vllm_load_failure_aborts_job(tmp_path: Path, capsys: pytest.CaptureFixt
     err = capsys.readouterr().err
     assert "vLLM ロード失敗" in err
     assert "joryu-probe-vllm" in err
+    assert "joryu-up" in err
 
 
 def test_run_distill_redo_truncated_reprocesses_matching_keys(tmp_path: Path) -> None:

@@ -7,8 +7,14 @@ import sys
 from pathlib import Path
 
 from joryu.config import load_config
-from joryu.paths import resolve_repo_root
-from joryu.vllm_limits import PROBE_CANDIDATES, VllmLimits, is_vram_limit_error, write_probe_limits
+from joryu.paths import DEFAULT_CONFIG, resolve_repo_root
+from joryu.vllm_limits import (
+    PROBE_CANDIDATES,
+    VllmLimits,
+    is_vram_limit_error,
+    vllm_config_fingerprint,
+    write_probe_limits,
+)
 
 
 def _probe_once(
@@ -103,6 +109,38 @@ def run_probe(*, config: str | Path, out: str | Path | None = None) -> int:
         print("[probe] all candidates failed", file=sys.stderr)
         return 1
 
-    write_probe_limits(out_path, limits)
+    write_probe_limits(
+        out_path,
+        limits,
+        extra={"config_fingerprint": vllm_config_fingerprint(cfg)},
+    )
     print(f"[probe] wrote {out_path}")
     return 0
+
+
+def run_vllm_probe(
+    *,
+    config: str | Path = DEFAULT_CONFIG,
+    out: str | Path | None = None,
+    image: str | None = None,
+    force_docker: bool = False,
+    force_native: bool = False,
+) -> int:
+    """ホストまたは Docker delegate 経由で VRAM プローブを実行する。"""
+    from joryu.docker_delegate import DEFAULT_IMAGE, run_in_docker, should_use_docker
+
+    config_str = str(config)
+    extra: list[str] = []
+    if out:
+        extra.extend(["--out", str(out)])
+    docker_image = image or DEFAULT_IMAGE
+
+    if should_use_docker(force_docker=force_docker, force_native=force_native):
+        return run_in_docker(
+            image=docker_image,
+            config=config_str,
+            extra_args=extra,
+            cli_module="joryu.cli.probe_vllm",
+            native_flag="--no-docker",
+        )
+    return run_probe(config=config, out=out)
