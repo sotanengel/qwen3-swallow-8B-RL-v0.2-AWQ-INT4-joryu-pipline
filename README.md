@@ -32,6 +32,10 @@ uv run python scripts/migrate_csv_to_jsonl.py --src <path-to-csv> --dst data/pro
 # 2. Docker イメージビルド
 docker compose build joryu
 
+# 2.5. GPU 上限プローブ（初回のみ / WSL や GPU 変更時）
+uv run joryu-probe-vllm
+# → data/vllm_limits.json が生成され、以降 num_ctx/num_predict が自動クランプ
+
 # 3. 推論モードで蒸留
 uv run joryu-distill --count 50 --duration 1h
 

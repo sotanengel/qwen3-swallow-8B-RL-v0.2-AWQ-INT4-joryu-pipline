@@ -13,10 +13,27 @@ logger = logging.getLogger(__name__)
 PROBE_CANDIDATES: tuple[tuple[int, int], ...] = (
     (2048, 1024),
     (1536, 768),
+    (1280, 640),
     (1024, 640),
     (768, 512),
     (512, 384),
 )
+
+
+def is_vram_limit_error(exc: BaseException) -> bool:
+    """OOM や KV キャッシュ不足など VRAM 制限による vLLM 起動失敗か判定する。"""
+    text = str(exc).lower()
+    markers = (
+        "out of memory",
+        "cuda oom",
+        " oom",
+        "kv cache",
+        "max_model_len",
+        "gpu_memory_utilization",
+        "available kv cache memory",
+        "not enough memory",
+    )
+    return any(m in text for m in markers)
 
 
 @dataclass(frozen=True)

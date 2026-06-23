@@ -115,6 +115,8 @@ def run_in_docker(
     image: str = DEFAULT_IMAGE,
     config: str,
     extra_args: list[str],
+    cli_module: str = "joryu.cli.distill",
+    native_flag: str | None = "--no-docker",
 ) -> int:
     cwd = Path.cwd()
     config_path = (cwd / config).resolve()
@@ -152,6 +154,8 @@ def run_in_docker(
         styles_rel=mounts.styles_rel,
         allocate_tty=sys.stderr.isatty(),
         extra_args=extra_args,
+        cli_module=cli_module,
+        native_flag=native_flag,
     )
     print(f"[joryu] docker delegate: {' '.join(cmd)}", file=sys.stderr)
     return subprocess.run(cmd, check=False).returncode
