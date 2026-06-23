@@ -90,7 +90,8 @@ export function mergeStats(data: Partial<JoryuStats>): JoryuStats {
 
 export async function loadStats(url = "/stats.json"): Promise<JoryuStats> {
   try {
-    const r = await fetch(url, { cache: "no-store" });
+    const bust = `${url}${url.includes("?") ? "&" : "?"}t=${Date.now()}`;
+    const r = await fetch(bust, { cache: "no-store" });
     if (!r.ok) return EMPTY_STATS;
     const data = (await r.json()) as Partial<JoryuStats>;
     return mergeStats(data);

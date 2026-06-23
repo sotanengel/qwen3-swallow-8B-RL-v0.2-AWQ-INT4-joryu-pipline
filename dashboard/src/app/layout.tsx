@@ -29,7 +29,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         </header>
         <main className="main">{children}</main>
         <footer className="footer">
-          <span>stats.json / responses.jsonl を 3 秒ごとに再読み込みします。</span>
+          <span>
+            stats.json / responses.jsonl を再読み込みします（蒸留中 1 秒、通常 3 秒）。
+          </span>
         </footer>
       </body>
     </html>

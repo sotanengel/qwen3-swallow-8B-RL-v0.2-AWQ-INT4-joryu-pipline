@@ -8,9 +8,10 @@ from pathlib import Path
 
 import pytest
 
-from joryu.jobs.models import DistillJobSpec, JobRecord, JobStatus
+from joryu.jobs.models import CurateJobSpec, DistillJobSpec, JobKind, JobRecord, JobStatus
 from joryu.jobs.runner import (
     JobRunner,
+    build_curate_command,
     build_job_command,
     make_refresh_stats,
     resolve_docker_bin,
@@ -28,13 +29,27 @@ def test_build_job_command_api_delegate(tmp_path: Path, monkeypatch) -> None:
     (tmp_path / "config.yaml").write_text("x: 1\n", encoding="utf-8")
     (tmp_path / "docker-compose.yml").write_text("services: {}\n", encoding="utf-8")
     spec = DistillJobSpec(count=3, mode="nothinking")
-    cmd = build_job_command(tmp_path, spec)
+    record = JobRecord.create(spec)
+    cmd = build_job_command(tmp_path, record)
     assert cmd[0:3] == ["/usr/bin/docker", "run", "--rm"]
     assert "joryu:latest" in cmd
     assert "hf-cache:/root/.cache/huggingface" in cmd
     assert "joryu.cli.distill" in cmd
     assert "--count" in cmd and "3" in cmd
     assert "--mode" in cmd and "nothinking" in cmd
+
+
+def test_build_curate_command_api_delegate(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("JORYU_USE_COMPOSE_RUN", "1")
+    monkeypatch.setattr("joryu.jobs.runner.resolve_docker_bin", lambda: "/usr/bin/docker")
+    host_root = Path("C:/repo")
+    monkeypatch.setattr("joryu.jobs.runner.resolve_host_repo_root", lambda _root: host_root)
+    (tmp_path / "config.yaml").write_text("x: 1\n", encoding="utf-8")
+    spec = CurateJobSpec(skip_llm=True)
+    cmd = build_curate_command(tmp_path, spec)
+    assert cmd[0:3] == ["/usr/bin/docker", "run", "--rm"]
+    assert "joryu.cli.curate" in cmd
+    assert "--skip-llm" in cmd
 
 
 def test_should_use_compose_run_env(monkeypatch) -> None:
@@ -51,7 +66,8 @@ def test_resolve_docker_bin_missing(monkeypatch) -> None:
         resolve_docker_bin()
 
 
-def test_runner_executes_queued_job(tmp_path: Path) -> None:
+def test_runner_executes_queued_job(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr("joryu.jobs.runner.STATS_REFRESH_INTERVAL_SEC", 3600.0)
     store = JobStore(tmp_path)
     spec = DistillJobSpec(count=1)
     record = JobRecord.create(spec)
@@ -74,7 +90,10 @@ def test_runner_executes_queued_job(tmp_path: Path) -> None:
         tmp_path,
         run_command=fake_run,
         refresh_stats=fake_stats,
-        command_builder=lambda _root, spec: ["fake-distill", *spec.to_distill_argv()],
+        command_builder=lambda _root, record: [
+            "fake-distill",
+            *record.spec.to_distill_argv(),  # type: ignore[union-attr]
+        ],
     )
     runner.enqueue(record)
 
@@ -89,7 +108,43 @@ def test_runner_executes_queued_job(tmp_path: Path) -> None:
     assert loaded.status == JobStatus.SUCCEEDED
     assert loaded.exit_code == 0
     assert calls
-    assert stats_called == [spec]
+    assert stats_called[-1] == spec
+
+
+def test_runner_executes_curate_job(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr("joryu.jobs.runner.STATS_REFRESH_INTERVAL_SEC", 3600.0)
+    store = JobStore(tmp_path)
+    spec = CurateJobSpec(skip_llm=True)
+    record = JobRecord.create(spec)
+    store.save(record)
+
+    calls: list[list[str]] = []
+
+    def fake_run(cmd, _cwd, log_path, _on_process):
+        calls.append(cmd)
+        log_path.write_text("ok\n", encoding="utf-8")
+        return 0
+
+    runner = JobRunner(
+        store,
+        tmp_path,
+        run_command=fake_run,
+        refresh_stats=lambda _s: 0,
+        command_builder=lambda _root, rec: ["fake-curate", *rec.spec.to_curate_argv()],  # type: ignore[union-attr]
+    )
+    runner.enqueue(record)
+
+    deadline = time.time() + 5.0
+    while time.time() < deadline:
+        loaded = store.load(record.id)
+        if loaded.status in (JobStatus.SUCCEEDED, JobStatus.FAILED):
+            break
+        time.sleep(0.05)
+
+    loaded = store.load(record.id)
+    assert loaded.kind == JobKind.CURATE
+    assert loaded.status == JobStatus.SUCCEEDED
+    assert calls == [["fake-curate", "--skip-llm"]]
 
 
 def test_runner_serializes_two_jobs(tmp_path: Path) -> None:
@@ -119,7 +174,10 @@ def test_runner_serializes_two_jobs(tmp_path: Path) -> None:
         tmp_path,
         run_command=fake_run,
         refresh_stats=lambda _s: 0,
-        command_builder=lambda _root, spec: ["fake-distill", *spec.to_distill_argv()],
+        command_builder=lambda _root, record: [
+            "fake-distill",
+            *record.spec.to_distill_argv(),  # type: ignore[union-attr]
+        ],
     )
     runner.enqueue(first)
     runner.enqueue(second)
@@ -187,7 +245,8 @@ class _FakeProcess:
         return self._event.wait(timeout)
 
 
-def test_cancel_queued_job_removes_from_queue(tmp_path: Path) -> None:
+def test_cancel_queued_job_removes_from_queue(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr("joryu.jobs.runner.STATS_REFRESH_INTERVAL_SEC", 3600.0)
     store = JobStore(tmp_path)
     first = JobRecord.create(DistillJobSpec(count=1))
     second = JobRecord.create(DistillJobSpec(count=2))
@@ -211,7 +270,10 @@ def test_cancel_queued_job_removes_from_queue(tmp_path: Path) -> None:
         tmp_path,
         run_command=fake_run,
         refresh_stats=lambda s: (stats_called.append(s), 0)[1],
-        command_builder=lambda _root, spec: ["fake-distill", *spec.to_distill_argv()],
+        command_builder=lambda _root, record: [
+            "fake-distill",
+            *record.spec.to_distill_argv(),  # type: ignore[union-attr]
+        ],
     )
     runner.enqueue(first)
     runner.enqueue(second)
@@ -232,10 +294,11 @@ def test_cancel_queued_job_removes_from_queue(tmp_path: Path) -> None:
     assert cancelled.error == "cancelled by user"
     assert cancelled.finished_at is not None
     assert executed == ["1"]
-    assert stats_called == [first.spec]
+    assert stats_called[-1] == first.spec
 
 
-def test_cancel_running_job_terminates_process(tmp_path: Path) -> None:
+def test_cancel_running_job_terminates_process(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr("joryu.jobs.runner.STATS_REFRESH_INTERVAL_SEC", 3600.0)
     store = JobStore(tmp_path)
     record = JobRecord.create(DistillJobSpec(count=1))
     store.save(record)
@@ -258,7 +321,10 @@ def test_cancel_running_job_terminates_process(tmp_path: Path) -> None:
         tmp_path,
         run_command=fake_run,
         refresh_stats=lambda s: (stats_called.append(s), 0)[1],
-        command_builder=lambda _root, spec: ["fake-distill", *spec.to_distill_argv()],
+        command_builder=lambda _root, record: [
+            "fake-distill",
+            *record.spec.to_distill_argv(),  # type: ignore[union-attr]
+        ],
     )
     runner.enqueue(record)
 
@@ -290,7 +356,7 @@ def test_cancel_unknown_job_returns_false(tmp_path: Path) -> None:
         tmp_path,
         run_command=lambda *args, **kwargs: 0,
         refresh_stats=lambda _s: 0,
-        command_builder=lambda _root, _spec: ["noop"],
+        command_builder=lambda _root, _record: ["noop"],
     )
     assert runner.cancel("does-not-exist") is False
 

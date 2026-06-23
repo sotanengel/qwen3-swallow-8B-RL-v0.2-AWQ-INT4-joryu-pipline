@@ -1,10 +1,21 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { HeatmapTable } from "@/components/HeatmapTable";
 import { RejectedSamplesTable } from "@/components/RejectedSamplesTable";
+import {
+  CurateJobOptions,
+  CurateJobRecord,
+  cancelCurateJob,
+  createCurateJob,
+  curateStatusLabel,
+  getCurateJobLogs,
+  isCurateJobActive,
+  listCurateJobs,
+  loadCurateJobOptions,
+} from "@/lib/curate-jobs";
 import {
   EMPTY_CURATION,
   curationDataChanged,
@@ -35,6 +46,15 @@ const RUBRIC_ORDER: Array<{ key: string; label: string }> = [
 
 export default function CurationPage() {
   const [loaded, setLoaded] = useState(false);
+  const [options, setOptions] = useState<CurateJobOptions | null>(null);
+  const [jobs, setJobs] = useState<CurateJobRecord[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [logs, setLogs] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [skipLlm, setSkipLlm] = useState(false);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
+
   const cur = useIntervalPoll(
     async () => {
       const data = await loadCuration();
@@ -44,6 +64,96 @@ export default function CurationPage() {
     EMPTY_CURATION,
     { shouldUpdate: curationDataChanged },
   );
+
+  const refreshJobs = useCallback(async () => {
+    try {
+      const rows = await listCurateJobs();
+      setJobs(rows);
+      setError(null);
+    } catch (exc) {
+      setError(exc instanceof Error ? exc.message : String(exc));
+    }
+  }, []);
+
+  useEffect(() => {
+    loadCurateJobOptions()
+      .then((opts) => {
+        setOptions(opts);
+        setSkipLlm(!opts.vllm_available);
+      })
+      .catch((exc) => setError(exc instanceof Error ? exc.message : String(exc)));
+    void refreshJobs();
+  }, [refreshJobs]);
+
+  useEffect(() => {
+    const hasActive = jobs.some((j) => isCurateJobActive(j.status));
+    if (!hasActive) return;
+    const timer = setInterval(() => void refreshJobs(), 3000);
+    return () => clearInterval(timer);
+  }, [jobs, refreshJobs]);
+
+  useEffect(() => {
+    if (!selectedId) {
+      setLogs("");
+      return;
+    }
+
+    let cancelled = false;
+    let offset = 0;
+    setLogs("");
+
+    const poll = async () => {
+      try {
+        const res = await getCurateJobLogs(selectedId, offset);
+        if (cancelled) return;
+        if (res.chunk) {
+          setLogs((prev) => prev + res.chunk);
+        }
+        offset = res.offset;
+      } catch {
+        /* ignore transient log errors */
+      }
+    };
+
+    void poll();
+    const timer = setInterval(() => void poll(), 3000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [selectedId]);
+
+  const onRunCurate = async () => {
+    setSubmitting(true);
+    setError(null);
+    try {
+      const job = await createCurateJob({ skip_llm: skipLlm });
+      setSelectedId(job.id);
+      setLogs("");
+      await refreshJobs();
+    } catch (exc) {
+      setError(exc instanceof Error ? exc.message : String(exc));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const onCancel = async (job: CurateJobRecord) => {
+    if (!isCurateJobActive(job.status)) return;
+    if (typeof window !== "undefined" && !window.confirm("このジョブを停止しますか？")) {
+      return;
+    }
+    setCancellingId(job.id);
+    setError(null);
+    try {
+      await cancelCurateJob(job.id);
+      await refreshJobs();
+    } catch (exc) {
+      setError(exc instanceof Error ? exc.message : String(exc));
+    } finally {
+      setCancellingId(null);
+    }
+  };
 
   const scoreBins = cur.score_bins.map((b) => ({
     name: `${b.lo}–${b.hi ?? "∞"}`,
@@ -70,12 +180,117 @@ export default function CurationPage() {
     a.localeCompare(b),
   );
 
+  const inputReady = options?.input_ready ?? false;
+  const vllmAvailable = options?.vllm_available ?? false;
+
   return (
     <>
+      <section className="section">
+        <h2>高品質抽出</h2>
+        <p style={{ color: "var(--muted)", marginBottom: "1rem" }}>
+          API (
+          {process.env.NEXT_PUBLIC_JORYU_API_URL || "http://localhost:8000"}
+          ) 経由で <code>joryu-curate</code> を実行します。完了後、curation.json が自動更新されます。
+        </p>
+        {error && <p className="error-banner">{error}</p>}
+        {!inputReady && (
+          <p style={{ color: "var(--muted)", marginBottom: "1rem" }}>
+            蒸留 JSONL が未生成です。先に /jobs から蒸留を実行するか、
+            <code> uv run joryu-distill</code> を実行してください。
+          </p>
+        )}
+        <div className="card" style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              checked={skipLlm}
+              onChange={(e) => setSkipLlm(e.target.checked)}
+            />
+            LLM judge をスキップ (--skip-llm)
+            {!vllmAvailable && (
+              <span style={{ color: "var(--muted)", marginLeft: "0.5rem" }}>
+                vLLM 未起動のため推奨
+              </span>
+            )}
+          </label>
+          <button
+            type="button"
+            className="primary-btn"
+            disabled={submitting || !inputReady}
+            onClick={() => void onRunCurate()}
+          >
+            {submitting ? "投入中…" : "高品質抽出を実行"}
+          </button>
+        </div>
+      </section>
+
+      {jobs.length > 0 && (
+        <section className="section">
+          <h2>抽出ジョブ</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>状態</th>
+                <th>ID</th>
+                <th>skip_llm</th>
+                <th>作成</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {jobs.map((job) => (
+                <tr
+                  key={job.id}
+                  className={selectedId === job.id ? "row-selected" : ""}
+                  onClick={() => {
+                    setSelectedId(job.id);
+                    setLogs("");
+                  }}
+                  style={{ cursor: "pointer" }}
+                >
+                  <td>
+                    <span className={`badge badge-${job.status}`}>
+                      {curateStatusLabel(job.status)}
+                    </span>
+                  </td>
+                  <td title={job.id}>{job.id.slice(0, 8)}…</td>
+                  <td>{job.spec.skip_llm ? "yes" : "no"}</td>
+                  <td>{new Date(job.created_at).toLocaleString()}</td>
+                  <td>
+                    {isCurateJobActive(job.status) ? (
+                      <button
+                        type="button"
+                        className="danger-btn"
+                        disabled={cancellingId === job.id}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void onCancel(job);
+                        }}
+                      >
+                        {cancellingId === job.id ? "停止中…" : "停止"}
+                      </button>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      )}
+
+      {selectedId && (
+        <section className="section">
+          <h2>ログ — {selectedId.slice(0, 8)}…</h2>
+          <pre className="snippet log-panel">{logs || "(ログなし)"}</pre>
+        </section>
+      )}
+
       {loaded && cur.total === 0 && (
         <p style={{ color: "var(--muted)", marginBottom: "1rem" }}>
-          curation.json が未生成または空です。{" "}
-          <code>uv run joryu-curate</code> を実行してください。
+          curation.json が未生成または空です。上の「高品質抽出を実行」ボタンを使うか、
+          <code> uv run joryu-curate</code> を実行してください。
         </p>
       )}
 

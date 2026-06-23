@@ -8,7 +8,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from joryu.api.routes import jobs
+from joryu.api.routes import curate, jobs
 from joryu.jobs.runner import JobRunner, default_jobs_dir
 from joryu.jobs.store import JobStore
 
@@ -45,4 +45,5 @@ def create_app(*, repo_root: Path | None = None) -> FastAPI:
         return {"status": "ok"}
 
     app.include_router(jobs.router, prefix="/api/jobs", tags=["jobs"])
+    app.include_router(curate.router, prefix="/api/curate/jobs", tags=["curate"])
     return app

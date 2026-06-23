@@ -22,6 +22,7 @@ JobRequestBody = Annotated[dict[str, Any], Body()]
 
 class JobResponse(BaseModel):
     id: str
+    kind: str
     spec: dict[str, Any]
     status: str
     created_at: str
@@ -34,6 +35,7 @@ class JobResponse(BaseModel):
     def from_record(cls, record: JobRecord) -> JobResponse:
         return cls(
             id=record.id,
+            kind=record.kind.value,
             spec=record.spec.to_dict(),
             status=record.status.value,
             created_at=record.created_at,

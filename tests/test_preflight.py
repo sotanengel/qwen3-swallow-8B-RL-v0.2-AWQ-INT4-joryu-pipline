@@ -12,9 +12,13 @@ from joryu.preflight import (
     PreflightError,
     changed_services_from_git,
     check_disk_space,
+    curation_needs_refresh,
     docker_image_exists,
+    ensure_curation,
     ensure_dashboard_data_paths,
     ensure_prompt_bank,
+    ensure_stats_json,
+    jsonl_has_content,
     path_affects_service,
     required_disk_gb,
     resolve_prompt_bank_seed_path,
@@ -345,6 +349,109 @@ def test_ensure_dashboard_data_paths_creates_jsonl_and_symlink(tmp_path: Path) -
         import platform
 
         assert platform.system() == "Windows"
+
+
+def test_jsonl_has_content(tmp_path: Path) -> None:
+    empty = tmp_path / "empty.jsonl"
+    empty.write_text("\n\n", encoding="utf-8")
+    assert jsonl_has_content(empty) is False
+
+    filled = tmp_path / "filled.jsonl"
+    filled.write_text('{"prompt":"x"}\n', encoding="utf-8")
+    assert jsonl_has_content(filled) is True
+
+
+def test_ensure_stats_json_skips_empty(tmp_path: Path, monkeypatch) -> None:
+    (tmp_path / "config.yaml").write_text(
+        "distill:\n  out_dir: data/distilled\n  out_file: responses.jsonl\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "data" / "distilled").mkdir(parents=True)
+    (tmp_path / "data" / "distilled" / "responses.jsonl").touch()
+    calls: list[list[str]] = []
+
+    def fake_stats(argv: list[str] | None = None) -> int:
+        calls.append(list(argv or []))
+        return 0
+
+    monkeypatch.setattr("joryu.cli.stats.main", fake_stats)
+    assert ensure_stats_json(tmp_path) is None
+    assert calls == []
+
+
+def test_ensure_stats_json_runs_when_content(tmp_path: Path, monkeypatch) -> None:
+    (tmp_path / "config.yaml").write_text(
+        "distill:\n  out_dir: data/distilled\n  out_file: responses.jsonl\n",
+        encoding="utf-8",
+    )
+    jsonl = tmp_path / "data" / "distilled" / "responses.jsonl"
+    jsonl.parent.mkdir(parents=True)
+    jsonl.write_text('{"prompt":"P","answer":"A"}\n', encoding="utf-8")
+    (tmp_path / "dashboard" / "public").mkdir(parents=True)
+    calls: list[list[str]] = []
+
+    def fake_stats(argv: list[str] | None = None) -> int:
+        calls.append(list(argv or []))
+        return 0
+
+    monkeypatch.setattr("joryu.cli.stats.main", fake_stats)
+    rc = ensure_stats_json(tmp_path)
+    assert rc == 0
+    assert len(calls) == 1
+
+
+def test_curation_needs_refresh_when_missing(tmp_path: Path) -> None:
+    (tmp_path / "config.yaml").write_text(
+        "distill:\n  out_dir: data/distilled\n  out_file: responses.jsonl\n",
+        encoding="utf-8",
+    )
+    jsonl = tmp_path / "data" / "distilled" / "responses.jsonl"
+    jsonl.parent.mkdir(parents=True)
+    jsonl.write_text('{"prompt":"P","answer":"A"}\n', encoding="utf-8")
+    assert curation_needs_refresh(tmp_path) is True
+
+
+def test_ensure_curation_skips_when_fresh(tmp_path: Path, monkeypatch) -> None:
+    import os
+
+    (tmp_path / "config.yaml").write_text(
+        "distill:\n  out_dir: data/distilled\n  out_file: responses.jsonl\n",
+        encoding="utf-8",
+    )
+    jsonl = tmp_path / "data" / "distilled" / "responses.jsonl"
+    jsonl.parent.mkdir(parents=True)
+    jsonl.write_text('{"prompt":"P","answer":"A"}\n', encoding="utf-8")
+    curation = tmp_path / "dashboard" / "public" / "curation.json"
+    curation.parent.mkdir(parents=True)
+    curation.write_text("{}", encoding="utf-8")
+    os.utime(curation, (jsonl.stat().st_mtime + 10, jsonl.stat().st_mtime + 10))
+
+    def fail_curate(*args, **kwargs) -> int:
+        raise AssertionError("should not run")
+
+    monkeypatch.setattr("joryu.cli.curate.main", fail_curate)
+    assert ensure_curation(tmp_path, ["dashboard", "api"]) is None
+
+
+def test_ensure_curation_runs_with_skip_llm(tmp_path: Path, monkeypatch) -> None:
+    (tmp_path / "config.yaml").write_text(
+        "distill:\n  out_dir: data/distilled\n  out_file: responses.jsonl\n",
+        encoding="utf-8",
+    )
+    jsonl = tmp_path / "data" / "distilled" / "responses.jsonl"
+    jsonl.parent.mkdir(parents=True)
+    jsonl.write_text('{"prompt":"P","answer":"A"}\n', encoding="utf-8")
+    calls: list[list[str]] = []
+
+    def fake_curate(argv: list[str] | None = None) -> int:
+        calls.append(list(argv or []))
+        return 0
+
+    monkeypatch.setattr("joryu.cli.curate.main", fake_curate)
+    monkeypatch.setattr("joryu.preflight.joryu_container_running", lambda **_: False)
+    rc = ensure_curation(tmp_path, ["dashboard", "api"])
+    assert rc == 0
+    assert calls == [["--config", "config.yaml", "--skip-llm"]]
 
 
 class _GitResult:

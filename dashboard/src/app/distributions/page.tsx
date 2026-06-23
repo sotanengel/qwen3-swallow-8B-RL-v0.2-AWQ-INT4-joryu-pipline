@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { useState } from "react";
 
 import { EMPTY_STATS, loadStats, sortByCount, statsDataChanged } from "@/lib/stats";
+import { useDistillJobFastPoll } from "@/lib/useDistillJobFastPoll";
 import { useIntervalPoll } from "@/lib/useIntervalPoll";
 
 const HistogramChart = dynamic(
@@ -20,6 +21,7 @@ const HistogramChart = dynamic(
 );
 
 export default function DistributionsPage() {
+  const fastPoll = useDistillJobFastPoll();
   const [loaded, setLoaded] = useState(false);
   const stats = useIntervalPoll(
     async () => {
@@ -28,7 +30,10 @@ export default function DistributionsPage() {
       return data;
     },
     EMPTY_STATS,
-    { shouldUpdate: statsDataChanged },
+    {
+      shouldUpdate: statsDataChanged,
+      intervalMs: fastPoll ? 1000 : 3000,
+    },
   );
 
   const ansBins = stats.answer_length.bins.map((b) => ({

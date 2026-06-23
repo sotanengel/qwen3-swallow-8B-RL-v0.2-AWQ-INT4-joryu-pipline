@@ -70,6 +70,7 @@ def test_create_and_list_jobs(client: TestClient, repo_root: Path) -> None:
     assert resp.status_code == 201
     job = resp.json()
     assert job["status"] == "queued"
+    assert job["kind"] == "distill"
     assert job["spec"]["count"] == 2
 
     listed = client.get("/api/jobs").json()
@@ -107,7 +108,10 @@ def test_cancel_queued_job_via_api(client: TestClient) -> None:
     store = client.app.state.job_store
 
     # ランナーが実際の docker を呼ばないように差し替え
-    runner._command_builder = lambda _root, spec: ["noop", *spec.to_distill_argv()]
+    runner._command_builder = lambda _root, record: [
+        "noop",
+        *record.spec.to_distill_argv(),  # type: ignore[union-attr]
+    ]
     runner._run_command = lambda *args, **kwargs: 0  # type: ignore[assignment]
 
     # キュー先頭を埋めるためにダミーをセットしてから 2 件目を入れる

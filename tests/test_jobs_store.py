@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from joryu.jobs.models import DistillJobSpec, JobRecord, JobStatus
+from joryu.jobs.models import DistillJobSpec, JobKind, JobRecord, JobStatus
 from joryu.jobs.store import JobStore
 
 
@@ -27,12 +27,14 @@ def test_list_all_newest_first(tmp_path: Path) -> None:
     store = JobStore(tmp_path)
     older = JobRecord(
         id="older",
+        kind=JobKind.DISTILL,
         spec=DistillJobSpec(),
         status=JobStatus.SUCCEEDED,
         created_at="2020-01-01T00:00:00+00:00",
     )
     newer = JobRecord(
         id="newer",
+        kind=JobKind.DISTILL,
         spec=DistillJobSpec(),
         status=JobStatus.QUEUED,
         created_at="2025-01-01T00:00:00+00:00",

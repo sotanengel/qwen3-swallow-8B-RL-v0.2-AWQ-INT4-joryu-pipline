@@ -1,6 +1,7 @@
 "use client";
 
 import { useIntervalPoll } from "@/lib/useIntervalPoll";
+import { useDistillJobFastPoll } from "@/lib/useDistillJobFastPoll";
 import { EMPTY_STATS, JoryuStats, loadStats, sortByCount, statsDataChanged } from "@/lib/stats";
 
 function StatCard({ label, value }: { label: string; value: string | number }) {
@@ -41,8 +42,10 @@ function HistogramTable({
 }
 
 export default function HomePage() {
+  const fastPoll = useDistillJobFastPoll();
   const stats = useIntervalPoll(loadStats, EMPTY_STATS, {
     shouldUpdate: statsDataChanged,
+    intervalMs: fastPoll ? 1000 : 3000,
   });
 
   const modeRows = sortByCount(stats.modes);

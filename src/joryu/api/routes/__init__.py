@@ -1,5 +1,5 @@
 """API ルート。"""
 
-from joryu.api.routes import jobs
+from joryu.api.routes import curate, jobs
 
-__all__ = ["jobs"]
+__all__ = ["curate", "jobs"]

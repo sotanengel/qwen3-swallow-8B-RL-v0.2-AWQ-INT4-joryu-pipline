@@ -11,8 +11,9 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
+from joryu.distill import STATS_REFRESH_INTERVAL_SEC
 from joryu.docker_paths import map_path_for_docker, resolve_host_repo_root
-from joryu.jobs.models import DistillJobSpec, JobRecord, JobStatus
+from joryu.jobs.models import CurateJobSpec, DistillJobSpec, JobKind, JobRecord, JobStatus
 from joryu.jobs.store import JobStore
 
 
@@ -114,7 +115,15 @@ def build_docker_delegate_command(repo_root: Path, spec: DistillJobSpec) -> list
     return cmd
 
 
-def build_job_command(repo_root: Path, spec: DistillJobSpec) -> list[str]:
+def build_job_command(repo_root: Path, record: JobRecord) -> list[str]:
+    if record.kind == JobKind.CURATE:
+        assert isinstance(record.spec, CurateJobSpec)
+        return build_curate_command(repo_root, record.spec)
+    assert isinstance(record.spec, DistillJobSpec)
+    return build_distill_command(repo_root, record.spec)
+
+
+def build_distill_command(repo_root: Path, spec: DistillJobSpec) -> list[str]:
     if should_use_api_docker_delegate():
         return build_docker_delegate_command(repo_root, spec)
     if should_use_compose_run():
@@ -122,6 +131,94 @@ def build_job_command(repo_root: Path, spec: DistillJobSpec) -> list[str]:
     if platform.system() == "Windows":
         return build_docker_delegate_command(repo_root, spec)
     return build_compose_run_command(repo_root, spec)
+
+
+def build_compose_run_curate_command(repo_root: Path, spec: CurateJobSpec) -> list[str]:
+    host_root = resolve_host_repo_root(repo_root)
+    compose_file = host_root / "docker-compose.yml"
+    return [
+        resolve_docker_bin(),
+        "compose",
+        "-f",
+        str(compose_file),
+        "--project-directory",
+        str(host_root),
+        "run",
+        "--rm",
+        "joryu",
+        "joryu-curate",
+        "--config",
+        spec.config,
+        *spec.to_curate_argv(),
+    ]
+
+
+def build_curate_docker_delegate_command(repo_root: Path, spec: CurateJobSpec) -> list[str]:
+    from joryu.docker_delegate import DEFAULT_IMAGE, build_docker_command
+    from joryu.docker_runtime import prepare_distill_docker_mounts
+
+    host_root = resolve_host_repo_root(repo_root)
+
+    def _map(path: Path) -> Path:
+        return map_path_for_docker(path, repo_root=repo_root, host_repo_root=host_root)
+
+    config_path = (repo_root / spec.config).resolve()
+    if should_use_api_docker_delegate():
+        hf_cache: Path | str = "hf-cache"
+    else:
+        from joryu.docker_delegate import hf_cache_dir
+
+        hf_cache_path = hf_cache_dir()
+        hf_cache_path.mkdir(parents=True, exist_ok=True)
+        hf_cache = _map(hf_cache_path)
+
+    mounts = prepare_distill_docker_mounts(
+        repo_root,
+        config_path,
+        config_rel=spec.config.replace("\\", "/"),
+        map_path=_map,
+        hf_cache=hf_cache,
+        mount_styles=False,
+    )
+
+    cmd = build_docker_command(
+        image=DEFAULT_IMAGE,
+        cwd=host_root,
+        config_path=mounts.config_path,
+        config_rel=mounts.config_rel,
+        src_dir=mounts.src_dir,
+        data_dir=mounts.data_dir,
+        dashboard_public_dir=mounts.dashboard_public,
+        hf_cache=mounts.hf_cache,
+        styles_path=mounts.styles_path,
+        styles_rel=mounts.styles_rel,
+        allocate_tty=False,
+        extra_args=spec.to_curate_argv(),
+        cli_module="joryu.cli.curate",
+        native_flag=None,
+    )
+    cmd[0] = resolve_docker_bin()
+    return cmd
+
+
+def build_curate_command(repo_root: Path, spec: CurateJobSpec) -> list[str]:
+    if should_use_api_docker_delegate():
+        return build_curate_docker_delegate_command(repo_root, spec)
+    if should_use_compose_run():
+        return build_compose_run_curate_command(repo_root, spec)
+    if platform.system() == "Windows":
+        return build_curate_docker_delegate_command(repo_root, spec)
+    return build_compose_run_curate_command(repo_root, spec)
+
+
+def _stats_refresh_loop(
+    refresh: Callable[[], None],
+    stop_event: threading.Event,
+    *,
+    interval_sec: float = STATS_REFRESH_INTERVAL_SEC,
+) -> None:
+    while not stop_event.wait(interval_sec):
+        refresh()
 
 
 def run_subprocess_logged(
@@ -184,7 +281,7 @@ class JobRunner:
         *,
         run_command: RunCommand | None = None,
         refresh_stats: Callable[[DistillJobSpec], int] | None = None,
-        command_builder: Callable[[Path, DistillJobSpec], list[str]] | None = None,
+        command_builder: Callable[[Path, JobRecord], list[str]] | None = None,
     ) -> None:
         self.store = store
         self.repo_root = repo_root
@@ -254,12 +351,27 @@ class JobRunner:
 
         log_path = self.store.log_path(job_id)
         exit_code = 1
+        stop_stats = threading.Event()
+        stats_thread: threading.Thread | None = None
+        if record.kind == JobKind.DISTILL and isinstance(record.spec, DistillJobSpec):
+
+            def _refresh() -> None:
+                self._refresh_stats(record.spec)
+
+            stats_thread = threading.Thread(
+                target=_stats_refresh_loop,
+                args=(_refresh, stop_stats),
+                daemon=True,
+            )
+            stats_thread.start()
+
         try:
-            cmd = self._command_builder(self.repo_root, record.spec)
+            cmd = self._command_builder(self.repo_root, record)
             exit_code = self._run_command(cmd, self.repo_root, log_path, self._set_running_process)
             record.exit_code = exit_code
             if exit_code != 0:
-                record.error = f"distill exited with code {exit_code}"
+                label = "curate" if record.kind == JobKind.CURATE else "distill"
+                record.error = f"{label} exited with code {exit_code}"
         except OSError as exc:
             record.exit_code = 1
             self.store.append_log(job_id, f"[joryu-runner] error: {exc}\n")
@@ -268,6 +380,10 @@ class JobRunner:
             record.exit_code = 1
             self.store.append_log(job_id, f"[joryu-runner] error: {exc}\n")
             record.error = str(exc)
+        finally:
+            stop_stats.set()
+            if stats_thread is not None:
+                stats_thread.join(timeout=1.0)
 
         record.finished_at = datetime.now(UTC).isoformat()
         with self._lock:
@@ -283,7 +399,8 @@ class JobRunner:
         self.store.save(record)
 
         if record.status == JobStatus.SUCCEEDED:
-            self._refresh_stats(record.spec)
+            if record.kind == JobKind.DISTILL and isinstance(record.spec, DistillJobSpec):
+                self._refresh_stats(record.spec)
 
         with self._lock:
             self._running_id = None

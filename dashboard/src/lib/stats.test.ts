@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-import { EMPTY_STATS, mergeStats, sortByCount, statsDataChanged } from "./stats";
+import { EMPTY_STATS, loadStats, mergeStats, sortByCount, statsDataChanged } from "./stats";
 
 describe("EMPTY_STATS", () => {
   it("has total 0", () => {
@@ -35,6 +35,22 @@ describe("sortByCount", () => {
 
   it("handles empty map", () => {
     expect(sortByCount({})).toEqual([]);
+  });
+});
+
+describe("loadStats", () => {
+  it("appends cache-bust query parameter", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ total: 1 }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await loadStats("/stats.json");
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const url = String(fetchMock.mock.calls[0][0]);
+    expect(url).toMatch(/^\/stats\.json\?t=\d+$/);
   });
 });
 
