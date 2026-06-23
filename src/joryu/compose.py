@@ -18,11 +18,14 @@ def compose_up_command(
     services: list[str] | None,
     detach: bool,
     build: bool,
+    force_recreate: bool = False,
 ) -> list[str]:
-    """`docker compose up [--build] [-d] [services...]` を構築。"""
+    """`docker compose up [--build] [--force-recreate] [-d] [services...]` を構築。"""
     cmd: list[str] = ["docker", "compose", "up"]
     if build:
         cmd.append("--build")
+    if force_recreate:
+        cmd.append("--force-recreate")
     if detach:
         cmd.append("-d")
     if services:

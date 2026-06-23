@@ -57,3 +57,20 @@ def test_down_default() -> None:
 def test_down_with_volumes() -> None:
     cmd = compose_down_command(volumes=True)
     assert "-v" in cmd or "--volumes" in cmd
+
+
+def test_up_force_recreate_after_build() -> None:
+    cmd = compose_up_command(
+        services=["dashboard", "api"],
+        detach=False,
+        build=False,
+        force_recreate=True,
+    )
+    assert cmd == [
+        "docker",
+        "compose",
+        "up",
+        "--force-recreate",
+        "dashboard",
+        "api",
+    ]

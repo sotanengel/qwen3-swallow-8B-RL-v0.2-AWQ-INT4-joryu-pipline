@@ -70,7 +70,14 @@ def test_up_joryu_diff_triggers_build_then_up(monkeypatch: pytest.MonkeyPatch) -
     assert rc == 0
     assert len(calls) == 2
     assert calls[0] == ["docker", "compose", "build", "api"]
-    assert calls[1] == ["docker", "compose", "up", "dashboard", "api"]
+    assert calls[1] == [
+        "docker",
+        "compose",
+        "up",
+        "--force-recreate",
+        "dashboard",
+        "api",
+    ]
 
 
 def test_up_full_brings_up_all_builds_only_changed(
@@ -82,7 +89,15 @@ def test_up_full_brings_up_all_builds_only_changed(
     rc = cli_up.main(["--full"])
     assert rc == 0
     assert calls[0] == ["docker", "compose", "build", "dashboard"]
-    assert calls[1] == ["docker", "compose", "up", "dashboard", "api", "joryu"]
+    assert calls[1] == [
+        "docker",
+        "compose",
+        "up",
+        "--force-recreate",
+        "dashboard",
+        "api",
+        "joryu",
+    ]
 
 
 def test_up_frontend_only_alias(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -100,7 +115,14 @@ def test_up_backend_only(monkeypatch: pytest.MonkeyPatch) -> None:
     rc = cli_up.main(["--backend-only", "--detach"])
     assert rc == 0
     assert calls[0] == ["docker", "compose", "build", "joryu"]
-    assert calls[1] == ["docker", "compose", "up", "-d", "joryu"]
+    assert calls[1] == [
+        "docker",
+        "compose",
+        "up",
+        "--force-recreate",
+        "-d",
+        "joryu",
+    ]
 
 
 def test_up_mutex_flags_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -163,7 +185,14 @@ def test_up_build_flag_forces_rebuild(monkeypatch: pytest.MonkeyPatch) -> None:
     rc = cli_up.main(["--build"])
     assert rc == 0
     assert calls[0] == ["docker", "compose", "build", "dashboard", "api", "joryu"]
-    assert calls[1] == ["docker", "compose", "up", "dashboard", "api"]
+    assert calls[1] == [
+        "docker",
+        "compose",
+        "up",
+        "--force-recreate",
+        "dashboard",
+        "api",
+    ]
 
 
 def test_up_first_run_builds_up_targets(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -182,7 +211,14 @@ def test_up_builds_joryu_when_image_missing(monkeypatch: pytest.MonkeyPatch) -> 
     rc = cli_up.main([])
     assert rc == 0
     assert calls[0] == ["docker", "compose", "build", "joryu"]
-    assert calls[1] == ["docker", "compose", "up", "dashboard", "api"]
+    assert calls[1] == [
+        "docker",
+        "compose",
+        "up",
+        "--force-recreate",
+        "dashboard",
+        "api",
+    ]
 
 
 def test_up_aborts_on_insufficient_disk(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -219,7 +255,14 @@ def test_up_force_bypasses_disk_check(monkeypatch: pytest.MonkeyPatch) -> None:
     assert rc == 0
     assert recorded == [True]
     assert calls[0] == ["docker", "compose", "build", "joryu"]
-    assert calls[1] == ["docker", "compose", "up", "dashboard", "api"]
+    assert calls[1] == [
+        "docker",
+        "compose",
+        "up",
+        "--force-recreate",
+        "dashboard",
+        "api",
+    ]
 
 
 def test_up_detach_opens_browser_after_dashboard_up(monkeypatch: pytest.MonkeyPatch) -> None:
