@@ -23,20 +23,32 @@ PROBE_CANDIDATES: tuple[tuple[int, int], ...] = (
 )
 
 
+_VRAM_LIMIT_MARKERS: tuple[str, ...] = (
+    "out of memory",
+    "cuda oom",
+    " oom",
+    "kv cache",
+    "max_model_len",
+    "max seq len",
+    "gpu_memory_utilization",
+    "available kv cache memory",
+    "not enough memory",
+    # vLLM v1: 子プロセスの KV cache 不足が親で RuntimeError に包まれる
+    "engine core initialization failed",
+)
+
+
 def is_vram_limit_error(exc: BaseException) -> bool:
     """OOM や KV キャッシュ不足など VRAM 制限による vLLM 起動失敗か判定する。"""
-    text = str(exc).lower()
-    markers = (
-        "out of memory",
-        "cuda oom",
-        " oom",
-        "kv cache",
-        "max_model_len",
-        "gpu_memory_utilization",
-        "available kv cache memory",
-        "not enough memory",
-    )
-    return any(m in text for m in markers)
+    seen: set[int] = set()
+    current: BaseException | None = exc
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        text = str(current).lower()
+        if any(m in text for m in _VRAM_LIMIT_MARKERS):
+            return True
+        current = current.__cause__ or current.__context__
+    return False
 
 
 @dataclass(frozen=True)
