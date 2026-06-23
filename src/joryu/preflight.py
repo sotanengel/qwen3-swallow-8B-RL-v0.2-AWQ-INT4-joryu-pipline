@@ -148,13 +148,41 @@ def load_up_state(repo_root: Path) -> dict[str, Any] | None:
     return None
 
 
-def save_up_state(repo_root: Path, git_head: str) -> None:
+def save_up_state(
+    repo_root: Path,
+    git_head: str,
+    *,
+    built_services: list[str] | None = None,
+) -> None:
     path = up_state_path(repo_root)
     path.parent.mkdir(parents=True, exist_ok=True)
+    prev = load_up_state(repo_root) or {}
+    payload: dict[str, Any] = {"git_head": git_head}
+    built: dict[str, str] = dict(prev.get("built_services") or {})
+    if built_services:
+        for svc in built_services:
+            built[svc] = git_head
+    if built:
+        payload["built_services"] = built
     path.write_text(
-        json.dumps({"git_head": git_head}, ensure_ascii=False, indent=2) + "\n",
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
+
+
+def services_missing_build_at_head(
+    up_services: list[str],
+    repo_root: Path,
+    *,
+    git_runner: _GitRunner | None = None,
+) -> set[str]:
+    """up 対象のうち、現在 HEAD で docker build されていないサービス。"""
+    head = git_head_at(repo_root, git_runner=git_runner)
+    if not head:
+        return set()
+    state = load_up_state(repo_root)
+    built: dict[str, str] = dict((state or {}).get("built_services") or {})
+    return {svc for svc in up_services if built.get(svc) != head}
 
 
 def git_head_at(repo_root: Path, *, git_runner: _GitRunner | None = None) -> str | None:
@@ -248,6 +276,7 @@ def services_to_build(
     no_build: bool,
     force_build: bool = False,
     first_run: bool = False,
+    repo_root: Path | None = None,
     inspect_runner: _InspectRunner | None = None,
 ) -> list[str]:
     """`up` 対象のうち rebuild が必要なサービスだけ build する。"""
@@ -258,7 +287,10 @@ def services_to_build(
     elif first_run:
         candidates = list(up_services)
     else:
-        candidates = [svc for svc in up_services if svc in changed]
+        stale: set[str] = set()
+        if repo_root is not None:
+            stale = services_missing_build_at_head(up_services, repo_root)
+        candidates = [svc for svc in up_services if svc in changed or svc in stale]
 
     # api を up する = ジョブが joryu:latest を docker run する。
     if "api" in up_services and "joryu" not in candidates:
