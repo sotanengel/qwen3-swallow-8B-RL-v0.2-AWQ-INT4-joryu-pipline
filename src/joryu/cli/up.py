@@ -144,6 +144,7 @@ def main(argv: list[str] | None = None) -> int:
         services=up_services,
         detach=args.detach,
         build=False,
+        force_recreate=bool(build_services),
     )
     open_browser = _should_open_browser(args, up_services)
     if open_browser and not args.detach:
