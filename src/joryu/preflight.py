@@ -611,7 +611,7 @@ def ensure_vllm_limits(
     from joryu.vllm_probe import run_vllm_probe
 
     _emit_preflight_log("[joryu-up] joryu-probe-vllm (GPU VRAM 上限)", log)
-    rc = run_vllm_probe(config=str(repo_root / DEFAULT_CONFIG))
+    rc = run_vllm_probe(config=DEFAULT_CONFIG)
     if rc != 0:
         raise PreflightError(
             "[joryu-up] joryu-probe-vllm が失敗しました。\n"

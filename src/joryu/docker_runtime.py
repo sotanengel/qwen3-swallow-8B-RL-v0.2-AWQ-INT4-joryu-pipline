@@ -31,6 +31,37 @@ def resolve_styles_mount(config_path: Path, styles_rel: str) -> Path | None:
     return candidate if candidate.exists() else None
 
 
+def _looks_absolute_config_ref(value: str) -> bool:
+    """POSIX / Windows ドライブレター付きの絶対パス参照か。"""
+    normalized = value.replace("\\", "/")
+    if normalized.startswith("/"):
+        return True
+    return len(normalized) >= 2 and normalized[1] == ":"
+
+
+def container_config_rel(
+    repo_root: Path,
+    config_path: Path,
+    config_rel: str | None = None,
+) -> str:
+    """コンテナ内マウント先・``--config`` 用のリポジトリ相対パス (POSIX)。"""
+    resolved = config_path.resolve()
+    root = repo_root.resolve()
+
+    if config_rel:
+        if _looks_absolute_config_ref(config_rel):
+            try:
+                return resolved.relative_to(root).as_posix()
+            except ValueError:
+                return resolved.name
+        return config_rel.replace("\\", "/")
+
+    try:
+        return resolved.relative_to(root).as_posix()
+    except ValueError:
+        return resolved.name
+
+
 def prepare_distill_docker_mounts(
     repo_root: Path,
     config_path: Path,
@@ -43,7 +74,7 @@ def prepare_distill_docker_mounts(
     """data/dashboard/public/src/HF cache/styles を整備しマウント用パスを返す。"""
     _map = map_path or (lambda p: p)
     resolved_config = config_path.resolve()
-    rel = (config_rel or str(config_path)).replace("\\", "/")
+    rel = container_config_rel(repo_root, resolved_config, config_rel)
 
     data_dir = repo_root / "data"
     data_dir.mkdir(parents=True, exist_ok=True)
