@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -35,6 +36,8 @@ def _patch_runner(
     # 空き容量チェックは環境依存なので既定で no-op 化 (insufficient disk テストでは上書き)
     monkeypatch.setattr("joryu.cli.up.check_disk_space", lambda *_args, **_kwargs: None)
     monkeypatch.setattr("joryu.cli.up.ensure_prompt_bank", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("joryu.cli.up.ensure_stats_json", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("joryu.cli.up.ensure_curation", lambda *_args, **_kwargs: None)
     monkeypatch.setattr("joryu.preflight.docker_image_exists", lambda *_args, **_kwargs: True)
     return calls
 
@@ -102,20 +105,35 @@ def test_up_full_and_frontend_only_mutex(monkeypatch: pytest.MonkeyPatch) -> Non
         cli_up.main(["--full", "--frontend-only"])
 
 
-def test_up_refresh_stats_runs_before_compose(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_up_refresh_stats_before_compose(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     calls = _patch_runner(monkeypatch)
-    stats_calls: list[list[str] | None] = []
+    stats_calls: list[bool] = []
     monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: set())
 
-    def _fake_stats_main(argv: list[str] | None = None) -> int:
-        stats_calls.append(argv)
+    def _fake_ensure_stats(_root: object, *, force: bool = False, log=None) -> int | None:
+        stats_calls.append(force)
         return 0
 
-    monkeypatch.setattr("joryu.cli.stats.main", _fake_stats_main)
+    monkeypatch.setattr("joryu.cli.up.ensure_stats_json", _fake_ensure_stats)
+    monkeypatch.chdir(tmp_path)
     rc = cli_up.main(["--refresh-stats", "--frontend-only"])
     assert rc == 0
-    assert stats_calls == [[]]
+    assert stats_calls == [True]
     assert calls[0] == ["docker", "compose", "up", "dashboard"]
+
+
+def test_up_aborts_when_curation_fails(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    calls = _patch_runner(monkeypatch)
+    monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: set())
+
+    def _fail_curation(_root: object, _services: list[str]) -> int:
+        return 1
+
+    monkeypatch.setattr("joryu.cli.up.ensure_curation", _fail_curation)
+    monkeypatch.chdir(tmp_path)
+    rc = cli_up.main(["--frontend-only"])
+    assert rc == 1
+    assert calls == []
 
 
 def test_up_no_build_flag(monkeypatch: pytest.MonkeyPatch) -> None:

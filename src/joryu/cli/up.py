@@ -27,14 +27,15 @@ import sys
 from pathlib import Path
 
 from joryu.browser import open_dashboard_when_ready, schedule_open_dashboard
-from joryu.cli import stats as cli_stats
 from joryu.compose import compose_build_command, compose_up_command, run
 from joryu.preflight import (
     PreflightError,
     changed_services_from_git,
     check_disk_space,
+    ensure_curation,
     ensure_dashboard_data_paths,
     ensure_prompt_bank,
+    ensure_stats_json,
     git_head_at,
     is_first_up_run,
     resolve_up_services,
@@ -97,12 +98,6 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     repo_root = Path.cwd()
 
-    if args.refresh_stats:
-        rc = cli_stats.main([])
-        if rc != 0:
-            print("[joryu-up] joryu-stats failed, aborting compose up", file=sys.stderr)
-            return rc
-
     changed = changed_services_from_git(repo_root)
     up_services = resolve_up_services(args, changed)
     build_services = services_to_build(
@@ -122,12 +117,22 @@ def main(argv: list[str] | None = None) -> int:
     if "dashboard" in up_services:
         ensure_dashboard_data_paths(repo_root)
 
+    rc = ensure_stats_json(repo_root, force=args.refresh_stats)
+    if rc is not None and rc != 0:
+        print("[joryu-up] joryu-stats failed, aborting compose up", file=sys.stderr)
+        return rc
+
     if "api" in up_services or "joryu" in up_services:
         try:
             ensure_prompt_bank(repo_root)
         except PreflightError as exc:
             print(exc, file=sys.stderr)
             return 1
+
+    rc = ensure_curation(repo_root, up_services)
+    if rc is not None and rc != 0:
+        print("[joryu-up] joryu-curate failed, aborting compose up", file=sys.stderr)
+        return rc
 
     if build_services:
         rc = run(compose_build_command(services=build_services))

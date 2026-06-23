@@ -22,7 +22,7 @@ from joryu.writer import JsonlAppendWriter
 
 logger = logging.getLogger(__name__)
 
-STATS_REFRESH_INTERVAL_SEC = 10.0
+STATS_REFRESH_INTERVAL_SEC = 3.0
 
 
 def _build_record(

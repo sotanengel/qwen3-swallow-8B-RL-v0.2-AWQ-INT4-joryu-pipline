@@ -402,6 +402,97 @@ def ensure_prompt_bank(
     _emit_preflight_log(f"[joryu-up] prompt bank: {n} rows from {src}", log)
 
 
+def resolve_distill_jsonl(repo_root: Path) -> Path:
+    """config から蒸留 JSONL の絶対パスを返す。"""
+    from joryu.paths import DEFAULT_CONFIG, resolve_optional_config
+
+    cfg = resolve_optional_config(repo_root / DEFAULT_CONFIG)
+    return repo_root / cfg.distill.out_dir / cfg.distill.out_file
+
+
+def jsonl_has_content(path: Path) -> bool:
+    """JSONL に非空行が 1 行以上あるか。"""
+    if not path.is_file():
+        return False
+    with path.open(encoding="utf-8") as fh:
+        for line in fh:
+            if line.strip():
+                return True
+    return False
+
+
+def ensure_stats_json(
+    repo_root: Path,
+    *,
+    force: bool = False,
+    log: Callable[[str], None] | None = None,
+) -> int | None:
+    """responses.jsonl から stats.json を更新する。スキップ時は None。"""
+    from joryu.cli.stats import main as stats_main
+    from joryu.paths import DEFAULT_CONFIG, resolve_stats_output_path
+
+    jsonl = resolve_distill_jsonl(repo_root)
+    if not force and not jsonl_has_content(jsonl):
+        return None
+    out = resolve_stats_output_path(repo_root=repo_root)
+    if out is None:
+        return None
+    cfg = repo_root / DEFAULT_CONFIG
+    _emit_preflight_log(f"[joryu-up] refreshing stats.json from {jsonl}", log)
+    return stats_main(["--config", str(cfg), "--output", str(out)])
+
+
+def curation_needs_refresh(repo_root: Path) -> bool:
+    """curation.json が未生成または蒸留 JSONL より古いか。"""
+    from joryu.paths import CURATION_JSON_REL
+
+    jsonl = resolve_distill_jsonl(repo_root)
+    if not jsonl_has_content(jsonl):
+        return False
+    curation = repo_root / CURATION_JSON_REL
+    if not curation.is_file():
+        return True
+    return curation.stat().st_mtime < jsonl.stat().st_mtime
+
+
+def joryu_container_running(*, docker_run: _InspectRunner | None = None) -> bool:
+    """joryu コンテナが起動中か。"""
+    runner = docker_run or subprocess.run
+    try:
+        proc = runner(
+            ["docker", "inspect", "-f", "{{.State.Running}}", "joryu"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError:
+        return False
+    return proc.returncode == 0 and proc.stdout.strip() == "true"
+
+
+def ensure_curation(
+    repo_root: Path,
+    up_services: list[str],
+    *,
+    log: Callable[[str], None] | None = None,
+) -> int | None:
+    """curation.json が必要なら joryu-curate を同期実行。スキップ時は None。"""
+    if not curation_needs_refresh(repo_root):
+        return None
+
+    from joryu.cli.curate import main as curate_main
+    from joryu.paths import DEFAULT_CONFIG
+
+    use_llm = "joryu" in up_services and joryu_container_running()
+    argv = ["--config", DEFAULT_CONFIG]
+    if not use_llm:
+        argv.append("--skip-llm")
+        _emit_preflight_log("[joryu-up] joryu-curate (--skip-llm: vLLM 未起動)", log)
+    else:
+        _emit_preflight_log("[joryu-up] joryu-curate (LLM judge)", log)
+    return curate_main(argv)
+
+
 def ensure_dashboard_data_paths(repo_root: Path) -> None:
     """蒸留 JSONL を dashboard から参照できるようディレクトリと symlink を整備する。"""
     from joryu.paths import DEFAULT_CONFIG, dashboard_public, resolve_optional_config

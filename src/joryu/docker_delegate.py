@@ -56,8 +56,10 @@ def build_docker_command(
     styles_rel: str | None = None,
     allocate_tty: bool = False,
     extra_args: list[str],
+    cli_module: str = "joryu.cli.distill",
+    native_flag: str | None = "--no-docker",
 ) -> list[str]:
-    """`docker run --gpus all ... joryu-distill --no-docker --config <c> <extra>` を構築。"""
+    """`docker run --gpus all ... python -m <cli_module> --config <c> <extra>` を構築。"""
     cmd: list[str] = [
         "docker",
         "run",
@@ -85,6 +87,10 @@ def build_docker_command(
     if styles_path is not None and styles_rel:
         rel = styles_rel.replace("\\", "/")
         cmd.extend(["-v", f"{styles_path}:/app/{rel}:ro"])
+    module_argv: list[str] = ["python", "-m", cli_module]
+    if native_flag:
+        module_argv.append(native_flag)
+    module_argv.extend(["--config", config_rel.replace("\\", "/"), *extra_args])
     cmd.extend(
         [
             "-e",
@@ -98,13 +104,7 @@ def build_docker_command(
             "-e",
             "VLLM_ATTENTION_BACKEND=FLASH_ATTN",
             image,
-            "python",
-            "-m",
-            "joryu.cli.distill",
-            "--no-docker",
-            "--config",
-            config_rel.replace("\\", "/"),
-            *extra_args,
+            *module_argv,
         ]
     )
     return cmd
