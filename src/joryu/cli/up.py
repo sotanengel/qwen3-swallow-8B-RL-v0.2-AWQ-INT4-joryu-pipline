@@ -28,11 +28,11 @@ from pathlib import Path
 
 from joryu.browser import open_dashboard_when_ready, schedule_open_dashboard
 from joryu.compose import (
-    builder_prune_command,
     compose_build_command,
     compose_up_command,
     image_prune_command,
     run,
+    run_build_artifact_cleanup,
 )
 from joryu.preflight import (
     PreflightError,
@@ -129,8 +129,7 @@ def main(argv: list[str] | None = None) -> int:
                 "`docker builder prune` を試行します",
                 file=sys.stderr,
             )
-            run(image_prune_command())
-            run(builder_prune_command())
+            run_build_artifact_cleanup()
             try:
                 check_disk_space(build_services, repo_root, force=args.force)
             except PreflightError as exc2:
@@ -164,9 +163,8 @@ def main(argv: list[str] | None = None) -> int:
         rc = run(compose_build_command(services=build_services))
         if rc != 0:
             return rc
-        # 旧ビルドの中間キャッシュ層を即時回収 (タグ付きイメージから参照される層は残る)。
-        # これを呼ばないと毎回 build の度に十数 GB のキャッシュが累積する。
-        run(builder_prune_command())
+        # 旧ビルドの dangling image / 中間キャッシュ層を即時回収。
+        run_build_artifact_cleanup()
 
     if "api" in up_services or "joryu" in up_services:
         try:
@@ -206,6 +204,9 @@ def main(argv: list[str] | None = None) -> int:
         )
     rc = run(cmd)
     if rc == 0:
+        if build_services:
+            # compose up --force-recreate 後、旧コンテナ参照が外れた dangling image を回収。
+            run(image_prune_command())
         head = git_head_at(repo_root)
         if head:
             save_up_state(

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from joryu.compose import (
+    build_artifact_cleanup_commands,
     builder_prune_command,
     compose_build_command,
     compose_down_command,
@@ -78,6 +79,14 @@ def test_builder_prune_command_is_all_and_force() -> None:
 def test_image_prune_command_is_force() -> None:
     """disk 不足時の自動回収で dangling image を `-f` で削除する。"""
     assert image_prune_command() == ["docker", "image", "prune", "-f"]
+
+
+def test_build_artifact_cleanup_commands() -> None:
+    """build 後 cleanup は dangling image と旧 build cache を順に回収する。"""
+    assert build_artifact_cleanup_commands() == [
+        ["docker", "image", "prune", "-f"],
+        ["docker", "builder", "prune", "-a", "-f"],
+    ]
 
 
 def test_up_force_recreate_after_build() -> None:
