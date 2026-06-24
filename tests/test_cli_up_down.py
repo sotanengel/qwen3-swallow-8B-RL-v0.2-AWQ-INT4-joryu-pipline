@@ -69,10 +69,11 @@ def test_up_joryu_diff_triggers_build_then_up(monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: {"api"})
     rc = cli_up.main([])
     assert rc == 0
-    assert len(calls) == 3
+    assert len(calls) == 5
     assert calls[0] == ["docker", "compose", "build", "api"]
-    assert calls[1] == ["docker", "builder", "prune", "-a", "-f"]
-    assert calls[2] == [
+    assert calls[1] == ["docker", "image", "prune", "-f"]
+    assert calls[2] == ["docker", "builder", "prune", "-a", "-f"]
+    assert calls[3] == [
         "docker",
         "compose",
         "up",
@@ -80,6 +81,7 @@ def test_up_joryu_diff_triggers_build_then_up(monkeypatch: pytest.MonkeyPatch) -
         "dashboard",
         "api",
     ]
+    assert calls[4] == ["docker", "image", "prune", "-f"]
 
 
 def test_up_full_brings_up_all_builds_only_changed(
@@ -91,8 +93,9 @@ def test_up_full_brings_up_all_builds_only_changed(
     rc = cli_up.main(["--full"])
     assert rc == 0
     assert calls[0] == ["docker", "compose", "build", "dashboard"]
-    assert calls[1] == ["docker", "builder", "prune", "-a", "-f"]
-    assert calls[2] == [
+    assert calls[1] == ["docker", "image", "prune", "-f"]
+    assert calls[2] == ["docker", "builder", "prune", "-a", "-f"]
+    assert calls[3] == [
         "docker",
         "compose",
         "up",
@@ -101,6 +104,7 @@ def test_up_full_brings_up_all_builds_only_changed(
         "api",
         "joryu",
     ]
+    assert calls[4] == ["docker", "image", "prune", "-f"]
 
 
 def test_up_frontend_only_alias(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -118,8 +122,9 @@ def test_up_backend_only(monkeypatch: pytest.MonkeyPatch) -> None:
     rc = cli_up.main(["--backend-only", "--detach"])
     assert rc == 0
     assert calls[0] == ["docker", "compose", "build", "joryu"]
-    assert calls[1] == ["docker", "builder", "prune", "-a", "-f"]
-    assert calls[2] == [
+    assert calls[1] == ["docker", "image", "prune", "-f"]
+    assert calls[2] == ["docker", "builder", "prune", "-a", "-f"]
+    assert calls[3] == [
         "docker",
         "compose",
         "up",
@@ -127,6 +132,7 @@ def test_up_backend_only(monkeypatch: pytest.MonkeyPatch) -> None:
         "-d",
         "joryu",
     ]
+    assert calls[4] == ["docker", "image", "prune", "-f"]
 
 
 def test_up_mutex_flags_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -211,8 +217,9 @@ def test_up_build_flag_forces_rebuild(monkeypatch: pytest.MonkeyPatch) -> None:
     rc = cli_up.main(["--build"])
     assert rc == 0
     assert calls[0] == ["docker", "compose", "build", "dashboard", "api", "joryu"]
-    assert calls[1] == ["docker", "builder", "prune", "-a", "-f"]
-    assert calls[2] == [
+    assert calls[1] == ["docker", "image", "prune", "-f"]
+    assert calls[2] == ["docker", "builder", "prune", "-a", "-f"]
+    assert calls[3] == [
         "docker",
         "compose",
         "up",
@@ -220,6 +227,7 @@ def test_up_build_flag_forces_rebuild(monkeypatch: pytest.MonkeyPatch) -> None:
         "dashboard",
         "api",
     ]
+    assert calls[4] == ["docker", "image", "prune", "-f"]
 
 
 def test_up_first_run_builds_up_targets(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -229,7 +237,9 @@ def test_up_first_run_builds_up_targets(monkeypatch: pytest.MonkeyPatch) -> None
     rc = cli_up.main([])
     assert rc == 0
     assert calls[0] == ["docker", "compose", "build", "dashboard", "api", "joryu"]
-    assert calls[1] == ["docker", "builder", "prune", "-a", "-f"]
+    assert calls[1] == ["docker", "image", "prune", "-f"]
+    assert calls[2] == ["docker", "builder", "prune", "-a", "-f"]
+    assert calls[-1] == ["docker", "image", "prune", "-f"]
 
 
 def test_up_builds_joryu_when_image_missing(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -239,8 +249,9 @@ def test_up_builds_joryu_when_image_missing(monkeypatch: pytest.MonkeyPatch) -> 
     rc = cli_up.main([])
     assert rc == 0
     assert calls[0] == ["docker", "compose", "build", "joryu"]
-    assert calls[1] == ["docker", "builder", "prune", "-a", "-f"]
-    assert calls[2] == [
+    assert calls[1] == ["docker", "image", "prune", "-f"]
+    assert calls[2] == ["docker", "builder", "prune", "-a", "-f"]
+    assert calls[3] == [
         "docker",
         "compose",
         "up",
@@ -248,6 +259,19 @@ def test_up_builds_joryu_when_image_missing(monkeypatch: pytest.MonkeyPatch) -> 
         "dashboard",
         "api",
     ]
+    assert calls[4] == ["docker", "image", "prune", "-f"]
+
+
+def test_up_prunes_dangling_images_after_successful_up_with_build(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """build 後 up 成功時に `<none>` dangling image を回収する。"""
+    calls = _patch_runner(monkeypatch)
+    monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: {"api"})
+    rc = cli_up.main(["--detach"])
+    assert rc == 0
+    assert calls[-1] == ["docker", "image", "prune", "-f"]
+    assert calls.count(["docker", "image", "prune", "-f"]) == 2
 
 
 def test_up_aborts_on_insufficient_disk(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -302,12 +326,14 @@ def test_up_auto_prunes_and_continues_when_disk_recovered(
     rc = cli_up.main([])
     assert rc == 0
     assert len(attempts) == 2
-    # 期待する呼び出し順: image prune → builder prune → build → builder prune (再) → up
+    # 期待する呼び出し順: preflight cleanup → build → cleanup → up → post-up image prune
     assert calls[0] == ["docker", "image", "prune", "-f"]
     assert calls[1] == ["docker", "builder", "prune", "-a", "-f"]
     assert calls[2] == ["docker", "compose", "build", "joryu"]
-    assert calls[3] == ["docker", "builder", "prune", "-a", "-f"]
-    assert calls[4][:3] == ["docker", "compose", "up"]
+    assert calls[3] == ["docker", "image", "prune", "-f"]
+    assert calls[4] == ["docker", "builder", "prune", "-a", "-f"]
+    assert calls[5][:3] == ["docker", "compose", "up"]
+    assert calls[6] == ["docker", "image", "prune", "-f"]
 
 
 def test_up_force_bypasses_disk_check(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -323,8 +349,9 @@ def test_up_force_bypasses_disk_check(monkeypatch: pytest.MonkeyPatch) -> None:
     assert rc == 0
     assert recorded == [True]
     assert calls[0] == ["docker", "compose", "build", "joryu"]
-    assert calls[1] == ["docker", "builder", "prune", "-a", "-f"]
-    assert calls[2] == [
+    assert calls[1] == ["docker", "image", "prune", "-f"]
+    assert calls[2] == ["docker", "builder", "prune", "-a", "-f"]
+    assert calls[3] == [
         "docker",
         "compose",
         "up",
@@ -332,6 +359,7 @@ def test_up_force_bypasses_disk_check(monkeypatch: pytest.MonkeyPatch) -> None:
         "dashboard",
         "api",
     ]
+    assert calls[4] == ["docker", "image", "prune", "-f"]
 
 
 def test_up_detach_opens_browser_after_dashboard_up(monkeypatch: pytest.MonkeyPatch) -> None:

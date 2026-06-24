@@ -65,6 +65,17 @@ def image_prune_command() -> list[str]:
     return ["docker", "image", "prune", "-f"]
 
 
+def build_artifact_cleanup_commands() -> list[list[str]]:
+    """build 後 cleanup: dangling image と旧 build cache を順に回収する。"""
+    return [image_prune_command(), builder_prune_command()]
+
+
+def run_build_artifact_cleanup() -> None:
+    """build 後 / disk preflight リトライ時の cleanup を実行する。"""
+    for cmd in build_artifact_cleanup_commands():
+        run(cmd)
+
+
 def run(cmd: list[str]) -> int:
     """ログ出しつつ subprocess.run で実行し、返り値を返す。"""
     print(f"[joryu] {' '.join(cmd)}", file=sys.stderr)
