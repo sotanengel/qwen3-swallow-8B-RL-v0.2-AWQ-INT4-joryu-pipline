@@ -25,7 +25,7 @@ __all__ = [
     "SupportsChat",
     "VllmClient",
     "VllmError",
-    "extract_thinking",
+    "build_chat_template_kwargs",
     "compute_effective_max_tokens",
 ]
 
@@ -80,6 +80,13 @@ def compute_effective_max_tokens(
     return effective
 
 
+def build_chat_template_kwargs(enable_thinking: bool | None) -> dict[str, Any]:
+    """Qwen3 chat_template 用 kwargs。auto (None) 時は enable_thinking キーを渡さない。"""
+    if enable_thinking is None:
+        return {}
+    return {"enable_thinking": enable_thinking}
+
+
 class SupportsChat(Protocol):
     """テスト用 fake と本物クライアントが満たすプロトコル。"""
 
@@ -87,7 +94,7 @@ class SupportsChat(Protocol):
         self,
         messages: list[dict[str, str]],
         *,
-        enable_thinking: bool = True,
+        enable_thinking: bool | None = True,
         **sampling_overrides: Any,
     ) -> ChatResult: ...
 
@@ -207,13 +214,13 @@ class VllmClient:
         self,
         messages: list[dict[str, str]],
         *,
-        enable_thinking: bool = True,
+        enable_thinking: bool | None = True,
         **sampling_overrides: Any,
     ) -> ChatResult:
         """トークナイザの chat_template を使って生成。`ChatResult` を返す。"""
         self._load()
         chat_kwargs: dict[str, Any] = {"use_tqdm": False}
-        chat_kwargs["chat_template_kwargs"] = {"enable_thinking": enable_thinking}
+        chat_kwargs["chat_template_kwargs"] = build_chat_template_kwargs(enable_thinking)
 
         requested_max = int(sampling_overrides.get("max_tokens", self._max_tokens))
         prompt_tokens = self._estimate_prompt_tokens(

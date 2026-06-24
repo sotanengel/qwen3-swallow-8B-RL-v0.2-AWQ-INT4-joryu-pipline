@@ -10,7 +10,7 @@ from typing import Any, Literal
 
 import yaml
 
-Mode = Literal["thinking", "nothinking"]
+Mode = Literal["thinking", "nothinking", "auto"]
 
 
 @dataclass
@@ -29,8 +29,10 @@ class ModelConfig:
     mode: Mode = "thinking"
 
     def __post_init__(self) -> None:
-        if self.mode not in ("thinking", "nothinking"):
-            raise ValueError(f"model.mode must be 'thinking' or 'nothinking', got {self.mode!r}")
+        if self.mode not in ("thinking", "nothinking", "auto"):
+            raise ValueError(
+                f"model.mode must be 'thinking', 'nothinking', or 'auto', got {self.mode!r}"
+            )
 
 
 @dataclass
@@ -122,6 +124,12 @@ class CurateConfig:
     skip_llm: bool = False
     thresholds: CurateSignalThresholds = field(default_factory=CurateSignalThresholds)
     out_dir: str = "data/curated"
+
+    def __post_init__(self) -> None:
+        if self.judge_mode not in ("thinking", "nothinking"):
+            raise ValueError(
+                f"curate.judge_mode must be 'thinking' or 'nothinking', got {self.judge_mode!r}"
+            )
 
 
 @dataclass

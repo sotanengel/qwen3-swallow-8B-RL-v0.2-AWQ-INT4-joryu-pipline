@@ -17,7 +17,7 @@ def generate_until_complete(
     *,
     client: SupportsChat,
     messages: list[dict[str, str]],
-    enable_thinking: bool,
+    enable_thinking: bool | None,
     sampling: dict[str, Any],
     build_record: Callable[[ChatResult], dict[str, Any]],
     deadline: float | None = None,

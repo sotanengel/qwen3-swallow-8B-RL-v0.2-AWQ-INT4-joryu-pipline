@@ -9,7 +9,7 @@ from typing import Any
 from joryu.config import Config, Mode
 from joryu.io.jsonl import iter_jsonl
 
-_VALID_MODES = ("thinking", "nothinking")
+_VALID_MODES = ("thinking", "nothinking", "auto")
 _SAMPLING_KEYS = ("temperature", "top_p", "top_k", "max_tokens", "repetition_penalty")
 
 

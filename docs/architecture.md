@@ -11,12 +11,12 @@ styles.yaml ──┤
    prompt_bank.py ◄── data/prompts/*.jsonl (1 行 1 prompt + row overrides)
               │
               ▼
-   variants.py (style × temperature × top_p の直積)
+   variants.py (style × temperature × top_p × mode の直積)
               │
               ▼
    distill.py ─── chat_via_template ───▶ vllm_client.py ──▶ vLLM (GPU)
               │                                              │
-              │   ◄── enable_thinking で <think> 切替 ──────┘
+              │   ◄── enable_thinking で <think> 切替 (auto は kwargs 省略) ──┘
               │
               ▼
    writer.py (resume-safe JSONL append, ensure_ascii=False)
@@ -100,7 +100,8 @@ styles.yaml ──┤
 出力レコードに含めるのは:
 
 - `model` (= モデル名)
-- `mode` (`thinking` or `nothinking`)
+- `mode` (`thinking` / `nothinking` / `auto` — 要求値)
+- `effective_mode` (`thinking` / `nothinking` — 実際の出力に基づく実測値)
 - `sampling` (実際に使われた値)
 - `system_prompt`
 - `config_hash` (`config.yaml` 全体の SHA256)

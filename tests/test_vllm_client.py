@@ -14,6 +14,7 @@ from joryu.vllm_client import (
     ChatResult,
     SupportsChat,
     VllmClient,
+    build_chat_template_kwargs,
     compute_effective_max_tokens,
     extract_thinking,
 )
@@ -78,14 +79,29 @@ def test_compute_effective_max_tokens_clamps_to_context() -> None:
     )
 
 
+def test_vllm_client_chat_via_template_requires_vllm() -> None:
+    # 実際の chat_via_template 呼び出しは _load を経由するため、
+    # vllm 未インストール環境では ImportError になることを確認。
+    cfg = Config()
+    client = VllmClient.from_config(cfg.model, cfg.vllm)
+    try:
+        import vllm  # noqa: F401
+
+        pytest.skip("vllm がインストールされているためテストをスキップ")
+    except ImportError:
+        pass
+
+    with pytest.raises(ImportError, match=re.compile("vllm", re.IGNORECASE)):
+        client.chat_via_template([{"role": "user", "content": "hi"}])
+
+
 def test_supports_chat_protocol_signature() -> None:
-    # ダミー実装が SupportsChat を満たすことを確認 (Protocol チェック)
     class _Fake:
         def chat_via_template(
             self,
             messages: list[dict[str, str]],
             *,
-            enable_thinking: bool = True,
+            enable_thinking: bool | None = True,
             **sampling_overrides: object,
         ) -> ChatResult:
             return ChatResult(
@@ -102,17 +118,11 @@ def test_supports_chat_protocol_signature() -> None:
     assert result.answer == "ok"
 
 
-def test_vllm_client_chat_via_template_requires_vllm() -> None:
-    # 実際の chat_via_template 呼び出しは _load を経由するため、
-    # vllm 未インストール環境では ImportError になることを確認。
-    cfg = Config()
-    client = VllmClient.from_config(cfg.model, cfg.vllm)
-    try:
-        import vllm  # noqa: F401
+def test_build_chat_template_kwargs_auto_omits_key() -> None:
+    assert build_chat_template_kwargs(None) == {}
+    assert "enable_thinking" not in build_chat_template_kwargs(None)
 
-        pytest.skip("vllm がインストールされているためテストをスキップ")
-    except ImportError:
-        pass
 
-    with pytest.raises(ImportError, match=re.compile("vllm", re.IGNORECASE)):
-        client.chat_via_template([{"role": "user", "content": "hi"}])
+def test_build_chat_template_kwargs_false_and_true() -> None:
+    assert build_chat_template_kwargs(False) == {"enable_thinking": False}
+    assert build_chat_template_kwargs(True) == {"enable_thinking": True}

@@ -38,6 +38,7 @@ def test_run_distill_writes_records(tmp_path: Path) -> None:
     assert records[0]["answer"] == "A"
     assert records[0]["thinking_trace"] == "T"
     assert records[0]["mode"] == "thinking"
+    assert records[0]["effective_mode"] == "thinking"
     assert records[0]["model"] == cfg.model.name
     assert records[0]["sampling"]["temperature"] == cfg.model.temperature
     assert records[0]["sampling"]["top_p"] == cfg.model.top_p
@@ -119,6 +120,56 @@ def test_row_mode_nothinking_disables_thinking_for_that_row(tmp_path: Path) -> N
     assert records[0]["thinking_trace"] == "T"
     assert records[1]["mode"] == "nothinking"
     assert records[1]["thinking_trace"] is None
+    assert records[1]["effective_mode"] == "nothinking"
+
+
+def test_mode_auto_passes_none_enable_thinking(tmp_path: Path) -> None:
+    bank = tmp_path / "bank.jsonl"
+    _write_bank(bank, [{"prompt": "P1", "mode": "auto"}])
+    out = tmp_path / "out.jsonl"
+    cfg = Config()
+    client = FakeVllmClient(answer="A", thinking="T")
+    run_distill(cfg, bank_path=bank, out_path=out, client=client)
+
+    assert client.calls[0]["enable_thinking"] is None
+    rec = _load_jsonl(out)[0]
+    assert rec["mode"] == "auto"
+    assert rec["effective_mode"] == "thinking"
+    assert rec["thinking_trace"] == "T"
+
+
+def test_mode_auto_without_thinking_records_nothinking_effective(tmp_path: Path) -> None:
+    bank = tmp_path / "bank.jsonl"
+    _write_bank(bank, [{"prompt": "P1", "mode": "auto"}])
+    out = tmp_path / "out.jsonl"
+    cfg = Config()
+    client = FakeVllmClient(answer="A", thinking=None)
+    run_distill(cfg, bank_path=bank, out_path=out, client=client)
+
+    rec = _load_jsonl(out)[0]
+    assert rec["mode"] == "auto"
+    assert rec["effective_mode"] == "nothinking"
+    assert rec["thinking_trace"] is None
+
+
+def test_mode_sweep_expands_variants(tmp_path: Path) -> None:
+    bank = tmp_path / "bank.jsonl"
+    _write_bank(bank, [{"prompt": "P1"}])
+    out = tmp_path / "out.jsonl"
+    cfg = Config()
+    client = FakeVllmClient(answer="A", thinking="T")
+    n = run_distill(
+        cfg,
+        bank_path=bank,
+        out_path=out,
+        client=client,
+        modes=["thinking", "nothinking", "auto"],
+    )
+    assert n == 3
+    records = _load_jsonl(out)
+    assert {r["mode"] for r in records} == {"thinking", "nothinking", "auto"}
+    enable_flags = [c["enable_thinking"] for c in client.calls]
+    assert enable_flags == [True, False, None]
 
 
 def test_global_mode_override_applies_when_row_missing(tmp_path: Path) -> None:

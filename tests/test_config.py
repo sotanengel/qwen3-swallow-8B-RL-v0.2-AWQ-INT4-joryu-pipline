@@ -81,6 +81,11 @@ def test_invalid_mode_rejected() -> None:
         ModelConfig(mode="rambling")  # type: ignore[arg-type]
 
 
+def test_auto_mode_accepted() -> None:
+    cfg = ModelConfig(mode="auto")
+    assert cfg.mode == "auto"
+
+
 def test_partial_yaml_falls_back_to_defaults(tmp_path: Path) -> None:
     # model.mode のみ上書き。他は既定値。
     path = tmp_path / "partial.yaml"
