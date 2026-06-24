@@ -73,3 +73,40 @@ def test_dashboard_responses_returns_jsonl_text(client: TestClient) -> None:
     assert res.headers.get("cache-control", "").startswith("no-store")
     assert "P1" in res.text
     assert "P2" in res.text
+
+
+def test_dashboard_delete_one_response(client: TestClient, repo_root: Path) -> None:
+    from joryu.responses_store import record_id
+
+    rid = record_id({"prompt": "P1", "answer": "A1"})
+    res = client.delete(f"/api/dashboard/responses/{rid}")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["deleted"] == 1
+    assert body["remaining"] == 1
+
+    get_res = client.get("/api/dashboard/responses")
+    assert "P1" not in get_res.text
+    assert "P2" in get_res.text
+
+    stats = client.get("/api/dashboard/stats").json()
+    assert stats["total"] == 1
+
+
+def test_dashboard_delete_one_not_found(client: TestClient) -> None:
+    res = client.delete("/api/dashboard/responses/nonexistent")
+    assert res.status_code == 404
+
+
+def test_dashboard_delete_all_responses(client: TestClient, repo_root: Path) -> None:
+    res = client.delete("/api/dashboard/responses")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["deleted"] == 2
+    assert body["remaining"] == 0
+
+    get_res = client.get("/api/dashboard/responses")
+    assert get_res.text.strip() == ""
+
+    stats = client.get("/api/dashboard/stats").json()
+    assert stats["total"] == 0
