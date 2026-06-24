@@ -28,5 +28,14 @@ def resolve_cli_config(args: argparse.Namespace) -> Config:
 
 
 def resolve_cli_distill_input(args: argparse.Namespace, cfg: Config) -> Path:
-    """stats/export 等: 蒸留 JSONL 入力パスを args.input から解決する。"""
-    return resolve_distill_output(cfg, args.input or None)
+    """stats/export 等: 蒸留 JSONL 入力パスを args.input から解決する。
+
+    config 内の相対パスは --config の親ディレクトリ (通常リポジトリルート) 基準。
+    API コンテナは working_dir=/app だがリポジトリは /workspace にマウントされるため、
+    cwd 基準だと data/distilled/responses.jsonl が見つからず total=0 で上書きされる。
+    """
+    raw = resolve_distill_output(cfg, args.input or None)
+    if raw.is_absolute():
+        return raw
+    config_dir = Path(args.config).resolve().parent
+    return (config_dir / raw).resolve()
