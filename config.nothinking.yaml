@@ -2,8 +2,8 @@
 # config.yaml との差分は model.mode のみ。
 model:
   name: "Qwen3-Swallow-8B-RL-v0.2-AWQ-INT4"
-  num_ctx: 2048
-  num_predict: 1024
+  num_ctx: 4096
+  num_predict: 2048
   limits_probe_file: "data/vllm_limits.json"
   temperature: 0.6
   top_p: 0.95
@@ -18,6 +18,10 @@ vllm:
   quantization: "awq_marlin"
   gpu_memory_utilization: 0.85
   enforce_eager: true
+  kv_cache_dtype: "fp8"
+  enable_prefix_caching: true
+  max_num_seqs: 1
+  swap_space_gib: 4
 
 distill:
   prompt_bank: "data/prompts/training_prompts.jsonl"

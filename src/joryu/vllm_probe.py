@@ -27,6 +27,10 @@ def _probe_once(
     num_ctx: int,
     num_predict: int,
     seed: int,
+    kv_cache_dtype: str = "auto",
+    enable_prefix_caching: bool = False,
+    max_num_seqs: int | None = None,
+    swap_space_gib: int = 0,
 ) -> None:
     from vllm import LLM, SamplingParams
 
@@ -40,6 +44,14 @@ def _probe_once(
     }
     if quantization:
         llm_kwargs["quantization"] = quantization
+    if kv_cache_dtype and kv_cache_dtype != "auto":
+        llm_kwargs["kv_cache_dtype"] = kv_cache_dtype
+    if enable_prefix_caching:
+        llm_kwargs["enable_prefix_caching"] = True
+    if max_num_seqs is not None and max_num_seqs > 0:
+        llm_kwargs["max_num_seqs"] = max_num_seqs
+    if swap_space_gib and swap_space_gib > 0:
+        llm_kwargs["swap_space"] = swap_space_gib
 
     llm = LLM(**llm_kwargs)
     try:
@@ -60,6 +72,10 @@ def probe_limits(
     enforce_eager: bool,
     seed: int,
     candidates: tuple[tuple[int, int], ...] = PROBE_CANDIDATES,
+    kv_cache_dtype: str = "auto",
+    enable_prefix_caching: bool = False,
+    max_num_seqs: int | None = None,
+    swap_space_gib: int = 0,
 ) -> VllmLimits | None:
     """候補を降順で試行し、成功した最大 (num_ctx, num_predict) を返す。"""
     for num_ctx, num_predict in candidates:
@@ -74,6 +90,10 @@ def probe_limits(
                 num_ctx=num_ctx,
                 num_predict=num_predict,
                 seed=seed,
+                kv_cache_dtype=kv_cache_dtype,
+                enable_prefix_caching=enable_prefix_caching,
+                max_num_seqs=max_num_seqs,
+                swap_space_gib=swap_space_gib,
             )
             print(f"[probe] OK num_ctx={num_ctx} num_predict={num_predict}", flush=True)
             return VllmLimits(num_ctx=num_ctx, num_predict=num_predict)
@@ -105,6 +125,10 @@ def run_probe(*, config: str | Path, out: str | Path | None = None) -> int:
         gpu_memory_utilization=cfg.vllm.gpu_memory_utilization,
         enforce_eager=cfg.vllm.enforce_eager,
         seed=cfg.model.seed,
+        kv_cache_dtype=cfg.vllm.kv_cache_dtype,
+        enable_prefix_caching=cfg.vllm.enable_prefix_caching,
+        max_num_seqs=cfg.vllm.max_num_seqs,
+        swap_space_gib=cfg.vllm.swap_space_gib,
     )
     if limits is None:
         print("[probe] all candidates failed", file=sys.stderr)

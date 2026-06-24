@@ -16,8 +16,10 @@ Mode = Literal["thinking", "nothinking"]
 @dataclass
 class ModelConfig:
     name: str = "Qwen3-Swallow-8B-RL-v0.2-AWQ-INT4"
-    num_ctx: int = 2048
-    num_predict: int = 1024
+    # num_ctx/num_predict は KV cache FP8 + prefix caching 有効化前提で倍増。
+    # VRAM が足りない環境では VllmClient.from_config が probe 結果でクランプする。
+    num_ctx: int = 4096
+    num_predict: int = 2048
     limits_probe_file: str = "data/vllm_limits.json"
     temperature: float = 0.6
     top_p: float = 0.95
@@ -38,6 +40,15 @@ class VllmConfig:
     quantization: str = "awq_marlin"
     gpu_memory_utilization: float = 0.85
     enforce_eager: bool = True
+    # KV キャッシュを FP8 化して実効容量を ~2 倍にする (品質影響は実質ゼロ報告)。
+    # "auto" / "fp16" / "bfloat16" を指定すれば旧挙動に戻せる。
+    kv_cache_dtype: str = "fp8"
+    # 共通 system_prompt の KV を 1 回だけ確保するため、prefix caching を有効化。
+    enable_prefix_caching: bool = True
+    # 蒸留は逐次 1 件ずつなので KV ブロックプールを最小化。
+    max_num_seqs: int = 1
+    # KV を CPU 側に退避するための swap space (GiB)。0 で無効。
+    swap_space_gib: int = 4
 
 
 _DEFAULT_SYSTEM_PROMPT = (

@@ -1,13 +1,14 @@
 # joryu 既定設定。RTX 3060 Ti (8GB VRAM) + AWQ-INT4 (awq_marlin) を想定。
 # 互換性メモ:
 #   - dtype は bfloat16 必須 (fp16 だと awq_marlin が token=0 を吐く既知バグ)
-#   - num_ctx=2048 / num_predict=1024 は長文論述向け (VRAM プローブで自動降格可)
+#   - num_ctx=4096 / num_predict=2048 は KV cache FP8 + prefix caching 前提
+#     (旧 2048/1024 から倍増。VRAM が足りない環境では VRAM プローブで自動降格可)
 #   - scripts/probe_vllm_limits.py で GPU 上限を data/vllm_limits.json に記録
 #   - VLLM_USE_FLASHINFER_SAMPLER=0 を実行環境で設定 (Docker delegate が自動)
 model:
   name: "Qwen3-Swallow-8B-RL-v0.2-AWQ-INT4"
-  num_ctx: 2048
-  num_predict: 1024
+  num_ctx: 4096
+  num_predict: 2048
   limits_probe_file: "data/vllm_limits.json"
   temperature: 0.6
   top_p: 0.95
@@ -22,6 +23,15 @@ vllm:
   quantization: "awq_marlin"
   gpu_memory_utilization: 0.85
   enforce_eager: true
+  # KV キャッシュ FP8 化で実効容量を ~2 倍にする (品質影響は実質ゼロ)。
+  # 旧挙動に戻したい場合は "auto"。
+  kv_cache_dtype: "fp8"
+  # 共通 system_prompt の KV を再利用 (蒸留では全行で同じプロンプトを使うため有効)。
+  enable_prefix_caching: true
+  # 蒸留は逐次 1 件のため KV ブロックプールを最小化。
+  max_num_seqs: 1
+  # KV を CPU 側にスピルさせる退避領域 (GiB)。0 で無効。
+  swap_space_gib: 4
 
 distill:
   prompt_bank: "data/prompts/training_prompts.jsonl"
