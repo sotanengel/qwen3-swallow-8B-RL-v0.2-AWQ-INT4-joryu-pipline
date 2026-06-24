@@ -2,18 +2,45 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   curationFetchUrls,
+  fetchAllLiveJson,
+  fetchBestLiveText,
   fetchLiveJson,
-  fetchLiveText,
   responsesFetchUrls,
   statsFetchUrls,
 } from "./live-data";
 
 describe("statsFetchUrls", () => {
-  it("lists API, live route, and static paths in priority order", () => {
+  it("lists live route first, then proxy, direct API, and static", () => {
     const urls = statsFetchUrls();
-    expect(urls[0]).toContain("/api/dashboard/stats");
-    expect(urls[1]).toBe("/api/live/stats");
-    expect(urls[2]).toBe("/stats.json");
+    expect(urls[0]).toBe("/api/live/stats");
+    expect(urls[1]).toBe("/joryu-api/api/dashboard/stats");
+    expect(urls[2]).toContain("/api/dashboard/stats");
+    expect(urls[3]).toBe("/stats.json");
+  });
+});
+
+describe("fetchAllLiveJson", () => {
+  it("returns all successful payloads", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: false, json: async () => ({}) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ total: 3 }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ total: 5 }) });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const rows = await fetchAllLiveJson(["/a", "/b", "/c"]);
+    expect(rows).toEqual([{ total: 3 }, { total: 5 }]);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("appends cache-bust query to each URL", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await fetchAllLiveJson(["/stats.json"]);
+
+    const url = String(fetchMock.mock.calls[0][0]);
+    expect(url).toMatch(/^\/stats\.json\?t=\d+$/);
   });
 });
 
@@ -30,32 +57,33 @@ describe("fetchLiveJson", () => {
     expect(await res!.json()).toEqual({ total: 3 });
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
-
-  it("appends cache-bust query to each URL", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
-    vi.stubGlobal("fetch", fetchMock);
-
-    await fetchLiveJson(["/stats.json"]);
-
-    const url = String(fetchMock.mock.calls[0][0]);
-    expect(url).toMatch(/^\/stats\.json\?t=\d+$/);
-  });
 });
 
-describe("fetchLiveText", () => {
-  it("returns text from first ok response", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true, text: async () => "line\n" });
+describe("fetchBestLiveText", () => {
+  it("returns the longest text among sources", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, text: async () => "a\n" })
+      .mockResolvedValueOnce({ ok: true, text: async () => "a\nb\nc\n" });
     vi.stubGlobal("fetch", fetchMock);
 
-    const text = await fetchLiveText(responsesFetchUrls().slice(2, 3));
-    expect(text).toBe("line\n");
+    const text = await fetchBestLiveText(responsesFetchUrls().slice(0, 2));
+    expect(text).toBe("a\nb\nc\n");
   });
 
   it("returns null when all sources fail", async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: false });
     vi.stubGlobal("fetch", fetchMock);
 
-    expect(await fetchLiveText(["/missing.jsonl"])).toBeNull();
+    expect(await fetchBestLiveText(["/missing.jsonl"])).toBeNull();
+  });
+});
+
+describe("responsesFetchUrls", () => {
+  it("includes live route and proxy paths", () => {
+    const urls = responsesFetchUrls();
+    expect(urls[0]).toBe("/api/live/responses");
+    expect(urls[1]).toBe("/joryu-api/api/dashboard/responses");
   });
 });
 

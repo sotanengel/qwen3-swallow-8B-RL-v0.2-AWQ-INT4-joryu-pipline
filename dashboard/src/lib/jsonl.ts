@@ -64,8 +64,8 @@ export function searchRecords(
 
 export async function loadJsonl(_url = "/responses.jsonl"): Promise<DistilledRecord[]> {
   try {
-    const { fetchLiveText, responsesFetchUrls } = await import("./live-data");
-    const text = await fetchLiveText(responsesFetchUrls());
+    const { fetchBestLiveText, responsesFetchUrls } = await import("./live-data");
+    const text = await fetchBestLiveText(responsesFetchUrls());
     if (text === null) return [];
     return parseJsonl(text);
   } catch {

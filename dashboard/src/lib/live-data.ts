@@ -1,4 +1,4 @@
-/** 蒸留データのライブ取得 (API → Next Route → 静的ファイルの順で試行)。 */
+/** 蒸留データのライブ取得 (複数ソース並列取得 → 最新を採用)。 */
 
 const API_BASE =
   (typeof process !== "undefined" && process.env.NEXT_PUBLIC_JORYU_API_URL) ||
@@ -8,14 +8,21 @@ function withCacheBust(url: string): string {
   return `${url}${url.includes("?") ? "&" : "?"}t=${Date.now()}`;
 }
 
+/** 同一オリジン live route を最優先 (Docker bind mount の fs 直読み)。 */
 export function statsFetchUrls(): string[] {
-  return [`${API_BASE}/api/dashboard/stats`, "/api/live/stats", "/stats.json"];
+  return [
+    "/api/live/stats",
+    "/joryu-api/api/dashboard/stats",
+    `${API_BASE}/api/dashboard/stats`,
+    "/stats.json",
+  ];
 }
 
 export function responsesFetchUrls(): string[] {
   return [
-    `${API_BASE}/api/dashboard/responses`,
     "/api/live/responses",
+    "/joryu-api/api/dashboard/responses",
+    `${API_BASE}/api/dashboard/responses`,
     "/responses.jsonl",
   ];
 }
@@ -24,6 +31,22 @@ export function curationFetchUrls(): string[] {
   return ["/api/live/curation", "/curation.json"];
 }
 
+export async function fetchAllLiveJson(urls: readonly string[]): Promise<unknown[]> {
+  const settled = await Promise.all(
+    urls.map(async (url) => {
+      try {
+        const r = await fetch(withCacheBust(url), { cache: "no-store" });
+        if (!r.ok) return null;
+        return await r.json();
+      } catch {
+        return null;
+      }
+    }),
+  );
+  return settled.filter((row): row is unknown => row !== null);
+}
+
+/** @deprecated fetchAllLiveJson を使用 */
 export async function fetchLiveJson(urls: readonly string[]): Promise<Response | null> {
   for (const url of urls) {
     try {
@@ -36,14 +59,24 @@ export async function fetchLiveJson(urls: readonly string[]): Promise<Response |
   return null;
 }
 
+export async function fetchBestLiveText(urls: readonly string[]): Promise<string | null> {
+  const settled = await Promise.all(
+    urls.map(async (url) => {
+      try {
+        const r = await fetch(withCacheBust(url), { cache: "no-store" });
+        if (!r.ok) return null;
+        return await r.text();
+      } catch {
+        return null;
+      }
+    }),
+  );
+  const texts = settled.filter((row): row is string => row !== null);
+  if (texts.length === 0) return null;
+  return texts.reduce((best, cur) => (cur.length > best.length ? cur : best));
+}
+
+/** @deprecated fetchBestLiveText を使用 */
 export async function fetchLiveText(urls: readonly string[]): Promise<string | null> {
-  for (const url of urls) {
-    try {
-      const r = await fetch(withCacheBust(url), { cache: "no-store" });
-      if (r.ok) return await r.text();
-    } catch {
-      /* try next source */
-    }
-  }
-  return null;
+  return fetchBestLiveText(urls);
 }
