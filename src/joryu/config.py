@@ -97,6 +97,15 @@ class CurateSignalThresholds:
 
 
 @dataclass
+class SearchConfig:
+    """ダッシュボード BM25 検索設定。"""
+
+    index_dir: str = "data/distilled/.search_index"
+    top_k_default: int = 50
+    snippet_chars: int = 200
+
+
+@dataclass
 class CurateConfig:
     """高品質抽出 (`joryu-curate`) 設定。
 
@@ -123,6 +132,7 @@ class Config:
     distill: DistillConfig = field(default_factory=DistillConfig)
     export: ExportConfig = field(default_factory=ExportConfig)
     curate: CurateConfig = field(default_factory=CurateConfig)
+    search: SearchConfig = field(default_factory=SearchConfig)
 
     def fingerprint(self) -> str:
         """設定の SHA256 ハッシュ。出力レコードの再現性記録に使う。
@@ -203,4 +213,5 @@ def load_config(path: str | Path) -> Config:
     cfg.curate = _merge_section(cfg.curate, curate_raw if isinstance(curate_raw, dict) else None)
     if isinstance(thresholds_raw, dict):
         cfg.curate.thresholds = _merge_section(cfg.curate.thresholds, thresholds_raw)
+    cfg.search = _merge_section(cfg.search, raw.get("search"))
     return cfg

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useIntervalPoll } from "@/lib/useIntervalPoll";
 import { useDistillJobFastPoll } from "@/lib/useDistillJobFastPoll";
@@ -10,11 +10,26 @@ import {
   jsonlDataChanged,
   loadJsonl,
   recordId,
+  recordLooksTruncated,
   searchRecords,
   truncateText,
 } from "@/lib/jsonl";
+import { SearchHit, searchRanked } from "@/lib/search";
 
 const PAGE_SIZE = 25;
+type SearchMode = "keyword" | "ranked";
+
+function formatTokens(r: DistilledRecord): string {
+  const p = r.prompt_tokens;
+  const c = r.completion_tokens;
+  if (p == null && c == null) return "-";
+  return `${p ?? "-"}/${c ?? "-"}`;
+}
+
+function formatStatus(r: DistilledRecord): string {
+  if (recordLooksTruncated(r)) return "truncated";
+  return r.finish_reason ?? "-";
+}
 
 export default function OutputsPage() {
   const [loaded, setLoaded] = useState(false);
@@ -29,9 +44,14 @@ export default function OutputsPage() {
     { shouldUpdate: jsonlDataChanged, intervalMs: 3000, fastPoll },
   );
   const [query, setQuery] = useState("");
+  const [searchMode, setSearchMode] = useState<SearchMode>("keyword");
   const [mode, setMode] = useState<"all" | "thinking" | "nothinking">("all");
   const [category, setCategory] = useState("");
   const [page, setPage] = useState(0);
+  const [rankedHits, setRankedHits] = useState<SearchHit[]>([]);
+  const [rankedTotal, setRankedTotal] = useState(0);
+  const [rankedLoading, setRankedLoading] = useState(false);
+  const [rankedUnavailable, setRankedUnavailable] = useState(false);
 
   const categories = useMemo(() => {
     const set = new Set<string>();
@@ -41,7 +61,7 @@ export default function OutputsPage() {
     return [...set].sort();
   }, [records]);
 
-  const filtered = useMemo(
+  const keywordFiltered = useMemo(
     () =>
       searchRecords(records, {
         query,
@@ -51,8 +71,49 @@ export default function OutputsPage() {
     [records, query, mode, category],
   );
 
-  const pageRows = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const runRankedSearch = useCallback(async () => {
+    if (searchMode !== "ranked") return;
+    setRankedLoading(true);
+    const result = await searchRanked({
+      query,
+      mode,
+      category,
+      limit: PAGE_SIZE,
+      offset: page * PAGE_SIZE,
+    });
+    setRankedLoading(false);
+    if (result.index_status === "unavailable") {
+      setRankedUnavailable(true);
+      setRankedHits([]);
+      setRankedTotal(0);
+      return;
+    }
+    setRankedUnavailable(false);
+    setRankedHits(result.hits);
+    setRankedTotal(result.total);
+  }, [searchMode, query, mode, category, page]);
+
+  useEffect(() => {
+    if (searchMode !== "ranked") return;
+    const timer = setTimeout(() => {
+      void runRankedSearch();
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchMode, runRankedSearch]);
+
+  useEffect(() => {
+    if (rankedUnavailable && searchMode === "ranked") {
+      setSearchMode("keyword");
+    }
+  }, [rankedUnavailable, searchMode]);
+
+  const isRanked = searchMode === "ranked";
+  const totalCount = isRanked ? rankedTotal : keywordFiltered.length;
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+  const keywordPageRows = keywordFiltered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+  const displayRows: { record: DistilledRecord; hit?: SearchHit }[] = isRanked
+    ? rankedHits.map((hit) => ({ record: hit.record, hit }))
+    : keywordPageRows.map((record) => ({ record }));
 
   return (
     <>
@@ -70,6 +131,17 @@ export default function OutputsPage() {
             setPage(0);
           }}
         />
+        <select
+          value={searchMode}
+          onChange={(e) => {
+            setSearchMode(e.target.value as SearchMode);
+            setPage(0);
+          }}
+          aria-label="検索モード"
+        >
+          <option value="keyword">keyword</option>
+          <option value="ranked">ranked (BM25)</option>
+        </select>
         <select
           value={mode}
           onChange={(e) => {
@@ -97,6 +169,12 @@ export default function OutputsPage() {
         </select>
       </section>
 
+      {rankedUnavailable ? (
+        <p className="search-warning" role="status">
+          BM25 検索 API が利用できないため keyword モードに切り替えました。
+        </p>
+      ) : null}
+
       {!loaded ? (
         <p style={{ color: "var(--muted)" }}>
           responses.jsonl を読み込み中…
@@ -105,37 +183,76 @@ export default function OutputsPage() {
         </p>
       ) : (
         <p style={{ color: "var(--muted)", fontSize: "0.9rem" }}>
-          {filtered.length.toLocaleString()} / {records.length.toLocaleString()} 件 ヒット (ページ{" "}
+          {isRanked && rankedLoading ? "検索中… " : ""}
+          {totalCount.toLocaleString()} / {records.length.toLocaleString()} 件 ヒット (ページ{" "}
           {page + 1} / {totalPages})
         </p>
       )}
 
-      <table>
-        <thead>
-          <tr>
-            <th>category</th>
-            <th>mode</th>
-            <th>prompt</th>
-            <th>created_at</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {pageRows.map((r) => (
-            <tr key={recordId(r)} className="output-list-row">
-              <td style={{ verticalAlign: "top" }}>{r.category ?? ""}</td>
-              <td style={{ verticalAlign: "top" }}>{r.mode ?? ""}</td>
-              <td>{truncateText(r.prompt, 80)}</td>
-              <td style={{ verticalAlign: "top", whiteSpace: "nowrap" }}>
-                {r.created_at ?? "-"}
-              </td>
-              <td style={{ verticalAlign: "top" }}>
-                <Link href={`/outputs/${recordId(r)}`}>詳細</Link>
-              </td>
+      <div className="outputs-table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>category</th>
+              <th>mode</th>
+              <th>style_id</th>
+              <th>model</th>
+              <th>prompt</th>
+              <th>answer</th>
+              <th>tokens</th>
+              <th>status</th>
+              <th>created_at</th>
+              {isRanked ? (
+                <>
+                  <th>score</th>
+                  <th>snippet</th>
+                </>
+              ) : null}
+              <th></th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {displayRows.map(({ record: r, hit }) => (
+              <tr key={recordId(r)} className="output-list-row">
+                <td style={{ verticalAlign: "top" }}>{r.category ?? ""}</td>
+                <td style={{ verticalAlign: "top" }}>{r.mode ?? ""}</td>
+                <td style={{ verticalAlign: "top" }}>{r.style_id ?? "-"}</td>
+                <td style={{ verticalAlign: "top" }}>{r.model ?? "-"}</td>
+                <td>{truncateText(r.prompt, 80)}</td>
+                <td>{truncateText(r.answer, 60)}</td>
+                <td style={{ verticalAlign: "top", whiteSpace: "nowrap" }}>{formatTokens(r)}</td>
+                <td style={{ verticalAlign: "top" }}>
+                  {formatStatus(r) === "truncated" ? (
+                    <span className="badge-truncated">truncated</span>
+                  ) : (
+                    formatStatus(r)
+                  )}
+                </td>
+                <td style={{ verticalAlign: "top", whiteSpace: "nowrap" }}>
+                  {r.created_at ?? "-"}
+                </td>
+                {isRanked ? (
+                  <>
+                    <td style={{ verticalAlign: "top", whiteSpace: "nowrap" }}>
+                      {hit ? hit.score.toFixed(2) : "-"}
+                    </td>
+                    <td style={{ verticalAlign: "top", maxWidth: "16rem" }}>
+                      {hit?.snippet ? (
+                        <pre className="snippet search-snippet">{hit.snippet}</pre>
+                      ) : (
+                        "-"
+                      )}
+                    </td>
+                  </>
+                ) : null}
+                <td style={{ verticalAlign: "top" }}>
+                  <Link href={`/outputs/${recordId(r)}`}>詳細</Link>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
       <div style={{ display: "flex", gap: "0.5rem", marginTop: "1rem" }}>
         <button onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0}>
