@@ -7,14 +7,18 @@ import sys
 import time
 from collections.abc import Callable
 from datetime import UTC, datetime
+from functools import partial
 from pathlib import Path
 from typing import Any
 
 from joryu.config import Config
+from joryu.dashboard_json import write_dashboard_json
+from joryu.distill_live import DistillLiveState
+from joryu.distill_retry import generate_until_complete
 from joryu.progress import load_done_keys, load_truncated_run_keys, run_key_from_parts
 from joryu.progress_reporter import DistillProgressReporter
 from joryu.prompt_bank import EffectiveSampling, PromptRow, load_prompt_bank
-from joryu.stats import resolve_stats_output_path, write_stats_json
+from joryu.stats import compute_stats, resolve_stats_output_path
 from joryu.styles import StylePreset, load_styles, resolve_style_ids
 from joryu.variants import DistillVariant, expand_variants
 from joryu.vllm_client import ChatResult, SupportsChat, VllmClient, VllmError
@@ -57,6 +61,55 @@ def _build_record(
     }
 
 
+def _record_from_chat(
+    chat: ChatResult,
+    *,
+    row: PromptRow,
+    eff: EffectiveSampling,
+    model_name: str,
+    config_hash: str,
+) -> dict[str, Any]:
+    if eff.mode == "nothinking":
+        chat = ChatResult(
+            thinking=None,
+            answer=chat.answer,
+            finish_reason=chat.finish_reason,
+            prompt_tokens=chat.prompt_tokens,
+            completion_tokens=chat.completion_tokens,
+            effective_max_tokens=chat.effective_max_tokens,
+        )
+    thinking = chat.thinking
+    final_answer = (chat.answer or "").strip()
+    return _build_record(
+        row=row,
+        eff=eff,
+        thinking=thinking,
+        answer=final_answer,
+        model_name=model_name,
+        config_hash=config_hash,
+        chat=chat,
+    )
+
+
+def _report_truncation_retry(
+    attempt: int,
+    _record: dict[str, Any],
+    *,
+    run_key: str,
+    row: PromptRow,
+    eff: EffectiveSampling,
+    stats_throttler: _StatsRefreshThrottler | None,
+) -> None:
+    DistillLiveState.report_retry(
+        run_key=run_key,
+        prompt=row.prompt,
+        style_id=eff.style_id,
+        attempts=attempt,
+    )
+    if stats_throttler is not None:
+        stats_throttler.maybe_refresh(force=True)
+
+
 def variant_run_key(variant: DistillVariant) -> str:
     """DistillVariant から resume キーを構築。"""
     return run_key_from_parts(
@@ -73,7 +126,11 @@ def default_stats_refresher(out_path: Path) -> None:
     dst = resolve_stats_output_path(out_path=out_path)
     if dst is None:
         return
-    write_stats_json(out_path, dst)
+    stats = compute_stats(out_path)
+    live = DistillLiveState.to_dict()
+    if live["active"] or live["truncation_retries"]:
+        stats["distill_live"] = live
+    write_dashboard_json(dst, stats, source_path=out_path)
 
 
 class _StatsRefreshThrottler:
@@ -172,84 +229,100 @@ def run_distill(
     stats_throttler = (
         _StatsRefreshThrottler(out_p, stats_refresher) if stats_refresher is not None else None
     )
-    with JsonlAppendWriter(out_p) as writer:
-        for i, variant in enumerate(work, 1):
-            if deadline is not None and time.time() >= deadline:
-                logger.info("[distill] deadline reached; stopping")
-                log("[joryu-distill] 実行時間上限に達しました", file=sys.stderr)
-                break
+    DistillLiveState.begin()
+    try:
+        with JsonlAppendWriter(out_p) as writer:
+            for i, variant in enumerate(work, 1):
+                if deadline is not None and time.time() >= deadline:
+                    logger.info("[distill] deadline reached; stopping")
+                    log("[joryu-distill] 実行時間上限に達しました", file=sys.stderr)
+                    break
 
-            row = variant.row
-            eff = variant.eff
-            messages = [
-                {"role": "system", "content": eff.system_prompt},
-                {"role": "user", "content": row.prompt},
-            ]
+                row = variant.row
+                eff = variant.eff
+                run_key = variant_run_key(variant)
+                messages = [
+                    {"role": "system", "content": eff.system_prompt},
+                    {"role": "user", "content": row.prompt},
+                ]
 
-            enable_thinking = eff.mode == "thinking"
-            try:
-                chat = client.chat_via_template(
-                    messages,
-                    enable_thinking=enable_thinking,
-                    **eff.sampling,
+                enable_thinking = eff.mode == "thinking"
+                build_record = partial(
+                    _record_from_chat,
+                    row=row,
+                    eff=eff,
+                    model_name=config.model.name,
+                    config_hash=fingerprint,
                 )
-            except VllmError as exc:
-                if "failed to load vLLM model" in str(exc):
-                    logger.error("[distill] vLLM load failed; aborting job")
+                on_retry = partial(
+                    _report_truncation_retry,
+                    run_key=run_key,
+                    row=row,
+                    eff=eff,
+                    stats_throttler=stats_throttler,
+                )
+
+                try:
+                    record, _attempts = generate_until_complete(
+                        client=client,
+                        messages=messages,
+                        enable_thinking=enable_thinking,
+                        sampling=eff.sampling,
+                        build_record=build_record,
+                        deadline=deadline,
+                        min_interval_sec=config.distill.min_interval_sec,
+                        on_retry=on_retry,
+                        log=log,
+                    )
+                except VllmError as exc:
+                    if "failed to load vLLM model" in str(exc):
+                        logger.error("[distill] vLLM load failed; aborting job")
+                        log(
+                            "[joryu-distill] vLLM ロード失敗 — ジョブを中止します。"
+                            " `uv run joryu-up` または `uv run joryu-probe-vllm` で"
+                            " GPU 上限を記録してください。",
+                            file=sys.stderr,
+                        )
+                        log(f"[joryu-distill] [{i}/{run_total}] エラー: {exc}", file=sys.stderr)
+                        reporter.update(i)
+                        break
+                    logger.warning("[distill] row failed (prompt=%r): %s", row.prompt[:40], exc)
                     log(
-                        "[joryu-distill] vLLM ロード失敗 — ジョブを中止します。"
-                        " `uv run joryu-up` または `uv run joryu-probe-vllm` で"
-                        " GPU 上限を記録してください。",
+                        f"[joryu-distill] [{i}/{run_total}] エラー: {exc}",
                         file=sys.stderr,
                     )
-                    log(f"[joryu-distill] [{i}/{run_total}] エラー: {exc}", file=sys.stderr)
                     reporter.update(i)
-                    break
-                logger.warning("[distill] row failed (prompt=%r): %s", row.prompt[:40], exc)
-                log(
-                    f"[joryu-distill] [{i}/{run_total}] エラー: {exc}",
-                    file=sys.stderr,
-                )
-                reporter.update(i)
-                continue
-            except Exception as exc:  # noqa: BLE001
-                logger.warning("[distill] row failed (prompt=%r): %s", row.prompt[:40], exc)
-                log(
-                    f"[joryu-distill] [{i}/{run_total}] エラー: {exc}",
-                    file=sys.stderr,
-                )
-                reporter.update(i)
-                continue
+                    continue
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning("[distill] row failed (prompt=%r): %s", row.prompt[:40], exc)
+                    log(
+                        f"[joryu-distill] [{i}/{run_total}] エラー: {exc}",
+                        file=sys.stderr,
+                    )
+                    reporter.update(i)
+                    continue
 
-            if eff.mode == "nothinking":
-                chat = ChatResult(
-                    thinking=None,
-                    answer=chat.answer,
-                    finish_reason=chat.finish_reason,
-                    prompt_tokens=chat.prompt_tokens,
-                    completion_tokens=chat.completion_tokens,
-                    effective_max_tokens=chat.effective_max_tokens,
-                )
-            thinking = chat.thinking
-            final_answer = (chat.answer or "").strip()
-            record = _build_record(
-                row=row,
-                eff=eff,
-                thinking=thinking,
-                answer=final_answer,
-                model_name=config.model.name,
-                config_hash=fingerprint,
-                chat=chat,
-            )
-            writer.write(record)
-            n += 1
-            reporter.record_success(row.prompt, final_answer, style_id=eff.style_id)
-            reporter.update(i)
-            if stats_throttler is not None:
-                stats_throttler.maybe_refresh()
+                if record is None:
+                    log(
+                        f"[joryu-distill] [{i}/{run_total}] "
+                        "打ち切りのまま deadline 到達 — 書き込みスキップ",
+                        file=sys.stderr,
+                    )
+                    reporter.update(i)
+                    continue
 
-    if stats_throttler is not None and n > 0:
-        stats_throttler.maybe_refresh(force=True)
+                DistillLiveState.clear_retry(run_key)
+                final_answer = str(record.get("answer") or "")
+                writer.write(record)
+                n += 1
+                reporter.record_success(row.prompt, final_answer, style_id=eff.style_id)
+                reporter.update(i)
+                if stats_throttler is not None:
+                    stats_throttler.maybe_refresh()
+    finally:
+        DistillLiveState.end()
+        if stats_throttler is not None:
+            stats_throttler.maybe_refresh(force=True)
 
     reporter.log_finish(n, out_path=out_p)
     return n

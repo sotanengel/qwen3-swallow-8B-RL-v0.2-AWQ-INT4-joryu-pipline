@@ -16,9 +16,16 @@ class FakeVllmClient:
         self,
         answer: str = "回答",
         thinking: str | None = "思考",
+        *,
+        finish_reason: str = "stop",
+        finish_reasons: list[str] | None = None,
+        answers: list[str] | None = None,
     ) -> None:
         self.answer = answer
         self.thinking = thinking
+        self.finish_reason = finish_reason
+        self.finish_reasons = finish_reasons
+        self.answers = answers
         self.calls: list[dict[str, Any]] = []
 
     def chat_via_template(
@@ -35,11 +42,20 @@ class FakeVllmClient:
                 "sampling": dict(sampling_overrides),
             }
         )
+        idx = len(self.calls) - 1
+        if self.finish_reasons is not None:
+            finish_reason = self.finish_reasons[min(idx, len(self.finish_reasons) - 1)]
+        else:
+            finish_reason = self.finish_reason
+        if self.answers is not None:
+            answer = self.answers[min(idx, len(self.answers) - 1)]
+        else:
+            answer = self.answer
         thinking = self.thinking if enable_thinking else None
         return ChatResult(
             thinking=thinking,
-            answer=self.answer,
-            finish_reason="stop",
+            answer=answer,
+            finish_reason=finish_reason,
             prompt_tokens=10,
             completion_tokens=5,
             effective_max_tokens=sampling_overrides.get("max_tokens"),

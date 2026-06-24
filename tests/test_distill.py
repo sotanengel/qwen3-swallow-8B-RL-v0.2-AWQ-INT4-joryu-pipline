@@ -405,3 +405,64 @@ def test_run_distill_stats_refresher_is_throttled(tmp_path: Path) -> None:
     throttler.maybe_refresh(force=True)
 
     assert calls == [0.0, 5.0]
+
+
+def test_run_distill_retries_truncated_until_complete(tmp_path: Path) -> None:
+    bank = tmp_path / "bank.jsonl"
+    _write_bank(bank, [{"prompt": "P1"}])
+    out = tmp_path / "out.jsonl"
+    cfg = Config()
+    client = FakeVllmClient(
+        finish_reasons=["length", "stop"],
+        answers=["途中\n\n## 1. 章", "完結した回答。"],
+    )
+    n = run_distill(cfg, bank_path=bank, out_path=out, client=client)
+    assert n == 1
+    assert len(client.calls) == 2
+    records = _load_jsonl(out)
+    assert len(records) == 1
+    assert records[0]["answer"] == "完結した回答。"
+    assert records[0]["generation_attempts"] == 2
+
+
+def test_run_distill_skips_write_when_truncated_and_deadline_hit(tmp_path: Path) -> None:
+    import time
+
+    bank = tmp_path / "bank.jsonl"
+    _write_bank(bank, [{"prompt": "P1"}])
+    out = tmp_path / "out.jsonl"
+    cfg = Config()
+    client = FakeVllmClient(
+        finish_reason="length",
+        answer="途中\n\n## 1. 章",
+    )
+    n = run_distill(
+        cfg,
+        bank_path=bank,
+        out_path=out,
+        client=client,
+        deadline=time.time() + 0.05,
+    )
+    assert n == 0
+    assert not out.exists() or out.read_text(encoding="utf-8") == ""
+
+
+def test_run_distill_records_generation_attempts_after_many_retries(tmp_path: Path) -> None:
+    bank = tmp_path / "bank.jsonl"
+    _write_bank(bank, [{"prompt": "P1"}])
+    out = tmp_path / "out.jsonl"
+    cfg = Config()
+    client = FakeVllmClient(
+        finish_reasons=["length", "length", "length", "stop"],
+        answers=[
+            "a\n\n## h",
+            "b\n\n## h",
+            "c\n\n## h",
+            "完結した回答。",
+        ],
+    )
+    n = run_distill(cfg, bank_path=bank, out_path=out, client=client)
+    assert n == 1
+    assert len(client.calls) == 4
+    rec = _load_jsonl(out)[0]
+    assert rec["generation_attempts"] == 4

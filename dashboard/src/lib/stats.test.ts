@@ -103,4 +103,26 @@ describe("statsDataChanged", () => {
     const next = mergeStats({ total: 1, _meta: { generated_at: "t1" } });
     expect(statsDataChanged(prev, next)).toBe(false);
   });
+
+  it("returns true when distill_live retries change", () => {
+    const prev = mergeStats({
+      total: 1,
+      distill_live: { active: true, truncation_retries: [] },
+    });
+    const next = mergeStats({
+      total: 1,
+      distill_live: {
+        active: true,
+        truncation_retries: [
+          {
+            prompt_preview: "P",
+            style_id: null,
+            attempts: 3,
+            updated_at: "t1",
+          },
+        ],
+      },
+    });
+    expect(statsDataChanged(prev, next)).toBe(true);
+  });
 });

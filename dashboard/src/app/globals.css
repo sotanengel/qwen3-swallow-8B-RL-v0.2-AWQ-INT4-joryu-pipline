@@ -338,6 +338,10 @@ pre.snippet {
   font-size: 0.9rem;
 }
 
+.distill-live-alert {
+  margin: 0 1.5rem 1rem;
+}
+
 .markdown-body {
   line-height: 1.6;
   font-size: 0.95rem;

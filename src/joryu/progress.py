@@ -59,13 +59,16 @@ def run_key_from_record(record: dict[str, Any]) -> str | None:
 
 
 def load_done_keys(path: str | Path) -> set[str]:
-    """JSONL レコードから処理済 run キーの set を構築する。"""
-    done: set[str] = set()
+    """JSONL レコードから処理済 run キーの set を構築する。
+
+    同一キーの最新レコードが途中打ち切りの場合は未処理扱いとする。
+    """
+    latest: dict[str, dict[str, Any]] = {}
     for record in iter_jsonl(Path(path)):
         key = run_key_from_record(record)
         if key is not None:
-            done.add(key)
-    return done
+            latest[key] = record
+    return {key for key, record in latest.items() if not record_looks_truncated(record)}
 
 
 def load_truncated_run_keys(path: str | Path) -> set[str]:

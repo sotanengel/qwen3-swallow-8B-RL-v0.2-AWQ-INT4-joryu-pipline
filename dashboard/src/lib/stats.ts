@@ -15,6 +15,18 @@ export interface LengthSummary {
   bins: LengthBin[];
 }
 
+export interface TruncationRetryAlert {
+  prompt_preview: string;
+  style_id: string | null;
+  attempts: number;
+  updated_at: string;
+}
+
+export interface DistillLiveState {
+  active: boolean;
+  truncation_retries: TruncationRetryAlert[];
+}
+
 export interface JoryuStats {
   total: number;
   models: Record<string, number>;
@@ -28,6 +40,7 @@ export interface JoryuStats {
     top_p: Record<string, number>;
   };
   timeline_daily: Record<string, number>;
+  distill_live?: DistillLiveState;
   _meta?: {
     source_path?: string;
     generated_at?: string;
@@ -85,6 +98,7 @@ export function mergeStats(data: Partial<JoryuStats>): JoryuStats {
       ...EMPTY_STATS.timeline_daily,
       ...data.timeline_daily,
     },
+    distill_live: data.distill_live,
   };
 }
 
@@ -111,8 +125,13 @@ export function pickNewestStats(candidates: Partial<JoryuStats>[]): JoryuStats {
   }, EMPTY_STATS);
 }
 
-/** ポーリング時に再描画が必要か (_meta.generated_at または total で判定)。 */
+/** ポーリング時に再描画が必要か (_meta.generated_at / total / live アラートで判定)。 */
 export function statsDataChanged(prev: JoryuStats, next: JoryuStats): boolean {
   if (prev.total !== next.total) return true;
-  return prev._meta?.generated_at !== next._meta?.generated_at;
+  if (prev._meta?.generated_at !== next._meta?.generated_at) return true;
+  const prevRetries = prev.distill_live?.truncation_retries?.length ?? 0;
+  const nextRetries = next.distill_live?.truncation_retries?.length ?? 0;
+  if (prevRetries !== nextRetries) return true;
+  if (prev.distill_live?.active !== next.distill_live?.active) return true;
+  return false;
 }
