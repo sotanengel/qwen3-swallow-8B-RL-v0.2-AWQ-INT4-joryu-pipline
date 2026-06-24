@@ -69,6 +69,8 @@ class DistillConfig:
     system_prompt: str = _DEFAULT_SYSTEM_PROMPT
     styles_file: str = "styles.yaml"
     tools_file: str = "tools.yaml"
+    tool_loop: bool = False
+    tool_loop_max_turns: int = 4
 
 
 @dataclass

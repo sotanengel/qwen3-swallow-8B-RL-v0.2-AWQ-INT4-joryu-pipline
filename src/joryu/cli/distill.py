@@ -55,6 +55,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="top_p スイープ (0.8〜0.95、カンマ区切り。例: 0.8,0.9,0.95)",
     )
     p.add_argument(
+        "--tool-loop",
+        action="store_true",
+        help="tool_call をローカル実行して再生成するループを有効化",
+    )
+    p.add_argument(
+        "--max-turns",
+        type=int,
+        default=None,
+        help="tool_loop の最大ターン数 (既定: config.distill.tool_loop_max_turns)",
+    )
+    p.add_argument(
         "--image",
         default=DEFAULT_IMAGE,
         help=f"Docker イメージ (既定: {DEFAULT_IMAGE})",
@@ -145,6 +156,8 @@ def main(argv: list[str] | None = None, *, _client: SupportsChat | None = None) 
         temperatures=temperatures,
         top_ps=top_ps,
         modes=mode_sweep,
+        tool_loop=bool(getattr(args, "tool_loop", False)),
+        tool_loop_max_turns=getattr(args, "max_turns", None),
         stats_refresher=default_stats_refresher,
     )
     return 0

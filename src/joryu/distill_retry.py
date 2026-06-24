@@ -21,6 +21,7 @@ def generate_until_complete(
     tools: list[dict[str, Any]] | None,
     sampling: dict[str, Any],
     build_record: Callable[[ChatResult], dict[str, Any]],
+    chat_fn: Callable[..., ChatResult] | None = None,
     deadline: float | None = None,
     min_interval_sec: float = 0.0,
     on_retry: Callable[[int, dict[str, Any]], None] | None = None,
@@ -42,12 +43,20 @@ def generate_until_complete(
             return None, attempts
 
         attempts += 1
-        chat = client.chat_via_template(
-            messages,
-            enable_thinking=enable_thinking,
-            tools=tools,
-            **sampling,
-        )
+        if chat_fn is None:
+            chat = client.chat_via_template(
+                messages,
+                enable_thinking=enable_thinking,
+                tools=tools,
+                **sampling,
+            )
+        else:
+            chat = chat_fn(
+                messages,
+                enable_thinking=enable_thinking,
+                tools=tools,
+                **sampling,
+            )
         record = build_record(chat)
         if not record_looks_truncated(record):
             record["generation_attempts"] = attempts

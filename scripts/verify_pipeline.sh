@@ -95,6 +95,40 @@ test -s "$tools_out" || { echo "[verify] FAIL: tools smoke jsonl missing"; exit 
 echo "[verify] step 1c: verify_record_replay" >&2
 uv run python scripts/verify_record_replay.py "$tools_out"
 
+echo "[verify] step 1d: tool-loop smoke distill" >&2
+loop_bank="$work/tools_loop.jsonl"
+loop_out="$work/tools_loop_responses.jsonl"
+cat > "$loop_bank" <<'EOF'
+{"prompt":"23 * 47 + 119 を計算してください","tool_ids":["calc"]}
+EOF
+export JORYU_VERIFY_LOOP_BANK="$loop_bank"
+export JORYU_VERIFY_LOOP_OUT="$loop_out"
+uv run python - <<'PY'
+import os, sys
+
+sys.path.insert(0, "tests")
+from joryu.cli import distill as cli
+from conftest import FakeVllmClient
+
+turn1 = '<tool_call>{"name":"calc","arguments":{"expression":"23*47+119"}}</tool_call>'
+fake = FakeVllmClient(answers=[turn1, "計算結果は 1200 です。"], thinking=None)
+rc = cli.main(
+    [
+        "--no-docker",
+        "--config",
+        os.environ["JORYU_VERIFY_CFG"],
+        "--bank",
+        os.environ["JORYU_VERIFY_LOOP_BANK"],
+        "--out",
+        os.environ["JORYU_VERIFY_LOOP_OUT"],
+        "--tool-loop",
+    ],
+    _client=fake,
+)
+sys.exit(rc)
+PY
+test -s "$loop_out" || { echo "[verify] FAIL: tool-loop smoke jsonl missing"; exit 1; }
+
 echo "[verify] step 2: joryu-export" >&2
 uv run joryu-export --config "$cfg" --input "$out" --out-dir "$exp_dir" --level 3
 

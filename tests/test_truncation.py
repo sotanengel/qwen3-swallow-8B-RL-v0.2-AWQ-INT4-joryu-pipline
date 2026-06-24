@@ -22,3 +22,7 @@ def test_record_finish_reason_length() -> None:
 
 def test_record_finish_reason_stop() -> None:
     assert record_looks_truncated({"finish_reason": "stop", "answer": "## 見出し"}) is False
+
+
+def test_record_tool_loop_exhausted_not_truncated() -> None:
+    assert record_looks_truncated({"finish_reason": "tool_loop_exhausted", "answer": ""}) is False
