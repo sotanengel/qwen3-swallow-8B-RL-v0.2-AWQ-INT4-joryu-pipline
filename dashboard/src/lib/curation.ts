@@ -102,14 +102,26 @@ export function mergeCuration(data: Partial<CurationStats>): CurationStats {
 
 export async function loadCuration(_url = "/curation.json"): Promise<CurationStats> {
   try {
-    const { fetchLiveJson, curationFetchUrls } = await import("./live-data");
-    const r = await fetchLiveJson(curationFetchUrls());
-    if (!r) return EMPTY_CURATION;
-    const data = (await r.json()) as Partial<CurationStats>;
-    return mergeCuration(data);
+    const { fetchAllLiveJson, curationFetchUrls } = await import("./live-data");
+    const payloads = await fetchAllLiveJson(curationFetchUrls());
+    if (payloads.length === 0) return EMPTY_CURATION;
+    return pickNewestCuration(payloads as Partial<CurationStats>[]);
   } catch {
     return EMPTY_CURATION;
   }
+}
+
+export function pickNewestCuration(candidates: Partial<CurationStats>[]): CurationStats {
+  return candidates.reduce<CurationStats>((best, raw) => {
+    const cur = mergeCuration(raw);
+    if (cur.total > best.total) return cur;
+    if (cur.total < best.total) return best;
+    if (cur.accepted > best.accepted) return cur;
+    if (cur.accepted < best.accepted) return best;
+    const curTs = cur._meta?.generated_at ?? "";
+    const bestTs = best._meta?.generated_at ?? "";
+    return curTs > bestTs ? cur : best;
+  }, EMPTY_CURATION);
 }
 
 export function curationDataChanged(

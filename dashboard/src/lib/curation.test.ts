@@ -55,7 +55,7 @@ describe("curationDataChanged", () => {
 });
 
 describe("loadCuration", () => {
-  it("prefers live route with cache-bust", async () => {
+  it("fetches all curation sources in parallel", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ total: 1, accepted: 1 }),
@@ -64,7 +64,7 @@ describe("loadCuration", () => {
 
     await loadCuration();
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
     const url = String(fetchMock.mock.calls[0][0]);
     expect(url).toMatch(/^\/api\/live\/curation\?t=\d+$/);
   });

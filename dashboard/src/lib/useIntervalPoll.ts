@@ -36,16 +36,20 @@ export function useIntervalPoll<T>(
     }
     try {
       const next = await loadRef.current();
+      let changed = false;
       setData((prev) => {
         const cmp = shouldUpdateRef.current;
         if (cmp && !cmp(prev, next)) {
           return prev;
         }
         if (cmp && cmp(prev, next)) {
-          setFastUntil(Date.now() + ADAPTIVE_DURATION_MS);
+          changed = true;
         }
         return next;
       });
+      if (changed) {
+        setFastUntil(Date.now() + ADAPTIVE_DURATION_MS);
+      }
     } catch {
       /* ignore transient fetch errors during polling */
     }
