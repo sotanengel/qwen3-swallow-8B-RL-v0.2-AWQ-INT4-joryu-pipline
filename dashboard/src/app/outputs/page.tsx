@@ -1,8 +1,9 @@
 "use client";
 
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { deleteAllOutputs, deleteOutput } from "@/lib/outputs";
 import { useIntervalPoll } from "@/lib/useIntervalPoll";
 import { useDistillJobFastPoll } from "@/lib/useDistillJobFastPoll";
 import {
@@ -32,7 +33,11 @@ function formatStatus(r: DistilledRecord): string {
 }
 
 export default function OutputsPage() {
+  const router = useRouter();
   const [loaded, setLoaded] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deletingAll, setDeletingAll] = useState(false);
   const fastPoll = useDistillJobFastPoll();
   const records = useIntervalPoll(
     async () => {
@@ -115,11 +120,79 @@ export default function OutputsPage() {
     ? rankedHits.map((hit) => ({ record: hit.record, hit }))
     : keywordPageRows.map((record) => ({ record }));
 
+  const onDeleteOne = async (record: DistilledRecord) => {
+    const id = recordId(record);
+    if (typeof window !== "undefined" && !window.confirm("この出力を削除しますか？")) {
+      return;
+    }
+    setDeletingId(id);
+    setError(null);
+    try {
+      await deleteOutput(id);
+      const nextFilteredLen = totalCount - 1;
+      const nextTotalPages = Math.max(1, Math.ceil(nextFilteredLen / PAGE_SIZE));
+      if (page >= nextTotalPages) {
+        setPage(Math.max(0, nextTotalPages - 1));
+      }
+      if (isRanked) {
+        void runRankedSearch();
+      }
+    } catch (exc) {
+      setError(exc instanceof Error ? exc.message : String(exc));
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const onDeleteAll = async () => {
+    if (records.length === 0) return;
+    if (
+      typeof window !== "undefined" &&
+      !window.confirm("すべての出力を削除しますか？この操作は取り消せません。")
+    ) {
+      return;
+    }
+    setDeletingAll(true);
+    setError(null);
+    try {
+      await deleteAllOutputs();
+      setPage(0);
+      if (isRanked) {
+        setRankedHits([]);
+        setRankedTotal(0);
+      }
+    } catch (exc) {
+      setError(exc instanceof Error ? exc.message : String(exc));
+    } finally {
+      setDeletingAll(false);
+    }
+  };
+
   return (
     <>
       <section className="section">
-        <h2>出力一覧</h2>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "1rem",
+            flexWrap: "wrap",
+          }}
+        >
+          <h2 style={{ margin: 0 }}>出力一覧</h2>
+          <button
+            type="button"
+            className="danger-btn"
+            disabled={!loaded || records.length === 0 || deletingAll}
+            onClick={() => void onDeleteAll()}
+          >
+            {deletingAll ? "削除中…" : "全削除"}
+          </button>
+        </div>
       </section>
+
+      {error ? <div className="error-banner">{error}</div> : null}
 
       <section className="search-bar">
         <input
@@ -208,48 +281,65 @@ export default function OutputsPage() {
                   <th>snippet</th>
                 </>
               ) : null}
-              <th></th>
+              <th>操作</th>
             </tr>
           </thead>
           <tbody>
-            {displayRows.map(({ record: r, hit }) => (
-              <tr key={recordId(r)} className="output-list-row">
-                <td style={{ verticalAlign: "top" }}>{r.category ?? ""}</td>
-                <td style={{ verticalAlign: "top" }}>{r.mode ?? ""}</td>
-                <td style={{ verticalAlign: "top" }}>{r.style_id ?? "-"}</td>
-                <td style={{ verticalAlign: "top" }}>{r.model ?? "-"}</td>
-                <td>{truncateText(r.prompt, 80)}</td>
-                <td>{truncateText(r.answer, 60)}</td>
-                <td style={{ verticalAlign: "top", whiteSpace: "nowrap" }}>{formatTokens(r)}</td>
-                <td style={{ verticalAlign: "top" }}>
-                  {formatStatus(r) === "truncated" ? (
-                    <span className="badge-truncated">truncated</span>
-                  ) : (
-                    formatStatus(r)
-                  )}
-                </td>
-                <td style={{ verticalAlign: "top", whiteSpace: "nowrap" }}>
-                  {r.created_at ?? "-"}
-                </td>
-                {isRanked ? (
-                  <>
-                    <td style={{ verticalAlign: "top", whiteSpace: "nowrap" }}>
-                      {hit ? hit.score.toFixed(2) : "-"}
-                    </td>
-                    <td style={{ verticalAlign: "top", maxWidth: "16rem" }}>
-                      {hit?.snippet ? (
-                        <pre className="snippet search-snippet">{hit.snippet}</pre>
-                      ) : (
-                        "-"
-                      )}
-                    </td>
-                  </>
-                ) : null}
-                <td style={{ verticalAlign: "top" }}>
-                  <Link href={`/outputs/${recordId(r)}`}>詳細</Link>
-                </td>
-              </tr>
-            ))}
+            {displayRows.map(({ record: r, hit }) => {
+              const id = recordId(r);
+              return (
+                <tr
+                  key={id}
+                  className="output-list-row"
+                  onClick={() => router.push(`/outputs/${id}`)}
+                >
+                  <td style={{ verticalAlign: "top" }}>{r.category ?? ""}</td>
+                  <td style={{ verticalAlign: "top" }}>{r.mode ?? ""}</td>
+                  <td style={{ verticalAlign: "top" }}>{r.style_id ?? "-"}</td>
+                  <td style={{ verticalAlign: "top" }}>{r.model ?? "-"}</td>
+                  <td>{truncateText(r.prompt, 80)}</td>
+                  <td>{truncateText(r.answer, 60)}</td>
+                  <td style={{ verticalAlign: "top", whiteSpace: "nowrap" }}>{formatTokens(r)}</td>
+                  <td style={{ verticalAlign: "top" }}>
+                    {formatStatus(r) === "truncated" ? (
+                      <span className="badge-truncated">truncated</span>
+                    ) : (
+                      formatStatus(r)
+                    )}
+                  </td>
+                  <td style={{ verticalAlign: "top", whiteSpace: "nowrap" }}>
+                    {r.created_at ?? "-"}
+                  </td>
+                  {isRanked ? (
+                    <>
+                      <td style={{ verticalAlign: "top", whiteSpace: "nowrap" }}>
+                        {hit ? hit.score.toFixed(2) : "-"}
+                      </td>
+                      <td style={{ verticalAlign: "top", maxWidth: "16rem" }}>
+                        {hit?.snippet ? (
+                          <pre className="snippet search-snippet">{hit.snippet}</pre>
+                        ) : (
+                          "-"
+                        )}
+                      </td>
+                    </>
+                  ) : null}
+                  <td style={{ verticalAlign: "top" }}>
+                    <button
+                      type="button"
+                      className="danger-btn"
+                      disabled={deletingId === id}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void onDeleteOne(r);
+                      }}
+                    >
+                      {deletingId === id ? "削除中…" : "削除"}
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
