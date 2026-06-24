@@ -31,6 +31,7 @@ from joryu.compose import (
     builder_prune_command,
     compose_build_command,
     compose_up_command,
+    image_prune_command,
     run,
 )
 from joryu.preflight import (
@@ -120,8 +121,24 @@ def main(argv: list[str] | None = None) -> int:
     try:
         check_disk_space(build_services, repo_root, force=args.force)
     except PreflightError as exc:
-        print(exc, file=sys.stderr)
-        return 1
+        # 容量が足りなくても build 対象がある時は、まず dangling image / 旧 build cache を
+        # 自動で回収して再チェックする (joryu-up が世代毎に積み上げた中間層が主因のため)。
+        if build_services and not args.force:
+            print(
+                "[joryu-up] 容量不足のため `docker image prune` / "
+                "`docker builder prune` を試行します",
+                file=sys.stderr,
+            )
+            run(image_prune_command())
+            run(builder_prune_command())
+            try:
+                check_disk_space(build_services, repo_root, force=args.force)
+            except PreflightError as exc2:
+                print(exc2, file=sys.stderr)
+                return 1
+        else:
+            print(exc, file=sys.stderr)
+            return 1
 
     if "dashboard" in up_services:
         ensure_dashboard_data_paths(repo_root)

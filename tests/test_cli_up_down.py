@@ -251,6 +251,7 @@ def test_up_builds_joryu_when_image_missing(monkeypatch: pytest.MonkeyPatch) -> 
 
 
 def test_up_aborts_on_insufficient_disk(monkeypatch: pytest.MonkeyPatch) -> None:
+    """空き容量不足が prune 後も解消しない時は abort する。"""
     calls = _patch_runner(monkeypatch)
     monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: {"joryu"})
 
@@ -268,7 +269,45 @@ def test_up_aborts_on_insufficient_disk(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setattr("joryu.cli.up.check_disk_space", _fail_disk)
     rc = cli_up.main([])
     assert rc == 1
-    assert calls == []
+    # build 対象がある場合は image prune + builder prune を試行する
+    assert calls == [
+        ["docker", "image", "prune", "-f"],
+        ["docker", "builder", "prune", "-f"],
+    ]
+
+
+def test_up_auto_prunes_and_continues_when_disk_recovered(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """1 回目の disk check 失敗 → prune → 2 回目成功なら build/up を続行する。"""
+    calls = _patch_runner(monkeypatch)
+    monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: {"joryu"})
+
+    attempts: list[int] = []
+
+    def _flaky_disk(
+        services: list[str],
+        repo_root: object,
+        *,
+        force: bool,
+        disk_usage_fn: object = None,
+    ) -> None:
+        attempts.append(1)
+        if len(attempts) == 1:
+            from joryu.preflight import PreflightError
+
+            raise PreflightError("disk tight, retry after prune")
+
+    monkeypatch.setattr("joryu.cli.up.check_disk_space", _flaky_disk)
+    rc = cli_up.main([])
+    assert rc == 0
+    assert len(attempts) == 2
+    # 期待する呼び出し順: image prune → builder prune → build → builder prune (再) → up
+    assert calls[0] == ["docker", "image", "prune", "-f"]
+    assert calls[1] == ["docker", "builder", "prune", "-f"]
+    assert calls[2] == ["docker", "compose", "build", "joryu"]
+    assert calls[3] == ["docker", "builder", "prune", "-f"]
+    assert calls[4][:3] == ["docker", "compose", "up"]
 
 
 def test_up_force_bypasses_disk_check(monkeypatch: pytest.MonkeyPatch) -> None:
