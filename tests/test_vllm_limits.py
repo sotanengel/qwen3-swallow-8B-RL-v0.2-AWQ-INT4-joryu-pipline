@@ -35,19 +35,33 @@ def test_is_vram_limit_error_unrelated() -> None:
     assert not is_vram_limit_error(RuntimeError("connection refused"))
 
 
-def test_is_vram_limit_error_engine_core_wrapper() -> None:
-    """vLLM v1 が KV cache 不足を EngineCore RuntimeError に包むケース。"""
+def test_is_vram_limit_error_engine_core_wrapper_alone_is_not_vram() -> None:
+    """v1 wrapper 単独 (内側に真の VRAM 原因なし) は VRAM 扱いしない。
+
+    FlashInfer JIT 失敗や依存ライブラリ初期化失敗もこの wrapper でラップ
+    されるため、wrapper だけを根拠に降格すると probe が無関係な原因で
+    過剰降格する。
+    """
     exc = RuntimeError(
         "Engine core initialization failed. See root cause above. Failed core proc(s): {}"
     )
-    assert is_vram_limit_error(exc)
+    assert not is_vram_limit_error(exc)
 
 
 def test_is_vram_limit_error_chained_kv_cache() -> None:
+    """v1 wrapper に包まれていても、チェーン内に KV cache 例外があれば VRAM 扱い。"""
     inner = ValueError(KV_CACHE_VALUE_ERROR)
     outer = RuntimeError("Engine core initialization failed")
     outer.__cause__ = inner
     assert is_vram_limit_error(outer)
+
+
+def test_is_vram_limit_error_chained_non_vram_is_not_vram() -> None:
+    """v1 wrapper の内側が非 VRAM の失敗 (例: FlashInfer JIT) なら False。"""
+    inner = RuntimeError("FlashInfer JIT compilation failed: ninja exited with status 127")
+    outer = RuntimeError("Engine core initialization failed")
+    outer.__cause__ = inner
+    assert not is_vram_limit_error(outer)
 
 
 def test_load_probe_limits_missing(tmp_path) -> None:

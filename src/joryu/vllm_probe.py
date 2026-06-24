@@ -98,7 +98,22 @@ def probe_limits(
             print(f"[probe] OK num_ctx={num_ctx} num_predict={num_predict}", flush=True)
             return VllmLimits(num_ctx=num_ctx, num_predict=num_predict)
         except Exception as exc:  # noqa: BLE001
-            print(f"[probe] failed: {exc}", flush=True)
+            print(
+                f"[probe] failed at (num_ctx={num_ctx}, num_predict={num_predict}): "
+                f"{type(exc).__name__}: {exc}",
+                flush=True,
+            )
+            inner = exc.__cause__ or exc.__context__
+            seen: set[int] = {id(exc)}
+            depth = 0
+            while inner is not None and id(inner) not in seen and depth < 4:
+                seen.add(id(inner))
+                print(
+                    f"[probe]   caused by: {type(inner).__name__}: {inner}",
+                    flush=True,
+                )
+                inner = inner.__cause__ or inner.__context__
+                depth += 1
             if not is_vram_limit_error(exc):
                 raise
             gc.collect()
@@ -140,6 +155,14 @@ def run_probe(*, config: str | Path, out: str | Path | None = None) -> int:
         extra={"config_fingerprint": vllm_config_fingerprint(cfg)},
     )
     print(f"[probe] wrote {out_path}")
+    if limits.num_ctx < cfg.model.num_ctx:
+        print(
+            f"[probe] WARNING: probed num_ctx={limits.num_ctx} is below "
+            f"requested {cfg.model.num_ctx}. Inspect [probe] failure logs above. "
+            f"If failures are not VRAM-related (e.g. FlashInfer JIT errors), "
+            f"the probe should not have degraded — please report.",
+            file=sys.stderr,
+        )
     return 0
 
 

@@ -193,6 +193,17 @@ def main(argv: list[str] | None = None) -> int:
     open_browser = _should_open_browser(args, up_services)
     if open_browser and not args.detach:
         schedule_open_dashboard()
+    # フォアグラウンドのまま compose up に入ると docker がログをストリームし続け、
+    # Ctrl-C するまで joryu-up が返らない。これは docker compose 仕様だが、
+    # 「joryu-up が帰ってこない」と誤解されやすいので意図を明示する。
+    if args.detach:
+        print("[joryu-up] starting `docker compose up --detach`", file=sys.stderr)
+    else:
+        print(
+            "[joryu-up] starting `docker compose up` in foreground "
+            "(Ctrl-C to stop; pass --detach to background instead)",
+            file=sys.stderr,
+        )
     rc = run(cmd)
     if rc == 0:
         head = git_head_at(repo_root)
