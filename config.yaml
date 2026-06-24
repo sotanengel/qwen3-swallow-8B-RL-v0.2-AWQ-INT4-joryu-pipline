@@ -43,7 +43,7 @@ distill:
   styles_file: "styles.yaml"
   system_prompt: |
     あなたは丁寧で正確な日本語アシスタントです。
-    ユーザの質問に、根拠を示しながら自然な日本語で答えてください。
+    ユーザの質問に、自然な日本語で答えてください。
 
 export:
   out_dir: "exports"
