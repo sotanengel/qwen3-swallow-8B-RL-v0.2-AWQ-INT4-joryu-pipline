@@ -540,6 +540,24 @@ def joryu_container_running(*, docker_run: _InspectRunner | None = None) -> bool
     return proc.returncode == 0 and proc.stdout.strip() == "true"
 
 
+def stop_joryu_for_up(
+    *,
+    docker_run: _InspectRunner | None = None,
+    log: Callable[[str], None] | None = None,
+) -> None:
+    """GPU 占有中の joryu 常駐コンテナを停止して VRAM を解放する。"""
+    if not joryu_container_running(docker_run=docker_run):
+        return
+    runner = docker_run or subprocess.run
+    _emit_preflight_log("[joryu-up] stopping existing joryu container", log)
+    runner(
+        ["docker", "stop", "--time", "30", "joryu"],
+        capture_output=False,
+        text=True,
+        check=False,
+    )
+
+
 def ensure_curation(
     repo_root: Path,
     up_services: list[str],
@@ -553,7 +571,7 @@ def ensure_curation(
     from joryu.cli.curate import main as curate_main
     from joryu.paths import DEFAULT_CONFIG
 
-    use_llm = "joryu" in up_services and joryu_container_running()
+    use_llm = "joryu" not in up_services and joryu_container_running()
     argv = ["--config", DEFAULT_CONFIG]
     if not use_llm:
         argv.append("--skip-llm")
@@ -589,7 +607,7 @@ def vllm_limits_probe_needed(
     limits_path = resolve_vllm_limits_path(repo_root)
     if not limits_path.is_file():
         return True
-    if joryu_built:
+    if joryu_built and "joryu" not in up_services:
         return True
     cfg = resolve_optional_config(repo_root / DEFAULT_CONFIG)
     return limits_probe_stale(limits_path, vllm_config_fingerprint(cfg))

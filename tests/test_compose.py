@@ -7,6 +7,7 @@ from joryu.compose import (
     builder_prune_command,
     compose_build_command,
     compose_down_command,
+    compose_stop_command,
     compose_up_command,
     image_prune_command,
 )
@@ -54,6 +55,11 @@ def test_up_multiple_services() -> None:
     idx_j = cmd.index("joryu")
     idx_d = cmd.index("dashboard")
     assert idx_j < idx_d
+
+
+def test_stop_single_service() -> None:
+    cmd = compose_stop_command(services=["joryu"])
+    assert cmd == ["docker", "compose", "stop", "joryu"]
 
 
 def test_down_default() -> None:

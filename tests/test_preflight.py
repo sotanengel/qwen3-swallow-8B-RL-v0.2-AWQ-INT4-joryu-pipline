@@ -30,6 +30,7 @@ from joryu.preflight import (
     services_missing_build_at_head,
     services_to_build,
     should_force_recreate,
+    stop_joryu_for_up,
     vllm_limits_probe_needed,
 )
 
@@ -527,6 +528,102 @@ def test_vllm_limits_probe_needed_skips_fresh_limits(tmp_path: Path) -> None:
         extra={"config_fingerprint": vllm_config_fingerprint(cfg)},
     )
     assert vllm_limits_probe_needed(tmp_path, up_services=["dashboard", "api"]) is False
+
+
+def test_vllm_limits_probe_needed_joryu_built_skips_when_daemon_up_and_fresh(
+    tmp_path: Path,
+) -> None:
+    from joryu.config import Config
+    from joryu.vllm_limits import VllmLimits, vllm_config_fingerprint, write_probe_limits
+
+    cfg_yaml = "model:\n  limits_probe_file: data/vllm_limits.json\n"
+    (tmp_path / "config.yaml").write_text(cfg_yaml, encoding="utf-8")
+    cfg = Config()
+    write_probe_limits(
+        resolve_vllm_limits_path(tmp_path),
+        VllmLimits(num_ctx=1024, num_predict=640),
+        extra={"config_fingerprint": vllm_config_fingerprint(cfg)},
+    )
+    assert (
+        vllm_limits_probe_needed(
+            tmp_path,
+            up_services=["dashboard", "api", "joryu"],
+            joryu_built=True,
+        )
+        is False
+    )
+
+
+def test_vllm_limits_probe_needed_joryu_built_still_probes_api_only(
+    tmp_path: Path,
+) -> None:
+    from joryu.config import Config
+    from joryu.vllm_limits import VllmLimits, vllm_config_fingerprint, write_probe_limits
+
+    cfg_yaml = "model:\n  limits_probe_file: data/vllm_limits.json\n"
+    (tmp_path / "config.yaml").write_text(cfg_yaml, encoding="utf-8")
+    cfg = Config()
+    write_probe_limits(
+        resolve_vllm_limits_path(tmp_path),
+        VllmLimits(num_ctx=1024, num_predict=640),
+        extra={"config_fingerprint": vllm_config_fingerprint(cfg)},
+    )
+    assert (
+        vllm_limits_probe_needed(
+            tmp_path,
+            up_services=["dashboard", "api"],
+            joryu_built=True,
+        )
+        is True
+    )
+
+
+def test_ensure_curation_skips_llm_when_joryu_in_up_services(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    (tmp_path / "config.yaml").write_text(
+        "distill:\n  out_dir: data/distilled\n  out_file: responses.jsonl\n",
+        encoding="utf-8",
+    )
+    jsonl = tmp_path / "data" / "distilled" / "responses.jsonl"
+    jsonl.parent.mkdir(parents=True)
+    jsonl.write_text('{"prompt":"P","answer":"A"}\n', encoding="utf-8")
+    calls: list[list[str]] = []
+
+    def fake_curate(argv: list[str] | None = None) -> int:
+        calls.append(list(argv or []))
+        return 0
+
+    monkeypatch.setattr("joryu.cli.curate.main", fake_curate)
+    monkeypatch.setattr("joryu.preflight.joryu_container_running", lambda **_: True)
+    rc = ensure_curation(tmp_path, ["dashboard", "api", "joryu"])
+    assert rc == 0
+    assert calls == [["--config", "config.yaml", "--skip-llm"]]
+
+
+def test_stop_joryu_for_up_noop_when_not_running(monkeypatch) -> None:
+    calls: list[list[str]] = []
+
+    def fake_run(cmd: list[str], **_kwargs: object) -> _InspectResult:
+        calls.append(cmd)
+        return _InspectResult()
+
+    monkeypatch.setattr("joryu.preflight.joryu_container_running", lambda **_: False)
+    stop_joryu_for_up(docker_run=fake_run)
+    assert calls == []
+
+
+def test_stop_joryu_for_up_stops_running_container(monkeypatch) -> None:
+    calls: list[list[str]] = []
+
+    def fake_run(cmd: list[str], **_kwargs: object) -> _InspectResult:
+        calls.append(cmd)
+        return _InspectResult()
+
+    monkeypatch.setattr("joryu.preflight.joryu_container_running", lambda **_: True)
+    stop_joryu_for_up(docker_run=fake_run)
+    assert calls == [["docker", "stop", "--time", "30", "joryu"]]
 
 
 def test_ensure_vllm_limits_runs_probe_when_needed(tmp_path: Path, monkeypatch) -> None:

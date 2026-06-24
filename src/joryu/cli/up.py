@@ -49,6 +49,7 @@ from joryu.preflight import (
     save_up_state,
     services_to_build,
     should_force_recreate,
+    stop_joryu_for_up,
 )
 from joryu.readiness import wait_for_up_services
 
@@ -161,6 +162,9 @@ def main(argv: list[str] | None = None) -> int:
         except PreflightError as exc:
             print(exc, file=sys.stderr)
             return 1
+
+    if "joryu" in up_services:
+        stop_joryu_for_up()
 
     rc = ensure_curation(repo_root, up_services)
     if rc is not None and rc != 0:

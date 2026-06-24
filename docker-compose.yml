@@ -36,7 +36,7 @@ services:
               count: all
               capabilities: [gpu]
     command: ["joryu-llm-serve", "--host", "0.0.0.0", "--port", "8100"]
-    restart: unless-stopped
+    restart: "on-failure:3"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8100/health"]
       interval: 15s

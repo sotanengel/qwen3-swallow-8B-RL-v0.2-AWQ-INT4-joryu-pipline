@@ -47,6 +47,7 @@ def _patch_runner(
     monkeypatch.setattr("joryu.cli.up.ensure_stats_json", lambda *_args, **_kwargs: None)
     monkeypatch.setattr("joryu.cli.up.ensure_curation", lambda *_args, **_kwargs: None)
     monkeypatch.setattr("joryu.cli.up.ensure_vllm_limits", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("joryu.cli.up.stop_joryu_for_up", lambda **_kwargs: None)
     monkeypatch.setattr("joryu.preflight.services_missing_build_at_head", lambda *_a, **_k: set())
     monkeypatch.setattr("joryu.preflight.git_head_at", lambda *_a, **_k: "test-head")
     monkeypatch.setattr("joryu.cli.up.save_up_state", lambda *_args, **_kwargs: None)
@@ -62,6 +63,36 @@ def test_up_default_no_changes_builds_nothing(monkeypatch: pytest.MonkeyPatch) -
     assert rc == 0
     assert len(calls) == 1
     assert calls[0] == ["docker", "compose", "up", "dashboard", "api", "joryu"]
+
+
+def test_up_stops_joryu_before_compose_up(monkeypatch: pytest.MonkeyPatch) -> None:
+    """joryu を up する既定フローでは compose up 前に既存 joryu を停止する。"""
+    calls = _patch_runner(monkeypatch)
+    order: list[str] = []
+    monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: set())
+    monkeypatch.setattr(
+        "joryu.cli.up.stop_joryu_for_up",
+        lambda **_: order.append("stop_joryu"),
+    )
+
+    rc = cli_up.main([])
+    assert rc == 0
+    assert order == ["stop_joryu"]
+    assert calls[0][0:3] == ["docker", "compose", "up"]
+
+
+def test_up_frontend_only_does_not_stop_joryu(monkeypatch: pytest.MonkeyPatch) -> None:
+    stop_calls: list[str] = []
+    calls = _patch_runner(monkeypatch)
+    monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: {"joryu"})
+    monkeypatch.setattr(
+        "joryu.cli.up.stop_joryu_for_up",
+        lambda **_: stop_calls.append("stop"),
+    )
+    rc = cli_up.main(["--frontend-only"])
+    assert rc == 0
+    assert stop_calls == []
+    assert calls[0] == ["docker", "compose", "up", "dashboard"]
 
 
 def test_up_joryu_diff_triggers_build_then_up(monkeypatch: pytest.MonkeyPatch) -> None:
