@@ -22,6 +22,7 @@ bash scripts/setup-dev.sh
 2. `uv run ruff format --check .`
 3. `uvx pre-commit run --all-files`（zizmor / pinact / 基本フック含む）
 4. `uv run pytest --cov=joryu --cov-report=term-missing`
+5. `bash scripts/verify_pipeline.sh`（CI と同じ end-to-end スモーク）
 
 `--quick` は開発中の途中確認のみ。PR・コミット前では使用禁止。
 

@@ -48,6 +48,9 @@ fi
 if [ "$QUICK" -eq 0 ] && [ "$SKIP_PYTEST" -eq 0 ]; then
   log "pytest"
   uv run pytest --cov=joryu --cov-report=term-missing
+
+  log "verify_pipeline (CI smoke)"
+  bash scripts/verify_pipeline.sh
 fi
 
 log "OK: all checks passed"
