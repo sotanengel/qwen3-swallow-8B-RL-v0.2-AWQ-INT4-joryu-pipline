@@ -91,6 +91,12 @@ def test_partial_yaml_falls_back_to_defaults(tmp_path: Path) -> None:
     assert cfg.vllm.dtype == "bfloat16"
 
 
+def test_default_system_prompt_avoids_reasoning_bias() -> None:
+    prompt = Config().distill.system_prompt
+    assert "根拠を示しながら" not in prompt
+    assert "自然な日本語で答えてください" in prompt
+
+
 def test_config_hash_is_stable_and_changes_with_content() -> None:
     a = Config()
     b = Config()
