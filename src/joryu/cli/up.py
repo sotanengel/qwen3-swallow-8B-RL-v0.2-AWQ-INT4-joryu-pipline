@@ -125,7 +125,8 @@ def main(argv: list[str] | None = None) -> int:
         # 自動で回収して再チェックする (joryu-up が世代毎に積み上げた中間層が主因のため)。
         if build_services and not args.force:
             print(
-                "[joryu-up] 容量不足のため `docker image prune` / `docker builder prune` を試行します",
+                "[joryu-up] 容量不足のため `docker image prune` / "
+                "`docker builder prune` を試行します",
                 file=sys.stderr,
             )
             run(image_prune_command())
