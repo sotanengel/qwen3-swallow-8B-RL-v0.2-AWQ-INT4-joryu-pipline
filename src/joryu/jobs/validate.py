@@ -9,7 +9,7 @@ from joryu.config import load_config
 from joryu.jobs.models import CurateJobSpec, DistillJobSpec
 from joryu.preflight import jsonl_has_content, resolve_distill_jsonl
 from joryu.styles import load_styles, resolve_style_ids
-from joryu.variants import parse_comma_list, parse_float_list
+from joryu.variants import parse_comma_list, parse_float_list, parse_modes
 
 
 def validate_job_spec(spec: DistillJobSpec, *, repo_root: Path | None = None) -> None:
@@ -23,8 +23,11 @@ def validate_job_spec(spec: DistillJobSpec, *, repo_root: Path | None = None) ->
         except ValueError as exc:
             raise ValueError(str(exc)) from exc
 
-    if spec.mode is not None and spec.mode not in ("thinking", "nothinking"):
-        raise ValueError("mode must be 'thinking' or 'nothinking'")
+    if spec.mode is not None:
+        try:
+            parse_modes(spec.mode)
+        except ValueError as exc:
+            raise ValueError(str(exc)) from exc
 
     cfg_path = Path(spec.config)
     if not cfg_path.is_absolute() and repo_root is not None:

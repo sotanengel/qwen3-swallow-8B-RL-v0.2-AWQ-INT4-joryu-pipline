@@ -10,7 +10,7 @@ SFT 教師データとして再利用可能な形で配布する。
 1. **オフライン蒸留**: 4,000+ 個の日本語プロンプトに対する高品質な回答を生成する。
 2. **文体・サンプリング掃き出し**: 同一プロンプトを文体 / temperature / top_p で
    直積展開して多様なバリアントを生成する。
-3. **推論/非推論モード切替**: thinking と nothinking で得られるデータを使い分ける。
+3. **推論/非推論/自動モード切替**: thinking / nothinking / auto (`enable_thinking` 未指定で Qwen3 既定に委ねる) で得られるデータを使い分ける。
 4. **データ配布**: zstd 圧縮 + SHA256 + meta.json で別リポジトリへ持ち運ぶ。
 5. **品質確認**: 検索 + 分布のダッシュボードで蒸留データの偏りを目視する。
 
@@ -19,7 +19,7 @@ SFT 教師データとして再利用可能な形で配布する。
 | ID | 要件 | 実装 |
 |---|---|---|
 | R-01 | プロンプト 1 行ごとに `mode` / `sampling` / `system_prompt` 上書きできる | [src/joryu/prompt_bank.py](../src/joryu/prompt_bank.py) |
-| R-02 | 推論モード (`<think>...</think>` 含む) と非推論モードを切替できる | [src/joryu/distill.py](../src/joryu/distill.py), [src/joryu/vllm_client.py](../src/joryu/vllm_client.py) |
+| R-02 | 推論モード (`<think>...</think>` 含む) / 非推論 / auto（モデル自己判定、`effective_mode` で実測記録）を切替できる | [src/joryu/distill.py](../src/joryu/distill.py), [src/joryu/vllm_client.py](../src/joryu/vllm_client.py) |
 | R-03 | 中断・再開が安全 (既処理レコードはスキップ) | [src/joryu/progress.py](../src/joryu/progress.py), [src/joryu/writer.py](../src/joryu/writer.py) |
 | R-04 | 実行コマンドは簡略 (count / duration のみで起動可能) | [src/joryu/cli/distill.py](../src/joryu/cli/distill.py) |
 | R-05 | Windows でも実行できる (Docker 自動委譲) | [src/joryu/docker_delegate.py](../src/joryu/docker_delegate.py) |
@@ -42,7 +42,7 @@ SFT 教師データとして再利用可能な形で配布する。
 
 - **VRAM**: 8GB (RTX 3060 Ti) 想定。`num_ctx=2048` / `num_predict=1024`（`scripts/probe_vllm_limits.py` で OOM 時自動降格）
 - **CPU CI**: vLLM は遅延 import + Fake クライアントでテスト
-- **再現性**: 出力レコードに `config_hash` と effective `sampling` / `mode` を記録
+- **再現性**: 出力レコードに `config_hash` と effective `sampling` / `mode` / `effective_mode` を記録
 - **データ非コミット**: `data/` / `exports/` / `models/` は `.gitignore`
 
 ## 制約

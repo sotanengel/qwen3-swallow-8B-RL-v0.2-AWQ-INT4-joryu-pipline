@@ -32,7 +32,7 @@ class FakeVllmClient:
         self,
         messages: list[dict[str, str]],
         *,
-        enable_thinking: bool = True,
+        enable_thinking: bool | None = True,
         **sampling_overrides: Any,
     ) -> ChatResult:
         self.calls.append(
@@ -51,9 +51,12 @@ class FakeVllmClient:
             answer = self.answers[min(idx, len(self.answers) - 1)]
         else:
             answer = self.answer
-        thinking = self.thinking if enable_thinking else None
+        if enable_thinking is False:
+            thinking_out: str | None = None
+        else:
+            thinking_out = self.thinking
         return ChatResult(
-            thinking=thinking,
+            thinking=thinking_out,
             answer=answer,
             finish_reason=finish_reason,
             prompt_tokens=10,

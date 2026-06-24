@@ -12,7 +12,7 @@ from joryu.config import load_config
 from joryu.distill import default_stats_refresher, load_style_presets_from_config, run_distill
 from joryu.docker_delegate import DEFAULT_IMAGE, run_in_docker, should_use_docker
 from joryu.jobs.models import DistillJobSpec
-from joryu.variants import parse_float_list
+from joryu.variants import parse_float_list, parse_modes
 from joryu.vllm_client import SupportsChat
 
 
@@ -36,9 +36,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--duration", default="", help="実行時間上限 (例: 2h, 30m, 1h30m)")
     p.add_argument(
         "--mode",
-        choices=("thinking", "nothinking"),
         default=None,
-        help="行に mode が無い場合の既定モード (config.model.mode を上書き)",
+        help="推論モード (thinking / nothinking / auto)。カンマ区切りで直積スイープ可",
     )
     p.add_argument(
         "--style",
@@ -108,8 +107,13 @@ def main(argv: list[str] | None = None, *, _client: SupportsChat | None = None) 
 
     try:
         cfg = load_config(spec.config)
+        mode_sweep: list[str] | None = None
         if spec.mode is not None:
-            cfg.model.mode = spec.mode
+            parsed_modes = parse_modes(spec.mode)
+            if parsed_modes is not None and len(parsed_modes) == 1:
+                cfg.model.mode = parsed_modes[0]
+            elif parsed_modes is not None and len(parsed_modes) > 1:
+                mode_sweep = list(parsed_modes)
 
         style_presets = load_style_presets_from_config(cfg, spec.style)
         temperatures = parse_float_list(
@@ -140,6 +144,7 @@ def main(argv: list[str] | None = None, *, _client: SupportsChat | None = None) 
         style_presets=style_presets or None,
         temperatures=temperatures,
         top_ps=top_ps,
+        modes=mode_sweep,
         stats_refresher=default_stats_refresher,
     )
     return 0

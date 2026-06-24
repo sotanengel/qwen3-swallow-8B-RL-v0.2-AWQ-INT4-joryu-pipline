@@ -66,6 +66,28 @@ def test_parser_mode_override() -> None:
     assert args.count == 5
 
 
+def test_parser_mode_comma_list() -> None:
+    args = build_parser().parse_args(["--mode", "thinking,auto"])
+    assert args.mode == "thinking,auto"
+
+
+def test_main_invalid_mode_returns_error(tmp_path: Path) -> None:
+    bank = tmp_path / "bank.jsonl"
+    bank.write_text(json.dumps({"prompt": "Q"}) + "\n", encoding="utf-8")
+    cfg_yaml = tmp_path / "c.yaml"
+    cfg_yaml.write_text(
+        "distill:\n"
+        f'  prompt_bank: "{bank.as_posix()}"\n'
+        f'  out_dir: "{tmp_path.as_posix()}"\n'
+        '  out_file: "out.jsonl"\n',
+        encoding="utf-8",
+    )
+    from joryu.cli import distill as cli
+
+    rc = cli.main(["--no-docker", "--config", str(cfg_yaml), "--mode", "invalid"])
+    assert rc == 2
+
+
 def test_main_runs_native_with_fake_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     bank = tmp_path / "bank.jsonl"
     bank.write_text(json.dumps({"prompt": "Q"}) + "\n", encoding="utf-8")

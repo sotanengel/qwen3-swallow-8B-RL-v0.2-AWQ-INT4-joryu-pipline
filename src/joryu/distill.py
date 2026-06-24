@@ -11,7 +11,7 @@ from functools import partial
 from pathlib import Path
 from typing import Any
 
-from joryu.config import Config
+from joryu.config import Config, Mode
 from joryu.dashboard_json import write_dashboard_json
 from joryu.distill_live import DistillLiveState
 from joryu.distill_retry import generate_until_complete
@@ -47,6 +47,7 @@ def _build_record(
         "category": row.category,
         "style_id": eff.style_id,
         "mode": eff.mode,
+        "effective_mode": "thinking" if thinking else "nothinking",
         "system_prompt": eff.system_prompt,
         "sampling": sampling,
         "thinking_trace": thinking,
@@ -170,6 +171,7 @@ def run_distill(
     style_presets: list[StylePreset] | None = None,
     temperatures: list[float] | None = None,
     top_ps: list[float] | None = None,
+    modes: list[Mode] | None = None,
     _print: Any = None,
     stats_refresher: Callable[[Path], None] | None = None,
 ) -> int:
@@ -189,6 +191,7 @@ def run_distill(
         style_presets=style_presets,
         temperatures=temperatures,
         top_ps=top_ps,
+        modes=modes,
     )
     done = load_done_keys(out_p)
     if redo_truncated and out_p.exists():
@@ -246,7 +249,12 @@ def run_distill(
                     {"role": "user", "content": row.prompt},
                 ]
 
-                enable_thinking = eff.mode == "thinking"
+                if eff.mode == "thinking":
+                    enable_thinking: bool | None = True
+                elif eff.mode == "nothinking":
+                    enable_thinking = False
+                else:
+                    enable_thinking = None
                 build_record = partial(
                     _record_from_chat,
                     row=row,
