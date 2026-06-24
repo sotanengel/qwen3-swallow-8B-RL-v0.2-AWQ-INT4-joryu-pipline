@@ -11,10 +11,17 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Protocol
 
+# Docker build に最低限欲しいホスト空き容量 (GB)。
+# 過去は full from-scratch build を想定した保守的見積 (dashboard=5/api=2/joryu=25, 計32GB)
+# だったが、既存 image が存在する rebuild 系では layer cache が効くため実消費はもっと小さい。
+# - joryu image 実測: 21.7GB (full build), 増分 rebuild: 数GB
+# - api/dashboard image: 0.2-0.8GB
+# 「rebuild に最低限必要な C: 余裕」として現実値に寄せる。
+# 初回 full build で足りない時は `--force` でスキップ可。
 DISK_REQUIRED_GB: dict[str, float] = {
-    "dashboard": 5.0,
-    "api": 2.0,
-    "joryu": 25.0,
+    "dashboard": 2.0,
+    "api": 1.0,
+    "joryu": 10.0,
 }
 
 _JORYU_PATHS = frozenset(
