@@ -28,5 +28,16 @@ def resolve_cli_config(args: argparse.Namespace) -> Config:
 
 
 def resolve_cli_distill_input(args: argparse.Namespace, cfg: Config) -> Path:
-    """stats/export 等: 蒸留 JSONL 入力パスを args.input から解決する。"""
-    return resolve_distill_output(cfg, args.input or None)
+    """stats/export 等: 蒸留 JSONL 入力パスを args.input から解決する。
+
+    - ``--input`` 明示時: cwd 基準 (従来どおり。verify_pipeline 等の相対パス指定向け)
+    - config 既定時: ``--config`` の親ディレクトリ基準 (API コンテナ cwd=/app 対策)
+    """
+    if args.input:
+        raw = Path(args.input)
+        return raw if raw.is_absolute() else raw.resolve()
+    raw = resolve_distill_output(cfg, None)
+    if raw.is_absolute():
+        return raw
+    config_dir = Path(args.config).resolve().parent
+    return (config_dir / raw).resolve()
