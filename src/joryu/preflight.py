@@ -32,6 +32,7 @@ _JORYU_PATHS = frozenset(
         "uv.lock",
         "config.yaml",
         "styles.yaml",
+        "tools.yaml",
         "README.md",
         ".dockerignore",
     }

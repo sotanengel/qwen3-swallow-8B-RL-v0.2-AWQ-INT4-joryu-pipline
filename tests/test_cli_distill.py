@@ -100,6 +100,7 @@ def test_main_runs_native_with_fake_client(tmp_path: Path, monkeypatch: pytest.M
         '  out_file: "out.jsonl"\n',
         encoding="utf-8",
     )
+    (tmp_path / "tools.yaml").write_text("tools: {}\n", encoding="utf-8")
 
     from joryu.cli import distill as cli_distill
     from tests.conftest import FakeVllmClient

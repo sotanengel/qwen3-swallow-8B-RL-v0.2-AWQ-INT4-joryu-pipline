@@ -38,6 +38,7 @@ export:
   out_dir: "$exp_dir"
   level: 3
 EOF
+cp "$ROOT/tools.yaml" "$work/tools.yaml"
 
 echo "[verify] step 1: joryu-distill (FakeVllmClient via tests harness)" >&2
 JORYU_VERIFY_CFG="$cfg" uv run python - <<'PY'

@@ -110,6 +110,8 @@ def build_docker_delegate_command(repo_root: Path, spec: DistillJobSpec) -> list
         hf_cache=mounts.hf_cache,
         styles_path=mounts.styles_path,
         styles_rel=mounts.styles_rel,
+        tools_path=mounts.tools_path,
+        tools_rel=mounts.tools_rel,
         allocate_tty=False,
         extra_args=spec.to_distill_argv(),
     )
@@ -217,6 +219,8 @@ def build_curate_docker_delegate_command(
         hf_cache=mounts.hf_cache,
         styles_path=mounts.styles_path,
         styles_rel=mounts.styles_rel,
+        tools_path=mounts.tools_path,
+        tools_rel=mounts.tools_rel,
         allocate_tty=False,
         extra_args=_curate_argv_with_dst(spec, job_id),
         cli_module="joryu.cli.curate",

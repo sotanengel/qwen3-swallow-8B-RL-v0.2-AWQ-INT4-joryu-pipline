@@ -98,6 +98,33 @@ def test_build_docker_command_mounts_styles_when_provided(tmp_path: Path) -> Non
     assert "--style" in cmd and "polite" in cmd
 
 
+def test_build_docker_command_mounts_tools_when_provided(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text("model: {}\n", encoding="utf-8")
+    src_dir = tmp_path / "src"
+    src_dir.mkdir()
+    data_dir = tmp_path / "data"
+    hf_cache = tmp_path / "hf"
+    tools_path = tmp_path / "tools.yaml"
+    tools_path.write_text("tools: {}\n", encoding="utf-8")
+
+    cmd = build_docker_command(
+        image="joryu:test",
+        cwd=tmp_path,
+        config_path=config_path,
+        config_rel="config.yaml",
+        src_dir=src_dir,
+        data_dir=data_dir,
+        hf_cache=hf_cache,
+        tools_path=tools_path,
+        tools_rel="tools.yaml",
+        extra_args=["--tool-ids", "search"],
+    )
+
+    flat = " ".join(cmd)
+    assert f"{tools_path}:/app/tools.yaml:ro" in flat
+
+
 def test_build_docker_command_allocates_tty_when_requested(tmp_path: Path) -> None:
     config_path = tmp_path / "config.yaml"
     config_path.write_text("model: {}\n", encoding="utf-8")

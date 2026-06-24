@@ -54,6 +54,8 @@ def build_docker_command(
     dashboard_public_dir: Path | None = None,
     styles_path: Path | None = None,
     styles_rel: str | None = None,
+    tools_path: Path | None = None,
+    tools_rel: str | None = None,
     allocate_tty: bool = False,
     extra_args: list[str],
     cli_module: str = "joryu.cli.distill",
@@ -87,6 +89,9 @@ def build_docker_command(
     if styles_path is not None and styles_rel:
         rel = styles_rel.replace("\\", "/")
         cmd.extend(["-v", f"{styles_path}:/app/{rel}:ro"])
+    if tools_path is not None and tools_rel:
+        rel = tools_rel.replace("\\", "/")
+        cmd.extend(["-v", f"{tools_path}:/app/{rel}:ro"])
     module_argv: list[str] = ["python", "-m", cli_module]
     if native_flag:
         module_argv.append(native_flag)
@@ -152,6 +157,8 @@ def run_in_docker(
         hf_cache=mounts.hf_cache,
         styles_path=mounts.styles_path,
         styles_rel=mounts.styles_rel,
+        tools_path=mounts.tools_path,
+        tools_rel=mounts.tools_rel,
         allocate_tty=sys.stderr.isatty(),
         extra_args=extra_args,
         cli_module=cli_module,

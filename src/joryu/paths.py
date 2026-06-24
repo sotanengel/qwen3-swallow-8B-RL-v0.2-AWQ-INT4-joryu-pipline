@@ -27,6 +27,14 @@ def resolve_distill_output(cfg: Config, input_arg: str | Path | None) -> Path:
     return Path(cfg.distill.out_dir) / cfg.distill.out_file
 
 
+def resolve_config_relative(config_path: Path, rel: str) -> Path:
+    """config.yaml の親ディレクトリ基準で相対パスを絶対パスに解決する。"""
+    p = Path(rel)
+    if p.is_absolute():
+        return p.resolve()
+    return (config_path.parent / p).resolve()
+
+
 def resolve_repo_root(*, out_path: Path | None = None) -> Path | None:
     """stats.json 出力先を決めるリポジトリルートを返す。特定できなければ None。"""
     env = os.environ.get("JORYU_REPO_ROOT", "").strip()

@@ -23,6 +23,7 @@ services:
       - ./dashboard/public:/app/dashboard/public
       - ./config.yaml:/app/config.yaml:ro
       - ./styles.yaml:/app/styles.yaml:ro
+      - ./tools.yaml:/app/tools.yaml:ro
       - hf-cache:/root/.cache/huggingface
     deploy:
       resources:

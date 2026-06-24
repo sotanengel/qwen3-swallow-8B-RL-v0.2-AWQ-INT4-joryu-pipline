@@ -579,6 +579,41 @@ def test_variant_run_key_differs_by_tools(tmp_path: Path) -> None:
     assert key_a != key_b
 
 
+def test_run_distill_resolves_tools_from_config_path_parent(tmp_path: Path) -> None:
+    """config がサブディレクトリにある場合、tools.yaml は config 親基準で解決される。"""
+    cfg_dir = tmp_path / "configs"
+    cfg_dir.mkdir()
+    config_path = cfg_dir / "config.yaml"
+    config_path.write_text("distill:\n  tools_file: tools.yaml\n", encoding="utf-8")
+    (cfg_dir / "tools.yaml").write_text(
+        """
+tools:
+  search:
+    description: Web search
+    parameters:
+      type: object
+      properties:
+        query:
+          type: string
+      required: [query]
+""".strip(),
+        encoding="utf-8",
+    )
+    bank = tmp_path / "bank.jsonl"
+    _write_bank(bank, [{"prompt": "P1", "tool_ids": ["search"]}])
+    out = tmp_path / "out.jsonl"
+    cfg = Config()
+    client = FakeVllmClient(answer="A", thinking=None)
+    n = run_distill(
+        cfg,
+        bank_path=bank,
+        out_path=out,
+        client=client,
+        config_path=config_path,
+    )
+    assert n == 1
+
+
 def test_run_distill_override_tool_ids_applies_only_to_empty_rows(tmp_path: Path) -> None:
     bank = tmp_path / "bank.jsonl"
     _write_bank(
