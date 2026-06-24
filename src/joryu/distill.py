@@ -23,6 +23,7 @@ from joryu.progress_reporter import DistillProgressReporter
 from joryu.prompt_bank import EffectiveSampling, PromptRow, load_prompt_bank
 from joryu.stats import compute_stats, resolve_stats_output_path
 from joryu.styles import StylePreset, load_styles, resolve_style_ids
+from joryu.tool_executor import ToolExecutor, build_default_executor
 from joryu.tools import load_tools
 from joryu.variants import DistillVariant, expand_variants
 from joryu.vllm_client import ChatResult, SupportsChat, VllmClient, VllmError
@@ -42,6 +43,7 @@ def _build_record(
     model_name: str,
     config_hash: str,
     chat: ChatResult,
+    turns: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     sampling = dict(eff.sampling)
     if chat.effective_max_tokens is not None:
@@ -65,7 +67,7 @@ def _build_record(
         "tools": eff.tools,
         "tool_ids_requested": row.tool_ids,
         "tool_calls": [asdict(c) for c in chat.tool_calls],
-        "turns": [],
+        "turns": turns or [],
         "created_at": datetime.now(UTC).isoformat(),
     }
 
@@ -77,6 +79,7 @@ def _record_from_chat(
     eff: EffectiveSampling,
     model_name: str,
     config_hash: str,
+    turns: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     if eff.mode == "nothinking":
         chat = ChatResult(
@@ -98,7 +101,119 @@ def _record_from_chat(
         model_name=model_name,
         config_hash=config_hash,
         chat=chat,
+        turns=turns,
     )
+
+
+def _run_chat_loop(
+    client: SupportsChat,
+    messages: list[dict[str, str]],
+    *,
+    tools: list[dict[str, Any]] | None,
+    enable_thinking: bool | None,
+    executor: ToolExecutor | None,
+    max_turns: int,
+    sampling: dict[str, Any],
+) -> tuple[ChatResult, list[dict[str, Any]]]:
+    """tool_call が無くなるか max_turns に達するまで chat を回す。"""
+    turns: list[dict[str, Any]] = []
+    working_messages = list(messages)
+    final_chat: ChatResult | None = None
+    exhausted = False
+
+    for _turn in range(max_turns):
+        chat = client.chat_via_template(
+            working_messages,
+            enable_thinking=enable_thinking,
+            tools=tools,
+            **sampling,
+        )
+        final_chat = chat
+        turns.append(
+            {
+                "role": "assistant",
+                "content": chat.answer,
+                "tool_calls": [asdict(c) for c in chat.tool_calls],
+            }
+        )
+        if not chat.tool_calls or executor is None:
+            break
+
+        assistant_content = chat.answer or ""
+        for call in chat.tool_calls:
+            if call.name == "<malformed>":
+                result = "error: malformed tool_call"
+            else:
+                try:
+                    result = executor.run(call)
+                except (KeyError, ValueError) as exc:
+                    result = f"error: {exc}"
+            turns.append({"role": "tool", "name": call.name, "content": result})
+            working_messages = [
+                *working_messages,
+                {"role": "assistant", "content": assistant_content},
+                {"role": "tool", "content": result},
+            ]
+    else:
+        exhausted = final_chat is not None and bool(final_chat.tool_calls)
+
+    if final_chat is None:
+        raise RuntimeError("chat loop produced no result")
+
+    if exhausted:
+        final_chat = ChatResult(
+            thinking=final_chat.thinking,
+            answer=final_chat.answer,
+            finish_reason="tool_loop_exhausted",
+            prompt_tokens=final_chat.prompt_tokens,
+            completion_tokens=final_chat.completion_tokens,
+            effective_max_tokens=final_chat.effective_max_tokens,
+            tool_calls=final_chat.tool_calls,
+        )
+    return final_chat, turns
+
+
+def _make_tool_loop_chat_fn(
+    client: SupportsChat,
+    executor: ToolExecutor,
+    max_turns: int,
+    turns_holder: dict[str, list[dict[str, Any]]],
+) -> Callable[..., ChatResult]:
+    def _chat_with_loop(
+        loop_messages: list[dict[str, str]],
+        *,
+        enable_thinking: bool | None,
+        tools: list[dict[str, Any]] | None,
+        **sampling_kwargs: Any,
+    ) -> ChatResult:
+        chat, turns = _run_chat_loop(
+            client,
+            loop_messages,
+            tools=tools,
+            enable_thinking=enable_thinking,
+            executor=executor,
+            max_turns=max_turns,
+            sampling=sampling_kwargs,
+        )
+        turns_holder["turns"] = turns
+        return chat
+
+    return _chat_with_loop
+
+
+def _make_build_with_turns(
+    build_record: Callable[[ChatResult], dict[str, Any]],
+    *,
+    use_tool_loop: bool,
+    turns_holder: dict[str, list[dict[str, Any]]],
+) -> Callable[[ChatResult], dict[str, Any]]:
+    def _build_with_turns(chat: ChatResult) -> dict[str, Any]:
+        record = build_record(chat)
+        if use_tool_loop:
+            record["turns"] = turns_holder["turns"]
+        return record
+
+    return _build_with_turns
 
 
 def _report_truncation_retry(
@@ -192,6 +307,9 @@ def run_distill(
     temperatures: list[float] | None = None,
     top_ps: list[float] | None = None,
     modes: list[Mode] | None = None,
+    executor: ToolExecutor | None = None,
+    tool_loop: bool | None = None,
+    tool_loop_max_turns: int | None = None,
     _print: Any = None,
     stats_refresher: Callable[[Path], None] | None = None,
 ) -> int:
@@ -242,6 +360,14 @@ def run_distill(
     if client is None:
         client = VllmClient.from_config(config.model, config.vllm)
 
+    use_tool_loop = config.distill.tool_loop if tool_loop is None else tool_loop
+    loop_max_turns = (
+        config.distill.tool_loop_max_turns if tool_loop_max_turns is None else tool_loop_max_turns
+    )
+    loop_executor = executor
+    if use_tool_loop and loop_executor is None:
+        loop_executor = build_default_executor()
+
     reporter = DistillProgressReporter(
         prefix="[joryu-distill]",
         total_in_bank=total_in_bank,
@@ -287,6 +413,23 @@ def run_distill(
                     model_name=config.model.name,
                     config_hash=fingerprint,
                 )
+                turns_holder: dict[str, list[dict[str, Any]]] = {"turns": []}
+                chat_fn = (
+                    _make_tool_loop_chat_fn(
+                        client,
+                        loop_executor,
+                        loop_max_turns,
+                        turns_holder,
+                    )
+                    if use_tool_loop and loop_executor is not None
+                    else None
+                )
+                build_with_turns = _make_build_with_turns(
+                    build_record,
+                    use_tool_loop=use_tool_loop,
+                    turns_holder=turns_holder,
+                )
+
                 on_retry = partial(
                     _report_truncation_retry,
                     run_key=run_key,
@@ -302,7 +445,8 @@ def run_distill(
                         enable_thinking=enable_thinking,
                         tools=eff.tools or None,
                         sampling=eff.sampling,
-                        build_record=build_record,
+                        build_record=build_with_turns,
+                        chat_fn=chat_fn,
                         deadline=deadline,
                         min_interval_sec=config.distill.min_interval_sec,
                         on_retry=on_retry,

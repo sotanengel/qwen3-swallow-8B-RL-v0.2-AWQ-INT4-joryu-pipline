@@ -19,7 +19,8 @@ tools.yaml ───┤
               │
               ▼
    distill.py ─── chat_via_template ───▶ vllm_client.py ──▶ vLLM (GPU)
-              │                                              │
+              │         ▲                      │
+              │         └── tool_loop 時: tool_executor.py (Stub/Registry)
               │   ◄── enable_thinking で <think> 切替 (auto は kwargs 省略) ──┘
               │
               ▼

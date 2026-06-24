@@ -33,6 +33,6 @@ def record_looks_truncated(record: dict[str, Any]) -> bool:
     fr = record.get("finish_reason")
     if fr == "length":
         return True
-    if fr == "stop":
+    if fr in ("stop", "tool_loop_exhausted"):
         return False
     return answer_looks_truncated(str(record.get("answer") or ""))
