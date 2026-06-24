@@ -14,6 +14,7 @@ services:
     ports:
       - "8100:8100"
     environment:
+      - JORYU_REPO_ROOT=/app
       - VLLM_USE_DEEP_GEMM=0
       - VLLM_DEEP_GEMM_WARMUP=skip
       - VLLM_USE_FLASHINFER_SAMPLER=0

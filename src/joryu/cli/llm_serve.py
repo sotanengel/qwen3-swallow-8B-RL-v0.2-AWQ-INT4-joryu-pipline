@@ -7,7 +7,7 @@ import sys
 
 from joryu.config import load_config
 from joryu.llm_server import create_llm_app, warmup_client
-from joryu.paths import DEFAULT_CONFIG, resolve_repo_root
+from joryu.paths import DEFAULT_CONFIG, resolve_cli_config_path
 from joryu.vllm_client import VllmClient
 
 
@@ -28,8 +28,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    repo_root = resolve_repo_root()
-    config_path = (repo_root / args.config).resolve()
+    config_path = resolve_cli_config_path(args.config)
     cfg = load_config(config_path)
     port = args.port or cfg.vllm.serve_port
 

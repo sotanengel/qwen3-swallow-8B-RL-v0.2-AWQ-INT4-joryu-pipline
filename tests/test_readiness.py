@@ -82,6 +82,21 @@ def test_wait_for_api_uses_health_url(monkeypatch: pytest.MonkeyPatch) -> None:
     assert seen == [API_HEALTH_URL]
 
 
+def test_wait_for_dashboard_accepts_custom_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: list[str] = []
+
+    def _wait(url: str, **kwargs: object) -> bool:
+        del kwargs
+        seen.append(url)
+        return True
+
+    monkeypatch.setattr("joryu.readiness.wait_for_http_ok", _wait)
+    from joryu.readiness import wait_for_dashboard
+
+    assert wait_for_dashboard("http://custom:3000")
+    assert seen == ["http://custom:3000"]
+
+
 def test_wait_for_vllm_daemon_uses_default_url(monkeypatch: pytest.MonkeyPatch) -> None:
     seen: list[str] = []
 

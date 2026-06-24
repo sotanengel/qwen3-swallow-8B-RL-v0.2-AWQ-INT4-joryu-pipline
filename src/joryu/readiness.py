@@ -84,8 +84,11 @@ def wait_for_vllm_daemon(**kwargs: Any) -> bool:
     )
 
 
-def wait_for_dashboard(**kwargs: Any) -> bool:
-    return wait_for_http_ok(DASHBOARD_URL, **kwargs)
+def wait_for_dashboard(
+    url: str = DASHBOARD_URL,
+    **kwargs: Any,
+) -> bool:
+    return wait_for_http_ok(url, **kwargs)
 
 
 def resolve_vllm_health_url() -> str:

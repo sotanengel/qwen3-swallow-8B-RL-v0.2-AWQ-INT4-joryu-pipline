@@ -47,6 +47,15 @@ def resolve_repo_root(*, out_path: Path | None = None) -> Path | None:
     return None
 
 
+def resolve_cli_config_path(config_rel: str, *, cwd: Path | None = None) -> Path:
+    """CLI 用 config.yaml の絶対パス。JORYU_REPO_ROOT 未設定時は cwd (Docker では /app)。"""
+    p = Path(config_rel)
+    if p.is_absolute():
+        return p.resolve()
+    root = resolve_repo_root() or cwd or Path.cwd()
+    return (root / config_rel).resolve()
+
+
 def resolve_limits_probe_path(
     path: str | Path,
     *,
