@@ -13,6 +13,7 @@ COPY src ./src
 COPY scripts ./scripts
 COPY config.yaml ./config.yaml
 COPY styles.yaml ./styles.yaml
+COPY tools.yaml ./tools.yaml
 COPY README.md ./README.md
 RUN uv sync --frozen --no-dev
 

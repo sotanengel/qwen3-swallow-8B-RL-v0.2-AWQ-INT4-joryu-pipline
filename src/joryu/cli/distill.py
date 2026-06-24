@@ -6,6 +6,7 @@ import argparse
 import re
 import sys
 import time
+from pathlib import Path
 
 from joryu.cli.common import add_config_argument
 from joryu.config import load_config
@@ -164,6 +165,7 @@ def main(argv: list[str] | None = None, *, _client: SupportsChat | None = None) 
         tool_loop=bool(getattr(args, "tool_loop", False)),
         tool_loop_max_turns=getattr(args, "max_turns", None),
         override_tool_ids=parse_comma_list(getattr(args, "tool_ids", "")) or None,
+        config_path=Path(spec.config).resolve(),
         stats_refresher=default_stats_refresher,
     )
     return 0

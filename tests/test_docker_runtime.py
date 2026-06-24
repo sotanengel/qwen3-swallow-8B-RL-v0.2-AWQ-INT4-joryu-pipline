@@ -35,6 +35,24 @@ def test_prepare_distill_docker_mounts_normalizes_absolute_config_rel(tmp_path: 
     assert mounts.config_rel == "config.yaml"
 
 
+def test_prepare_distill_docker_mounts_includes_tools_path(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        "distill:\n  styles_file: styles.yaml\n  tools_file: tools.yaml\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "tools.yaml").write_text("tools: {}\n", encoding="utf-8")
+
+    mounts = prepare_distill_docker_mounts(
+        tmp_path,
+        config_path.resolve(),
+        mount_styles=False,
+    )
+    assert mounts.tools_path is not None
+    assert mounts.tools_path.resolve() == (tmp_path / "tools.yaml").resolve()
+    assert mounts.tools_rel == "tools.yaml"
+
+
 def test_build_docker_command_rejects_windows_absolute_container_path(tmp_path: Path) -> None:
     """絶対 config_rel が正規化されていればマウント先にドライブレターが入らない。"""
     config_path = tmp_path / "config.yaml"

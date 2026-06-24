@@ -18,6 +18,7 @@ from joryu.config import Config, Mode
 from joryu.dashboard_json import write_dashboard_json
 from joryu.distill_live import DistillLiveState
 from joryu.distill_retry import generate_until_complete
+from joryu.paths import DEFAULT_CONFIG, resolve_config_relative, resolve_repo_root
 from joryu.progress import load_done_keys, load_truncated_run_keys, run_key_from_parts
 from joryu.progress_reporter import DistillProgressReporter
 from joryu.prompt_bank import EffectiveSampling, PromptRow, load_prompt_bank
@@ -32,6 +33,24 @@ from joryu.writer import JsonlAppendWriter
 logger = logging.getLogger(__name__)
 
 STATS_REFRESH_INTERVAL_SEC = 3.0
+
+
+def _resolve_tools_path(
+    config: Config,
+    *,
+    config_path: Path | None,
+    out_p: Path,
+) -> Path:
+    """tools.yaml の絶対パスを config 親基準で解決する。"""
+    if config_path is not None:
+        return resolve_config_relative(config_path, config.distill.tools_file)
+    root = resolve_repo_root(out_path=out_p)
+    if root is not None:
+        return resolve_config_relative(root / DEFAULT_CONFIG, config.distill.tools_file)
+    rel = Path(config.distill.tools_file)
+    if rel.is_absolute():
+        return rel.resolve()
+    return rel.resolve()
 
 
 def _build_record(
@@ -311,6 +330,7 @@ def run_distill(
     tool_loop: bool | None = None,
     tool_loop_max_turns: int | None = None,
     override_tool_ids: list[str] | None = None,
+    config_path: Path | None = None,
     _print: Any = None,
     stats_refresher: Callable[[Path], None] | None = None,
 ) -> int:
@@ -329,9 +349,7 @@ def run_distill(
             replace(row, tool_ids=list(override_tool_ids)) if not row.tool_ids else row
             for row in rows
         ]
-    tools_path = Path(config.distill.tools_file)
-    if not tools_path.is_absolute():
-        tools_path = Path(config.distill.styles_file).parent / tools_path
+    tools_path = _resolve_tools_path(config, config_path=config_path, out_p=out_p)
     tools_registry = load_tools(tools_path)
     all_variants = expand_variants(
         rows,

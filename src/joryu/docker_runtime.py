@@ -23,11 +23,19 @@ class DockerMountContext:
     hf_cache: Path | str
     styles_path: Path | None
     styles_rel: str | None
+    tools_path: Path | None
+    tools_rel: str | None
 
 
 def resolve_styles_mount(config_path: Path, styles_rel: str) -> Path | None:
     """styles.yaml の実パス。存在しなければ None。"""
     candidate = (config_path.parent / styles_rel).resolve()
+    return candidate if candidate.exists() else None
+
+
+def resolve_tools_mount(config_path: Path, tools_rel: str) -> Path | None:
+    """tools.yaml の実パス。存在しなければ None。"""
+    candidate = (config_path.parent / tools_rel).resolve()
     return candidate if candidate.exists() else None
 
 
@@ -70,8 +78,9 @@ def prepare_distill_docker_mounts(
     map_path: Callable[[Path], Path] | None = None,
     hf_cache: Path | str | None = None,
     mount_styles: bool = True,
+    mount_tools: bool = True,
 ) -> DockerMountContext:
-    """data/dashboard/public/src/HF cache/styles を整備しマウント用パスを返す。"""
+    """data/dashboard/public/src/HF cache/styles/tools を整備しマウント用パスを返す。"""
     _map = map_path or (lambda p: p)
     resolved_config = config_path.resolve()
     rel = container_config_rel(repo_root, resolved_config, config_rel)
@@ -87,6 +96,12 @@ def prepare_distill_docker_mounts(
     if mount_styles:
         styles_rel = cfg.distill.styles_file
         styles_path = resolve_styles_mount(resolved_config, styles_rel)
+
+    tools_path: Path | None = None
+    tools_rel: str | None = None
+    if mount_tools:
+        tools_rel = cfg.distill.tools_file
+        tools_path = resolve_tools_mount(resolved_config, tools_rel)
 
     if hf_cache is None:
         hf_cache_path = hf_cache_dir()
@@ -104,4 +119,6 @@ def prepare_distill_docker_mounts(
         hf_cache=resolved_hf_cache,
         styles_path=_map(styles_path) if styles_path is not None else None,
         styles_rel=styles_rel if styles_path is not None else None,
+        tools_path=_map(tools_path) if tools_path is not None else None,
+        tools_rel=tools_rel if tools_path is not None else None,
     )
