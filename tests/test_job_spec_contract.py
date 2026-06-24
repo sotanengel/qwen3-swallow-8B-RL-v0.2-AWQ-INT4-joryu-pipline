@@ -23,6 +23,9 @@ def test_distill_job_spec_field_names_match_dashboard_contract() -> None:
         "temperature",
         "top_p",
         "config",
+        "tool_ids",
+        "tool_loop",
+        "max_turns",
     }
 
 
@@ -126,6 +129,20 @@ styles:
 """.strip(),
         encoding="utf-8",
     )
+    (tmp_path / "tools.yaml").write_text(
+        """
+tools:
+  search:
+    description: Web search
+    parameters:
+      type: object
+      properties:
+        query:
+          type: string
+      required: [query]
+""".strip(),
+        encoding="utf-8",
+    )
     (tmp_path / "data" / "prompts").mkdir(parents=True)
     (tmp_path / "data" / "prompts" / "training_prompts.jsonl").write_text(
         '{"prompt":"hello"}\n',
@@ -149,5 +166,16 @@ def test_api_create_job_accepts_distill_job_spec_fields(api_client: TestClient) 
     )
     assert resp.status_code == 201
     spec = resp.json()["spec"]
-    for key in ("count", "duration", "mode", "style", "temperature", "top_p", "config"):
+    for key in (
+        "count",
+        "duration",
+        "mode",
+        "style",
+        "temperature",
+        "top_p",
+        "config",
+        "tool_ids",
+        "tool_loop",
+        "max_turns",
+    ):
         assert key in spec

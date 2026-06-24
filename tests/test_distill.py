@@ -577,3 +577,33 @@ def test_variant_run_key_differs_by_tools(tmp_path: Path) -> None:
     key_a = variant_run_key(DistillVariant(row=row, eff=eff_a))
     key_b = variant_run_key(DistillVariant(row=row, eff=eff_b))
     assert key_a != key_b
+
+
+def test_run_distill_override_tool_ids_applies_only_to_empty_rows(tmp_path: Path) -> None:
+    bank = tmp_path / "bank.jsonl"
+    _write_bank(
+        bank,
+        [
+            {"prompt": "ツール無し行"},
+            {"prompt": "行指定あり", "tool_ids": ["calc"]},
+        ],
+    )
+    out = tmp_path / "out.jsonl"
+    cfg = Config()
+    client = FakeVllmClient(answer="回答", thinking=None)
+    run_distill(
+        cfg,
+        bank_path=bank,
+        out_path=out,
+        client=client,
+        override_tool_ids=["search"],
+    )
+    records = _load_jsonl(out)
+    assert len(records) == 2
+    by_prompt = {r["prompt"]: r for r in records}
+    assert by_prompt["ツール無し行"]["tool_ids_requested"] == ["search"]
+    assert by_prompt["行指定あり"]["tool_ids_requested"] == ["calc"]
+    search_calls = [c for c in client.calls if c.get("tools")]
+    assert len(search_calls) == 2
+    names = {c["tools"][0]["function"]["name"] for c in search_calls}
+    assert names == {"search", "calc"}

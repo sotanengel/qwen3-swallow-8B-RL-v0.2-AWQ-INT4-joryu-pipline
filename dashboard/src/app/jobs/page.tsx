@@ -35,6 +35,9 @@ export default function JobsPage() {
   const [styles, setStyles] = useState<string[]>([]);
   const [temperature, setTemperature] = useState("");
   const [topP, setTopP] = useState("");
+  const [toolIds, setToolIds] = useState<string[]>([]);
+  const [toolLoop, setToolLoop] = useState(false);
+  const [maxTurns, setMaxTurns] = useState<number | "">("");
 
   const refreshJobs = useCallback(async () => {
     try {
@@ -98,6 +101,10 @@ export default function JobsPage() {
     setStyles((prev) => (prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]));
   };
 
+  const toggleTool = (id: string) => {
+    setToolIds((prev) => (prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id]));
+  };
+
   const onCancel = async (job: JobRecord) => {
     if (!isJobActive(job.status)) return;
     if (typeof window !== "undefined" && !window.confirm("このジョブを停止しますか？")) {
@@ -126,6 +133,9 @@ export default function JobsPage() {
       style: styles,
       temperature: temperature.trim(),
       top_p: topP.trim(),
+      tool_ids: toolIds,
+      tool_loop: toolLoop,
+      max_turns: maxTurns === "" ? null : maxTurns,
     };
     try {
       const job = await createJob(body);
@@ -196,6 +206,46 @@ export default function JobsPage() {
               onChange={(e) => setTopP(e.target.value)}
             />
           </label>
+          <fieldset className="style-fieldset">
+            <legend>ツール (tools)</legend>
+            <p style={{ color: "var(--muted)", fontSize: "0.875rem", margin: "0 0 0.5rem" }}>
+              プロンプト行に tool_ids が無い行にのみ適用されます。
+            </p>
+            <div className="style-grid">
+              {(options?.tools ?? []).map((t) => (
+                <label key={t.id} className="checkbox-label" title={t.description}>
+                  <input
+                    type="checkbox"
+                    checked={toolIds.includes(t.id)}
+                    onChange={() => toggleTool(t.id)}
+                  />
+                  {t.id}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              checked={toolLoop}
+              onChange={(e) => setToolLoop(e.target.checked)}
+            />
+            tool 実行ループ (tool_loop)
+          </label>
+          {toolLoop && (
+            <label>
+              最大ターン (max_turns)
+              <input
+                type="number"
+                min={1}
+                placeholder="既定 (config)"
+                value={maxTurns}
+                onChange={(e) =>
+                  setMaxTurns(e.target.value === "" ? "" : Number(e.target.value))
+                }
+              />
+            </label>
+          )}
           <fieldset className="style-fieldset">
             <legend>文体 (style)</legend>
             <div className="style-grid">

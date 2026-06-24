@@ -7,7 +7,14 @@ describe("parseJobRecord", () => {
     const job = parseJobRecord({
       id: "abc",
       kind: "distill",
-      spec: { count: 3, style: ["polite"], mode: "thinking" },
+      spec: {
+        count: 3,
+        style: ["polite"],
+        mode: "thinking",
+        tool_ids: ["search"],
+        tool_loop: true,
+        max_turns: 4,
+      },
       status: "queued",
       created_at: "2025-01-01T00:00:00+00:00",
     });
@@ -15,7 +22,22 @@ describe("parseJobRecord", () => {
     expect(job.kind).toBe("distill");
     expect(job.spec.count).toBe(3);
     expect(job.spec.style).toEqual(["polite"]);
+    expect(job.spec.tool_ids).toEqual(["search"]);
+    expect(job.spec.tool_loop).toBe(true);
+    expect(job.spec.max_turns).toBe(4);
     expect(job.status).toBe("queued");
+  });
+
+  it("defaults tool fields when omitted", () => {
+    const job = parseJobRecord({
+      id: "abc",
+      spec: { count: 1 },
+      status: "queued",
+      created_at: "2025-01-01T00:00:00+00:00",
+    });
+    expect(job.spec.tool_ids).toEqual([]);
+    expect(job.spec.tool_loop).toBe(false);
+    expect(job.spec.max_turns).toBeNull();
   });
 
   it("defaults kind to distill when omitted", () => {

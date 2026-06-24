@@ -9,6 +9,7 @@ from joryu.config import load_config
 from joryu.jobs.models import CurateJobSpec, DistillJobSpec
 from joryu.preflight import jsonl_has_content, resolve_distill_jsonl
 from joryu.styles import load_styles, resolve_style_ids
+from joryu.tools import load_tools
 from joryu.variants import parse_comma_list, parse_float_list, parse_modes
 
 
@@ -37,10 +38,17 @@ def validate_job_spec(spec: DistillJobSpec, *, repo_root: Path | None = None) ->
     except (FileNotFoundError, ValueError) as exc:
         raise ValueError(str(exc)) from exc
 
-    if spec.style:
-        styles_path = cfg_path.parent / cfg.distill.styles_file
-        styles = load_styles(styles_path)
-        resolve_style_ids(spec.style, styles)
+    if spec.tool_ids:
+        tools_path = cfg_path.parent / cfg.distill.tools_file
+        if not tools_path.is_absolute():
+            tools_path = cfg_path.parent / tools_path
+        reg = load_tools(tools_path)
+        from joryu.tools import resolve_tool_ids
+
+        resolve_tool_ids(spec.tool_ids, reg)
+
+    if spec.max_turns is not None and spec.max_turns < 1:
+        raise ValueError("max_turns must be >= 1")
 
     if spec.temperature:
         parse_float_list(spec.temperature, min_val=0.5, max_val=1.0, name="temperature")
@@ -48,6 +56,9 @@ def validate_job_spec(spec: DistillJobSpec, *, repo_root: Path | None = None) ->
         parse_float_list(spec.top_p, min_val=0.8, max_val=0.95, name="top_p")
 
     if spec.style:
+        styles_path = cfg_path.parent / cfg.distill.styles_file
+        styles = load_styles(styles_path)
+        resolve_style_ids(spec.style, styles)
         parse_comma_list(",".join(spec.style))
 
 

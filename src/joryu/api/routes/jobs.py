@@ -14,6 +14,7 @@ from joryu.jobs.store import JobStore
 from joryu.jobs.validate import validate_job_spec
 from joryu.paths import DEFAULT_CONFIG
 from joryu.styles import load_styles
+from joryu.tools import load_tools
 
 router = APIRouter()
 
@@ -65,9 +66,14 @@ def job_options(request: Request) -> dict[str, Any]:
     cfg = load_config(repo_root / "config.yaml")
     styles_path = repo_root / cfg.distill.styles_file
     styles = load_styles(styles_path)
+    tools_path = repo_root / cfg.distill.tools_file
+    tools = load_tools(tools_path)
     return {
-        "modes": ["thinking", "nothinking"],
+        "modes": ["thinking", "nothinking", "auto"],
         "styles": [{"id": sid, "label": preset.label} for sid, preset in sorted(styles.items())],
+        "tools": [
+            {"id": name, "description": tool.description} for name, tool in sorted(tools.items())
+        ],
         "defaults": {
             "config": DEFAULT_CONFIG,
             "mode": cfg.model.mode,

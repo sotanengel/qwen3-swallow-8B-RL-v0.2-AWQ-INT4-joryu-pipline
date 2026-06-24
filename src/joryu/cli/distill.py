@@ -12,7 +12,7 @@ from joryu.config import load_config
 from joryu.distill import default_stats_refresher, load_style_presets_from_config, run_distill
 from joryu.docker_delegate import DEFAULT_IMAGE, run_in_docker, should_use_docker
 from joryu.jobs.models import DistillJobSpec
-from joryu.variants import parse_float_list, parse_modes
+from joryu.variants import parse_comma_list, parse_float_list, parse_modes
 from joryu.vllm_client import SupportsChat
 
 
@@ -53,6 +53,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--top-p",
         default="",
         help="top_p スイープ (0.8〜0.95、カンマ区切り。例: 0.8,0.9,0.95)",
+    )
+    p.add_argument(
+        "--tool-ids",
+        default="",
+        help="tool ID (カンマ区切り。行の tool_ids が空の行にのみ適用)",
     )
     p.add_argument(
         "--tool-loop",
@@ -158,6 +163,7 @@ def main(argv: list[str] | None = None, *, _client: SupportsChat | None = None) 
         modes=mode_sweep,
         tool_loop=bool(getattr(args, "tool_loop", False)),
         tool_loop_max_turns=getattr(args, "max_turns", None),
+        override_tool_ids=parse_comma_list(getattr(args, "tool_ids", "")) or None,
         stats_refresher=default_stats_refresher,
     )
     return 0

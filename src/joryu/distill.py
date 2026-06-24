@@ -8,7 +8,7 @@ import logging
 import sys
 import time
 from collections.abc import Callable
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from datetime import UTC, datetime
 from functools import partial
 from pathlib import Path
@@ -310,6 +310,7 @@ def run_distill(
     executor: ToolExecutor | None = None,
     tool_loop: bool | None = None,
     tool_loop_max_turns: int | None = None,
+    override_tool_ids: list[str] | None = None,
     _print: Any = None,
     stats_refresher: Callable[[Path], None] | None = None,
 ) -> int:
@@ -323,6 +324,11 @@ def run_distill(
         out_p = Path(config.distill.out_dir) / config.distill.out_file
 
     rows = load_prompt_bank(bank_p)
+    if override_tool_ids:
+        rows = [
+            replace(row, tool_ids=list(override_tool_ids)) if not row.tool_ids else row
+            for row in rows
+        ]
     tools_path = Path(config.distill.tools_file)
     if not tools_path.is_absolute():
         tools_path = Path(config.distill.styles_file).parent / tools_path

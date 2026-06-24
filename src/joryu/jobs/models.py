@@ -36,6 +36,9 @@ class DistillJobSpec:
     temperature: str = ""
     top_p: str = ""
     config: str = DEFAULT_CONFIG
+    tool_ids: list[str] = field(default_factory=list)
+    tool_loop: bool = False
+    max_turns: int | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -46,6 +49,10 @@ class DistillJobSpec:
         from joryu.variants import parse_comma_list
 
         style = parse_comma_list(args.style) if getattr(args, "style", "") else []
+        tool_ids = (
+            parse_comma_list(getattr(args, "tool_ids", "")) if getattr(args, "tool_ids", "") else []
+        )
+        max_turns = getattr(args, "max_turns", None)
         return cls(
             count=int(getattr(args, "count", 0)),
             duration=str(getattr(args, "duration", "") or ""),
@@ -54,6 +61,9 @@ class DistillJobSpec:
             temperature=str(getattr(args, "temperature", "") or ""),
             top_p=str(getattr(args, "top_p", "") or ""),
             config=str(getattr(args, "config", DEFAULT_CONFIG) or DEFAULT_CONFIG),
+            tool_ids=tool_ids,
+            tool_loop=bool(getattr(args, "tool_loop", False)),
+            max_turns=int(max_turns) if max_turns is not None else None,
         )
 
     @classmethod
@@ -61,6 +71,10 @@ class DistillJobSpec:
         style = data.get("style") or []
         if isinstance(style, str):
             style = [s.strip() for s in style.split(",") if s.strip()]
+        tool_ids = data.get("tool_ids") or []
+        if isinstance(tool_ids, str):
+            tool_ids = [s.strip() for s in tool_ids.split(",") if s.strip()]
+        max_turns = data.get("max_turns")
         return cls(
             count=int(data.get("count", 0)),
             duration=str(data.get("duration") or ""),
@@ -69,6 +83,9 @@ class DistillJobSpec:
             temperature=str(data.get("temperature") or ""),
             top_p=str(data.get("top_p") or ""),
             config=str(data.get("config") or DEFAULT_CONFIG),
+            tool_ids=list(tool_ids),
+            tool_loop=bool(data.get("tool_loop", False)),
+            max_turns=int(max_turns) if max_turns is not None else None,
         )
 
     def to_distill_argv(self, *, bank: str = "", out: str = "") -> list[str]:
@@ -88,6 +105,12 @@ class DistillJobSpec:
             argv.extend(["--temperature", self.temperature])
         if self.top_p:
             argv.extend(["--top-p", self.top_p])
+        if self.tool_ids:
+            argv.extend(["--tool-ids", ",".join(self.tool_ids)])
+        if self.tool_loop:
+            argv.append("--tool-loop")
+        if self.max_turns is not None:
+            argv.extend(["--max-turns", str(self.max_turns)])
         return argv
 
 
