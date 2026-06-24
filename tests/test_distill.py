@@ -44,6 +44,10 @@ def test_run_distill_writes_records(tmp_path: Path) -> None:
     assert records[0]["sampling"]["top_p"] == cfg.model.top_p
     assert records[0]["sampling"]["max_tokens"] == cfg.model.num_predict
     assert records[0]["config_hash"].startswith("sha256-")
+    assert records[0]["tools"] == []
+    assert records[0]["tool_calls"] == []
+    assert records[0]["tool_ids_requested"] == []
+    assert records[0]["turns"] == []
     assert records[0]["finish_reason"] == "stop"
     assert records[0]["prompt_tokens"] == 10
     assert records[0]["completion_tokens"] == 5
@@ -517,3 +521,59 @@ def test_run_distill_records_generation_attempts_after_many_retries(tmp_path: Pa
     assert len(client.calls) == 4
     rec = _load_jsonl(out)[0]
     assert rec["generation_attempts"] == 4
+
+
+def test_run_distill_records_tool_calls(tmp_path: Path) -> None:
+    bank = tmp_path / "bank.jsonl"
+    _write_bank(
+        bank,
+        [{"prompt": "天気を調べて", "tool_ids": ["search"]}],
+    )
+    out = tmp_path / "out.jsonl"
+    cfg = Config()
+    tool_call = '<tool_call>{"name":"search","arguments":{"query":"東京 天気"}}</tool_call>'
+    client = FakeVllmClient(answer=tool_call + "\n要約です。", thinking=None)
+    run_distill(cfg, bank_path=bank, out_path=out, client=client)
+
+    assert client.calls[0]["tools"] is not None
+    assert len(client.calls[0]["tools"]) == 1
+    assert client.calls[0]["tools"][0]["function"]["name"] == "search"
+
+    rec = _load_jsonl(out)[0]
+    assert rec["tool_ids_requested"] == ["search"]
+    assert len(rec["tools"]) == 1
+    assert rec["tools"][0]["function"]["name"] == "search"
+    assert len(rec["tool_calls"]) == 1
+    assert rec["tool_calls"][0]["name"] == "search"
+    assert rec["turns"] == []
+
+
+def test_variant_run_key_differs_by_tools(tmp_path: Path) -> None:
+    from joryu.distill import variant_run_key
+    from joryu.prompt_bank import EffectiveSampling, PromptRow
+    from joryu.variants import DistillVariant
+
+    row = PromptRow(prompt="P1")
+    search_tool = {
+        "type": "function",
+        "function": {"name": "search", "description": "d", "parameters": {}},
+    }
+    calc_tool = {
+        "type": "function",
+        "function": {"name": "calc", "description": "d", "parameters": {}},
+    }
+    eff_a = EffectiveSampling(
+        mode="thinking",
+        system_prompt="sys",
+        sampling={"temperature": 0.6, "top_p": 0.95},
+        tools=[search_tool],
+    )
+    eff_b = EffectiveSampling(
+        mode="thinking",
+        system_prompt="sys",
+        sampling={"temperature": 0.6, "top_p": 0.95},
+        tools=[calc_tool],
+    )
+    key_a = variant_run_key(DistillVariant(row=row, eff=eff_a))
+    key_b = variant_run_key(DistillVariant(row=row, eff=eff_b))
+    assert key_a != key_b

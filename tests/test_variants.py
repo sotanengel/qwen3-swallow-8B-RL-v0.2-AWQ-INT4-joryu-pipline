@@ -109,3 +109,14 @@ def test_expand_variants_mode_sweep() -> None:
     variants = expand_variants(rows, cfg, modes=["thinking", "nothinking", "auto"])
     assert len(variants) == 3
     assert {v.eff.mode for v in variants} == {"thinking", "nothinking", "auto"}
+
+
+def test_expand_variants_resolves_tools_registry() -> None:
+    from joryu.tools import load_tools
+
+    cfg = Config()
+    rows = [PromptRow(prompt="P1", tool_ids=["search"])]
+    reg = load_tools("tools.yaml")
+    variants = expand_variants(rows, cfg, tools_registry=reg)
+    assert len(variants) == 1
+    assert variants[0].eff.tools[0]["function"]["name"] == "search"

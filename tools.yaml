@@ -1,0 +1,36 @@
+# 蒸留用ツール定義 (OpenAI / Qwen3 互換 JSON Schema)
+# `joryu-distill` の各プロンプト行から tool_ids で参照される。
+tools:
+  search:
+    description: "Web を検索して関連スニペットを返す。"
+    parameters:
+      type: object
+      properties:
+        query:
+          type: string
+          description: "検索クエリ"
+        top_k:
+          type: integer
+          description: "返却件数 (デフォルト 5)"
+          default: 5
+      required: [query]
+
+  calc:
+    description: "数式を評価して結果を返す。"
+    parameters:
+      type: object
+      properties:
+        expression:
+          type: string
+          description: "評価する Python 式 (純算術のみ)"
+      required: [expression]
+
+  fetch_url:
+    description: "URL からテキスト本文を取得する。"
+    parameters:
+      type: object
+      properties:
+        url:
+          type: string
+          format: uri
+      required: [url]

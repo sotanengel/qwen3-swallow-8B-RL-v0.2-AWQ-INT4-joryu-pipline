@@ -18,6 +18,7 @@ from typing import Any, Protocol
 
 from joryu.config import ModelConfig, VllmConfig
 from joryu.paths import resolve_limits_probe_path
+from joryu.tool_calls import ParsedToolCall, extract_tool_calls
 from joryu.vllm_limits import clamp_model_limits, load_probe_limits
 
 __all__ = [
@@ -50,6 +51,7 @@ class ChatResult:
     prompt_tokens: int | None
     completion_tokens: int | None
     effective_max_tokens: int | None = None
+    tool_calls: tuple[ParsedToolCall, ...] = ()
 
 
 def extract_thinking(text: str) -> tuple[str | None, str]:
@@ -95,6 +97,7 @@ class SupportsChat(Protocol):
         messages: list[dict[str, str]],
         *,
         enable_thinking: bool | None = True,
+        tools: list[dict[str, Any]] | None = None,
         **sampling_overrides: Any,
     ) -> ChatResult: ...
 
@@ -182,15 +185,19 @@ class VllmClient:
         messages: list[dict[str, str]],
         *,
         chat_template_kwargs: dict[str, Any],
+        tools: list[dict[str, Any]] | None = None,
     ) -> int | None:
         try:
             tokenizer = self._llm.get_tokenizer()
-            token_ids = tokenizer.apply_chat_template(
-                messages,
-                add_generation_prompt=True,
-                tokenize=True,
-                chat_template_kwargs=chat_template_kwargs,
-            )
+            template_kwargs: dict[str, Any] = {
+                "messages": messages,
+                "add_generation_prompt": True,
+                "tokenize": True,
+                "chat_template_kwargs": chat_template_kwargs,
+            }
+            if tools:
+                template_kwargs["tools"] = tools
+            token_ids = tokenizer.apply_chat_template(**template_kwargs)
             if isinstance(token_ids, list):
                 return len(token_ids)
             if hasattr(token_ids, "input_ids"):
@@ -215,17 +222,21 @@ class VllmClient:
         messages: list[dict[str, str]],
         *,
         enable_thinking: bool | None = True,
+        tools: list[dict[str, Any]] | None = None,
         **sampling_overrides: Any,
     ) -> ChatResult:
         """トークナイザの chat_template を使って生成。`ChatResult` を返す。"""
         self._load()
         chat_kwargs: dict[str, Any] = {"use_tqdm": False}
         chat_kwargs["chat_template_kwargs"] = build_chat_template_kwargs(enable_thinking)
+        if tools:
+            chat_kwargs["tools"] = tools
 
         requested_max = int(sampling_overrides.get("max_tokens", self._max_tokens))
         prompt_tokens = self._estimate_prompt_tokens(
             messages,
             chat_template_kwargs=chat_kwargs["chat_template_kwargs"],
+            tools=tools,
         )
         effective_max = requested_max
         if prompt_tokens is not None:
@@ -240,6 +251,7 @@ class VllmClient:
         completion = request_output.outputs[0]
         content: str = completion.text or ""
         thinking, answer = extract_thinking(content)
+        tool_calls, answer = extract_tool_calls(answer)
         out_prompt_tokens = (
             len(request_output.prompt_token_ids)
             if getattr(request_output, "prompt_token_ids", None) is not None
@@ -254,6 +266,7 @@ class VllmClient:
             prompt_tokens=out_prompt_tokens,
             completion_tokens=out_completion_tokens,
             effective_max_tokens=effective_max,
+            tool_calls=tuple(tool_calls),
         )
 
     @classmethod

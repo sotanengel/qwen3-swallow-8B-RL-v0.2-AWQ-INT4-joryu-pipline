@@ -19,7 +19,7 @@ SFT 教師データとして再利用可能な形で配布する。
 | ID | 要件 | 実装 |
 |---|---|---|
 | R-01 | プロンプト 1 行ごとに `mode` / `sampling` / `system_prompt` 上書きできる | [src/joryu/prompt_bank.py](../src/joryu/prompt_bank.py) |
-| R-02 | 推論モード (`<think>...</think>` 含む) / 非推論 / auto（モデル自己判定、`effective_mode` で実測記録）を切替できる | [src/joryu/distill.py](../src/joryu/distill.py), [src/joryu/vllm_client.py](../src/joryu/vllm_client.py) |
+| R-02 | 推論モード / 非推論 / auto + ツール呼び出し記録 (`tools.yaml` + 行 ad-hoc) | [src/joryu/distill.py](../src/joryu/distill.py), [src/joryu/vllm_client.py](../src/joryu/vllm_client.py), [src/joryu/tools.py](../src/joryu/tools.py) |
 | R-03 | 中断・再開が安全 (既処理レコードはスキップ) | [src/joryu/progress.py](../src/joryu/progress.py), [src/joryu/writer.py](../src/joryu/writer.py) |
 | R-04 | 実行コマンドは簡略 (count / duration のみで起動可能) | [src/joryu/cli/distill.py](../src/joryu/cli/distill.py) |
 | R-05 | Windows でも実行できる (Docker 自動委譲) | [src/joryu/docker_delegate.py](../src/joryu/docker_delegate.py) |

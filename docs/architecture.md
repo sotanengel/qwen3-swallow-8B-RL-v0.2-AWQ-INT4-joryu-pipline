@@ -7,8 +7,12 @@
 
 config.yaml ──┐
 styles.yaml ──┤
+tools.yaml ───┤
               ▼
-   prompt_bank.py ◄── data/prompts/*.jsonl (1 行 1 prompt + row overrides)
+   prompt_bank.py ◄── data/prompts/*.jsonl (1 行 1 prompt + row overrides + tool_ids)
+              │
+              ▼
+   tools.py (tool_ids → OpenAI schema 解決)
               │
               ▼
    variants.py (style × temperature × top_p × mode の直積)
