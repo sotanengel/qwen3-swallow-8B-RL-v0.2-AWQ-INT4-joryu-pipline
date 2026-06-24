@@ -37,13 +37,25 @@ _VRAM_LIMIT_MARKERS: tuple[str, ...] = (
     "gpu_memory_utilization",
     "available kv cache memory",
     "not enough memory",
-    # vLLM v1: 子プロセスの KV cache 不足が親で RuntimeError に包まれる
-    "engine core initialization failed",
 )
+
+# vLLM v1 が "EngineCore (=worker)" の **どんな失敗** でも親プロセスで包む
+# RuntimeError のメッセージ。これ単独では FlashInfer JIT 失敗・依存ライブラリ
+# 初期化失敗など VRAM とは無関係なケースも含むので、本物の VRAM マーカが
+# チェーン上で見つかった時のみ True を返す方針にしている。
+# (以前はこの文字列も _VRAM_LIMIT_MARKERS に含まれていたが、非 VRAM の
+#  失敗まで降格させて probe が無駄に小さい値を返す原因になっていた)
 
 
 def is_vram_limit_error(exc: BaseException) -> bool:
-    """OOM や KV キャッシュ不足など VRAM 制限による vLLM 起動失敗か判定する。"""
+    """OOM や KV キャッシュ不足など VRAM 制限による vLLM 起動失敗か判定する。
+
+    例外チェーン (`__cause__` / `__context__`) を辿り、本物の VRAM マーカ
+    (OOM/KV/max_model_len 等) が見つかった時のみ True。v1 の wrapper
+    RuntimeError 単独では False を返し、非 VRAM の失敗を呼び出し側に
+    伝搬させる (これで probe が無関係な失敗を VRAM 扱いして降格を続ける
+    事象を防ぐ)。
+    """
     seen: set[int] = set()
     current: BaseException | None = exc
     while current is not None and id(current) not in seen:
