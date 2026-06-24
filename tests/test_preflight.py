@@ -245,7 +245,8 @@ def test_required_disk_gb_sums_thresholds() -> None:
 
 
 def test_check_disk_space_aborts_when_insufficient() -> None:
-    free_bytes = int(4 * 1024**3)  # 4 GB < 5 GB dashboard threshold
+    # dashboard 閾値 (2 GB) を下回る空き容量を投入
+    free_bytes = int(1 * 1024**3)
     with pytest.raises(PreflightError, match="空き容量不足"):
         check_disk_space(
             ["dashboard"],
