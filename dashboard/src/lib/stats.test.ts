@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { EMPTY_STATS, loadStats, mergeStats, sortByCount, statsDataChanged } from "./stats";
+import { EMPTY_STATS, loadStats, mergeStats, pickNewestStats, sortByCount, statsDataChanged } from "./stats";
 
 describe("EMPTY_STATS", () => {
   it("has total 0", () => {
@@ -38,36 +38,50 @@ describe("sortByCount", () => {
   });
 });
 
+describe("pickNewestStats", () => {
+  it("prefers higher total", () => {
+    const best = pickNewestStats([
+      { total: 3, _meta: { generated_at: "t2" } },
+      { total: 5, _meta: { generated_at: "t1" } },
+    ]);
+    expect(best.total).toBe(5);
+  });
+
+  it("breaks ties with generated_at", () => {
+    const best = pickNewestStats([
+      { total: 5, _meta: { generated_at: "t1" } },
+      { total: 5, _meta: { generated_at: "t2" } },
+    ]);
+    expect(best._meta?.generated_at).toBe("t2");
+  });
+});
+
 describe("loadStats", () => {
-  it("prefers API dashboard stats with cache-bust", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ total: 1 }),
+  it("fetches all sources in parallel and picks the newest stats", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (String(url).startsWith("/api/live/stats")) {
+        return { ok: true, json: async () => ({ total: 5, _meta: { generated_at: "t2" } }) };
+      }
+      if (String(url).includes("/api/dashboard/stats")) {
+        return { ok: true, json: async () => ({ total: 3, _meta: { generated_at: "t1" } }) };
+      }
+      return { ok: false, json: async () => ({}) };
     });
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await loadStats();
 
-    expect(result.total).toBe(1);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const url = String(fetchMock.mock.calls[0][0]);
-    expect(url).toMatch(/\/api\/dashboard\/stats\?t=\d+$/);
+    expect(result.total).toBe(5);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
   });
 
-  it("falls back through live sources when API is unavailable", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce({ ok: false })
-      .mockResolvedValueOnce({ ok: false })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ total: 2 }) });
+  it("returns empty stats when all sources fail", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: false, json: async () => ({}) });
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await loadStats();
-
-    expect(result.total).toBe(2);
-    expect(fetchMock).toHaveBeenCalledTimes(3);
-    const lastUrl = String(fetchMock.mock.calls[2][0]);
-    expect(lastUrl).toMatch(/^\/stats\.json\?t=\d+$/);
+    expect(result.total).toBe(0);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
   });
 });
 

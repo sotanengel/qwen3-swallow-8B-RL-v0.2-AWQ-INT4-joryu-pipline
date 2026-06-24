@@ -90,14 +90,25 @@ export function mergeStats(data: Partial<JoryuStats>): JoryuStats {
 
 export async function loadStats(_url = "/stats.json"): Promise<JoryuStats> {
   try {
-    const { fetchLiveJson, statsFetchUrls } = await import("./live-data");
-    const r = await fetchLiveJson(statsFetchUrls());
-    if (!r) return EMPTY_STATS;
-    const data = (await r.json()) as Partial<JoryuStats>;
-    return mergeStats(data);
+    const { fetchAllLiveJson, statsFetchUrls } = await import("./live-data");
+    const payloads = await fetchAllLiveJson(statsFetchUrls());
+    if (payloads.length === 0) return EMPTY_STATS;
+    return pickNewestStats(payloads as Partial<JoryuStats>[]);
   } catch {
     return EMPTY_STATS;
   }
+}
+
+/** 複数ソースから取得した stats のうち total / generated_at が最新のものを選ぶ。 */
+export function pickNewestStats(candidates: Partial<JoryuStats>[]): JoryuStats {
+  return candidates.reduce<JoryuStats>((best, raw) => {
+    const cur = mergeStats(raw);
+    if (cur.total > best.total) return cur;
+    if (cur.total < best.total) return best;
+    const curTs = cur._meta?.generated_at ?? "";
+    const bestTs = best._meta?.generated_at ?? "";
+    return curTs > bestTs ? cur : best;
+  }, EMPTY_STATS);
 }
 
 /** ポーリング時に再描画が必要か (_meta.generated_at または total で判定)。 */
