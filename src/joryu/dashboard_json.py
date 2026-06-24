@@ -3,9 +3,26 @@
 from __future__ import annotations
 
 import json
+import os
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
+
+def _atomic_write_text(path: Path, text: str) -> None:
+    """tmp → os.replace で原子的に書き出す (Windows の読み取り競合にも retry)。"""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(f"{path.suffix}.tmp")
+    tmp.write_text(text, encoding="utf-8")
+    for attempt in range(10):
+        try:
+            os.replace(tmp, path)
+            return
+        except PermissionError:
+            if attempt == 9:
+                raise
+            time.sleep(0.02)
 
 
 def write_dashboard_json(
@@ -20,6 +37,8 @@ def write_dashboard_json(
         "source_path": str(source_path),
         "generated_at": (generated_at or datetime.now(UTC)).isoformat(),
     }
-    dst.parent.mkdir(parents=True, exist_ok=True)
-    dst.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    _atomic_write_text(
+        dst,
+        json.dumps(payload, ensure_ascii=False, indent=2),
+    )
     return payload

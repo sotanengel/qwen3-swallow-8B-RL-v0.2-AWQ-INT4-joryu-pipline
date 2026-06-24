@@ -45,7 +45,8 @@ export default function HomePage() {
   const fastPoll = useDistillJobFastPoll();
   const stats = useIntervalPoll(loadStats, EMPTY_STATS, {
     shouldUpdate: statsDataChanged,
-    intervalMs: fastPoll ? 1000 : 3000,
+    intervalMs: 3000,
+    fastPoll,
   });
 
   const modeRows = sortByCount(stats.modes);

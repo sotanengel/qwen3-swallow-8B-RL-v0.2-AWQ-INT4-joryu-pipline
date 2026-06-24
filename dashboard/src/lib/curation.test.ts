@@ -55,17 +55,17 @@ describe("curationDataChanged", () => {
 });
 
 describe("loadCuration", () => {
-  it("appends cache-bust query parameter", async () => {
+  it("prefers live route with cache-bust", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ total: 1, accepted: 1 }),
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    await loadCuration("/curation.json");
+    await loadCuration();
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const url = String(fetchMock.mock.calls[0][0]);
-    expect(url).toMatch(/^\/curation\.json\?t=\d+$/);
+    expect(url).toMatch(/^\/api\/live\/curation\?t=\d+$/);
   });
 });

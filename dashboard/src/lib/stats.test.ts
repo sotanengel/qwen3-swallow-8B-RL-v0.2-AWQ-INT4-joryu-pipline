@@ -39,18 +39,35 @@ describe("sortByCount", () => {
 });
 
 describe("loadStats", () => {
-  it("appends cache-bust query parameter", async () => {
+  it("prefers API dashboard stats with cache-bust", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ total: 1 }),
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    await loadStats("/stats.json");
+    const result = await loadStats();
 
+    expect(result.total).toBe(1);
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const url = String(fetchMock.mock.calls[0][0]);
-    expect(url).toMatch(/^\/stats\.json\?t=\d+$/);
+    expect(url).toMatch(/\/api\/dashboard\/stats\?t=\d+$/);
+  });
+
+  it("falls back through live sources when API is unavailable", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: false })
+      .mockResolvedValueOnce({ ok: false })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ total: 2 }) });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await loadStats();
+
+    expect(result.total).toBe(2);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    const lastUrl = String(fetchMock.mock.calls[2][0]);
+    expect(lastUrl).toMatch(/^\/stats\.json\?t=\d+$/);
   });
 });
 

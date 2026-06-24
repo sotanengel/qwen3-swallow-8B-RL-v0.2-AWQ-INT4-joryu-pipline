@@ -100,13 +100,11 @@ export function mergeCuration(data: Partial<CurationStats>): CurationStats {
   };
 }
 
-export async function loadCuration(
-  url = "/curation.json",
-): Promise<CurationStats> {
+export async function loadCuration(_url = "/curation.json"): Promise<CurationStats> {
   try {
-    const bust = `${url}${url.includes("?") ? "&" : "?"}t=${Date.now()}`;
-    const r = await fetch(bust, { cache: "no-store" });
-    if (!r.ok) return EMPTY_CURATION;
+    const { fetchLiveJson, curationFetchUrls } = await import("./live-data");
+    const r = await fetchLiveJson(curationFetchUrls());
+    if (!r) return EMPTY_CURATION;
     const data = (await r.json()) as Partial<CurationStats>;
     return mergeCuration(data);
   } catch {

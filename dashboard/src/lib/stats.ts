@@ -88,11 +88,11 @@ export function mergeStats(data: Partial<JoryuStats>): JoryuStats {
   };
 }
 
-export async function loadStats(url = "/stats.json"): Promise<JoryuStats> {
+export async function loadStats(_url = "/stats.json"): Promise<JoryuStats> {
   try {
-    const bust = `${url}${url.includes("?") ? "&" : "?"}t=${Date.now()}`;
-    const r = await fetch(bust, { cache: "no-store" });
-    if (!r.ok) return EMPTY_STATS;
+    const { fetchLiveJson, statsFetchUrls } = await import("./live-data");
+    const r = await fetchLiveJson(statsFetchUrls());
+    if (!r) return EMPTY_STATS;
     const data = (await r.json()) as Partial<JoryuStats>;
     return mergeStats(data);
   } catch {
