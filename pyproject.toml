@@ -26,9 +26,13 @@ joryu-probe-vllm = "joryu.cli.probe_vllm:main"
 vllm = [
     "vllm>=0.8",
 ]
+search = [
+    "rank-bm25>=0.2",
+]
 api = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.30",
+    "rank-bm25>=0.2",
 ]
 
 [dependency-groups]
@@ -39,6 +43,7 @@ dev = [
     "fastapi>=0.115",
     "httpx>=0.27",
     "uvicorn[standard]>=0.30",
+    "rank-bm25>=0.2",
 ]
 
 [build-system]

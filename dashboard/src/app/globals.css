@@ -284,6 +284,31 @@ pre.snippet {
   background: var(--accent-soft);
 }
 
+.outputs-table-wrap {
+  overflow-x: auto;
+}
+
+.search-snippet {
+  max-height: 6em;
+  margin: 0;
+  font-size: 0.8rem;
+}
+
+.badge-truncated {
+  display: inline-block;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  background: #fff3cd;
+  color: #664d03;
+  font-size: 0.75rem;
+}
+
+.search-warning {
+  color: #ffc107;
+  font-size: 0.9rem;
+  margin: 0 0 1rem;
+}
+
 .output-detail-back {
   display: inline-block;
   color: var(--accent);

@@ -45,6 +45,11 @@ distill:
     あなたは丁寧で正確な日本語アシスタントです。
     ユーザの質問に、自然な日本語で答えてください。
 
+search:
+  index_dir: "data/distilled/.search_index"
+  top_k_default: 50
+  snippet_chars: 200
+
 export:
   out_dir: "exports"
   compression: "zstd"

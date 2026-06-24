@@ -8,7 +8,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from joryu.api.routes import curate, dashboard, jobs
+from joryu.api.routes import curate, dashboard, jobs, search
 from joryu.jobs.runner import JobRunner, default_jobs_dir
 from joryu.jobs.store import JobStore
 
@@ -39,6 +39,7 @@ def create_app(*, repo_root: Path | None = None) -> FastAPI:
     app.state.repo_root = root
     app.state.job_store = store
     app.state.job_runner = runner
+    app.state.search_indexes = {}
 
     @app.get("/api/health")
     def health() -> dict[str, str]:
@@ -47,4 +48,5 @@ def create_app(*, repo_root: Path | None = None) -> FastAPI:
     app.include_router(jobs.router, prefix="/api/jobs", tags=["jobs"])
     app.include_router(curate.router, prefix="/api/curate/jobs", tags=["curate"])
     app.include_router(dashboard.router, prefix="/api/dashboard", tags=["dashboard"])
+    app.include_router(search.router, prefix="/api/dashboard", tags=["dashboard"])
     return app
