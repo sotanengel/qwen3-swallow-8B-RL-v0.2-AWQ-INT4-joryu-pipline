@@ -23,8 +23,9 @@ def run_key_from_parts(
     mode: str | None,
     temperature: Any,
     top_p: Any,
+    tools_hash: str | None = None,
 ) -> str:
-    """蒸留 run の安定キー（prompt + style + mode + sampling 主要軸）。"""
+    """蒸留 run の安定キー（prompt + style + mode + sampling 主要軸 + tools）。"""
     payload = {
         "prompt": prompt,
         "style_id": style_id,
@@ -32,6 +33,8 @@ def run_key_from_parts(
         "temperature": _round_float(temperature),
         "top_p": _round_float(top_p),
     }
+    if tools_hash is not None:
+        payload["tools_hash"] = tools_hash
     return json.dumps(payload, sort_keys=True, ensure_ascii=False)
 
 

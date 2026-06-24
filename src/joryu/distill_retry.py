@@ -18,6 +18,7 @@ def generate_until_complete(
     client: SupportsChat,
     messages: list[dict[str, str]],
     enable_thinking: bool | None,
+    tools: list[dict[str, Any]] | None,
     sampling: dict[str, Any],
     build_record: Callable[[ChatResult], dict[str, Any]],
     deadline: float | None = None,
@@ -44,6 +45,7 @@ def generate_until_complete(
         chat = client.chat_via_template(
             messages,
             enable_thinking=enable_thinking,
+            tools=tools,
             **sampling,
         )
         record = build_record(chat)

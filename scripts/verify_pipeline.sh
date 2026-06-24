@@ -59,6 +59,42 @@ fi
 lines=$(grep -c . < "$out" || true)
 echo "[verify]  -> wrote $lines records" >&2
 
+echo "[verify] step 1b: tools smoke distill" >&2
+tools_bank="$work/tools_smoke.jsonl"
+tools_out="$work/tools_responses.jsonl"
+cat > "$tools_bank" <<'EOF'
+{"prompt":"東京の今日の天気を調べて要約してください","tool_ids":["search"]}
+EOF
+export JORYU_VERIFY_CFG="$cfg"
+export JORYU_VERIFY_TOOLS_BANK="$tools_bank"
+export JORYU_VERIFY_TOOLS_OUT="$tools_out"
+uv run python - <<'PY'
+import os, sys
+
+sys.path.insert(0, "tests")
+from joryu.cli import distill as cli
+from conftest import FakeVllmClient
+
+tool_call = '<tool_call>{"name":"search","arguments":{"query":"東京 天気"}}</tool_call>'
+fake = FakeVllmClient(answer=tool_call + "\n要約。", thinking=None)
+rc = cli.main(
+    [
+        "--no-docker",
+        "--config",
+        os.environ["JORYU_VERIFY_CFG"],
+        "--bank",
+        os.environ["JORYU_VERIFY_TOOLS_BANK"],
+        "--out",
+        os.environ["JORYU_VERIFY_TOOLS_OUT"],
+    ],
+    _client=fake,
+)
+sys.exit(rc)
+PY
+test -s "$tools_out" || { echo "[verify] FAIL: tools smoke jsonl missing"; exit 1; }
+echo "[verify] step 1c: verify_record_replay" >&2
+uv run python scripts/verify_record_replay.py "$tools_out"
+
 echo "[verify] step 2: joryu-export" >&2
 uv run joryu-export --config "$cfg" --input "$out" --out-dir "$exp_dir" --level 3
 

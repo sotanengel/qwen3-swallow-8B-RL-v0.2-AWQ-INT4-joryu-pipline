@@ -6,6 +6,7 @@ from typing import Any
 
 import pytest
 
+from joryu.tool_calls import extract_tool_calls
 from joryu.vllm_client import ChatResult
 
 
@@ -33,12 +34,14 @@ class FakeVllmClient:
         messages: list[dict[str, str]],
         *,
         enable_thinking: bool | None = True,
+        tools: list[dict[str, Any]] | None = None,
         **sampling_overrides: Any,
     ) -> ChatResult:
         self.calls.append(
             {
                 "messages": messages,
                 "enable_thinking": enable_thinking,
+                "tools": tools,
                 "sampling": dict(sampling_overrides),
             }
         )
@@ -55,13 +58,15 @@ class FakeVllmClient:
             thinking_out: str | None = None
         else:
             thinking_out = self.thinking
+        tool_calls, cleaned_answer = extract_tool_calls(answer)
         return ChatResult(
             thinking=thinking_out,
-            answer=answer,
+            answer=cleaned_answer,
             finish_reason=finish_reason,
             prompt_tokens=10,
             completion_tokens=5,
             effective_max_tokens=sampling_overrides.get("max_tokens"),
+            tool_calls=tuple(tool_calls),
         )
 
 

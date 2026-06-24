@@ -8,6 +8,7 @@ from typing import Any
 
 from joryu.config import Config, Mode
 from joryu.io.jsonl import iter_jsonl
+from joryu.tools import ToolDefinition, merge_tools, resolve_tool_ids
 
 _VALID_MODES = ("thinking", "nothinking", "auto")
 _SAMPLING_KEYS = ("temperature", "top_p", "top_k", "max_tokens", "repetition_penalty")
@@ -23,6 +24,8 @@ class PromptRow:
     mode: Mode | None = None
     system_prompt: str | None = None
     sampling: dict[str, Any] = field(default_factory=dict)
+    tool_ids: list[str] = field(default_factory=list)
+    tools: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass
@@ -34,6 +37,7 @@ class EffectiveSampling:
     sampling: dict[str, Any]
     category: str | None = None
     style_id: str | None = None
+    tools: list[dict[str, Any]] = field(default_factory=list)
 
 
 def _parse_row(obj: dict[str, Any]) -> PromptRow:
@@ -46,6 +50,12 @@ def _parse_row(obj: dict[str, Any]) -> PromptRow:
     if not isinstance(sampling_raw, dict):
         raise ValueError("sampling must be a JSON object")
     sampling = {k: v for k, v in sampling_raw.items() if k in _SAMPLING_KEYS}
+    tool_ids_raw = obj.get("tool_ids") or []
+    if not isinstance(tool_ids_raw, list) or not all(isinstance(x, str) for x in tool_ids_raw):
+        raise ValueError("tool_ids must be a list of strings")
+    tools_raw = obj.get("tools") or []
+    if not isinstance(tools_raw, list) or not all(isinstance(x, dict) for x in tools_raw):
+        raise ValueError("tools must be a list of objects")
     return PromptRow(
         prompt=obj["prompt"],
         category=obj.get("category"),
@@ -53,6 +63,8 @@ def _parse_row(obj: dict[str, Any]) -> PromptRow:
         mode=mode,
         system_prompt=obj.get("system_prompt"),
         sampling=sampling,
+        tool_ids=list(tool_ids_raw),
+        tools=list(tools_raw),
     )
 
 
@@ -67,7 +79,12 @@ def load_prompt_bank(path: str | Path) -> list[PromptRow]:
     return rows
 
 
-def merge_with_defaults(row: PromptRow, cfg: Config) -> EffectiveSampling:
+def merge_with_defaults(
+    row: PromptRow,
+    cfg: Config,
+    *,
+    tools_registry: dict[str, ToolDefinition] | None = None,
+) -> EffectiveSampling:
     """PromptRow の上書き値と Config 既定値を畳んで EffectiveSampling を返す。"""
     sampling: dict[str, Any] = {
         "temperature": cfg.model.temperature,
@@ -82,10 +99,19 @@ def merge_with_defaults(row: PromptRow, cfg: Config) -> EffectiveSampling:
     system_prompt = (
         row.system_prompt if row.system_prompt is not None else cfg.distill.system_prompt
     )
+    resolved_tools: list[dict[str, Any]] = []
+    if row.tool_ids:
+        if tools_registry is None:
+            raise ValueError("tool_ids 参照には tools_registry が必須")
+        resolved = resolve_tool_ids(row.tool_ids, tools_registry)
+        resolved_tools = [t.to_openai_schema() for t in resolved]
+    if row.tools:
+        resolved_tools = merge_tools(resolved_tools, row.tools)
     return EffectiveSampling(
         mode=row.mode or cfg.model.mode,
         system_prompt=system_prompt,
         sampling=sampling,
         category=row.category,
         style_id=row.style_id,
+        tools=resolved_tools,
     )

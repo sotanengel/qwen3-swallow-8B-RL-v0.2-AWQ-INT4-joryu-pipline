@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 import sys
 import time
 from collections.abc import Callable
+from dataclasses import asdict
 from datetime import UTC, datetime
 from functools import partial
 from pathlib import Path
@@ -20,6 +23,7 @@ from joryu.progress_reporter import DistillProgressReporter
 from joryu.prompt_bank import EffectiveSampling, PromptRow, load_prompt_bank
 from joryu.stats import compute_stats, resolve_stats_output_path
 from joryu.styles import StylePreset, load_styles, resolve_style_ids
+from joryu.tools import load_tools
 from joryu.variants import DistillVariant, expand_variants
 from joryu.vllm_client import ChatResult, SupportsChat, VllmClient, VllmError
 from joryu.writer import JsonlAppendWriter
@@ -58,6 +62,10 @@ def _build_record(
         "finish_reason": chat.finish_reason,
         "prompt_tokens": chat.prompt_tokens,
         "completion_tokens": chat.completion_tokens,
+        "tools": eff.tools,
+        "tool_ids_requested": row.tool_ids,
+        "tool_calls": [asdict(c) for c in chat.tool_calls],
+        "turns": [],
         "created_at": datetime.now(UTC).isoformat(),
     }
 
@@ -78,6 +86,7 @@ def _record_from_chat(
             prompt_tokens=chat.prompt_tokens,
             completion_tokens=chat.completion_tokens,
             effective_max_tokens=chat.effective_max_tokens,
+            tool_calls=chat.tool_calls,
         )
     thinking = chat.thinking
     final_answer = (chat.answer or "").strip()
@@ -113,12 +122,23 @@ def _report_truncation_retry(
 
 def variant_run_key(variant: DistillVariant) -> str:
     """DistillVariant から resume キーを構築。"""
+    tool_names = sorted(
+        t["function"]["name"]
+        for t in variant.eff.tools
+        if isinstance(t.get("function"), dict) and isinstance(t["function"].get("name"), str)
+    )
+    tools_hash = (
+        hashlib.sha1(json.dumps(tool_names, ensure_ascii=False).encode()).hexdigest()[:8]
+        if tool_names
+        else None
+    )
     return run_key_from_parts(
         prompt=variant.row.prompt,
         style_id=variant.eff.style_id,
         mode=variant.eff.mode,
         temperature=variant.eff.sampling.get("temperature"),
         top_p=variant.eff.sampling.get("top_p"),
+        tools_hash=tools_hash,
     )
 
 
@@ -185,6 +205,10 @@ def run_distill(
         out_p = Path(config.distill.out_dir) / config.distill.out_file
 
     rows = load_prompt_bank(bank_p)
+    tools_path = Path(config.distill.tools_file)
+    if not tools_path.is_absolute():
+        tools_path = Path(config.distill.styles_file).parent / tools_path
+    tools_registry = load_tools(tools_path)
     all_variants = expand_variants(
         rows,
         config,
@@ -192,6 +216,7 @@ def run_distill(
         temperatures=temperatures,
         top_ps=top_ps,
         modes=modes,
+        tools_registry=tools_registry,
     )
     done = load_done_keys(out_p)
     if redo_truncated and out_p.exists():
@@ -275,6 +300,7 @@ def run_distill(
                         client=client,
                         messages=messages,
                         enable_thinking=enable_thinking,
+                        tools=eff.tools or None,
                         sampling=eff.sampling,
                         build_record=build_record,
                         deadline=deadline,

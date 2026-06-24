@@ -68,6 +68,7 @@ class DistillConfig:
     min_interval_sec: float = 0.5
     system_prompt: str = _DEFAULT_SYSTEM_PROMPT
     styles_file: str = "styles.yaml"
+    tools_file: str = "tools.yaml"
 
 
 @dataclass

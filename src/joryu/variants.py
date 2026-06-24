@@ -10,6 +10,7 @@ from typing import cast
 from joryu.config import Config, Mode
 from joryu.prompt_bank import EffectiveSampling, PromptRow, merge_with_defaults
 from joryu.styles import StylePreset, apply_style
+from joryu.tools import ToolDefinition
 
 _VALID_MODES: tuple[Mode, ...] = ("thinking", "nothinking", "auto")
 
@@ -78,6 +79,7 @@ def expand_variants(
     temperatures: list[float] | None = None,
     top_ps: list[float] | None = None,
     modes: list[Mode] | None = None,
+    tools_registry: dict[str, ToolDefinition] | None = None,
 ) -> list[DistillVariant]:
     """prompt bank 行を style × temperature × top_p × mode の直積で展開する。
 
@@ -88,7 +90,7 @@ def expand_variants(
     variants: list[DistillVariant] = []
 
     for row in rows:
-        base_eff = merge_with_defaults(row, cfg)
+        base_eff = merge_with_defaults(row, cfg, tools_registry=tools_registry)
         temp_axis = temperatures if temperatures is not None else [base_eff.sampling["temperature"]]
         top_p_axis = top_ps if top_ps is not None else [base_eff.sampling["top_p"]]
 

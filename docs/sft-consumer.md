@@ -60,6 +60,10 @@ for line in text.splitlines():
   "thinking_trace": "<thinking 内容>",
   "reasoning": "<thinking 内容>",
   "answer": "<最終回答>",
+  "tools": [],
+  "tool_ids_requested": [],
+  "tool_calls": [],
+  "turns": [],
   "model": "Qwen3-Swallow-8B-RL-v0.2-AWQ-INT4",
   "config_hash": "sha256-...",
   "created_at": "2026-06-21T14:00:00.000000+00:00"
@@ -67,6 +71,20 @@ for line in text.splitlines():
 ```
 
 非推論モードの場合 `thinking_trace` は `null`、`reasoning` は空文字列。
+
+### ツール付きレコードの再構築
+
+レコード内 `tools` フィールドだけで chat_template 入力を再構築できる:
+
+```python
+from joryu.record_replay import rebuild_chat_template_inputs
+
+inputs = rebuild_chat_template_inputs(record)
+# inputs["messages"], inputs["tools"] を apply_chat_template に渡す
+```
+
+`tool_calls` はモデルが出力した `<tool_call>{...}</tool_call>` のパース結果。
+`turns` はマルチターン tool 実行ループ有効時の履歴（未使用時は空配列）。
 
 ## 5. SFT データフォーマットへの変換例
 
