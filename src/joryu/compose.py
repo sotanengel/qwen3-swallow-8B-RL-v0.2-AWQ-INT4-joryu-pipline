@@ -51,6 +51,15 @@ def builder_prune_command() -> list[str]:
     return ["docker", "builder", "prune", "-f"]
 
 
+def image_prune_command() -> list[str]:
+    """`docker image prune -f`。タグなし (dangling) イメージのみ削除する。
+
+    タグ付きで稼働中の `joryu:latest` などは影響を受けない。
+    disk preflight が落ちた時の自動 reclaim 用。
+    """
+    return ["docker", "image", "prune", "-f"]
+
+
 def run(cmd: list[str]) -> int:
     """ログ出しつつ subprocess.run で実行し、返り値を返す。"""
     print(f"[joryu] {' '.join(cmd)}", file=sys.stderr)

@@ -7,6 +7,7 @@ from joryu.compose import (
     compose_build_command,
     compose_down_command,
     compose_up_command,
+    image_prune_command,
 )
 
 
@@ -67,6 +68,11 @@ def test_down_with_volumes() -> None:
 def test_builder_prune_command_is_force() -> None:
     """build キャッシュ累積防止のため `-f` 付きで unused 層を回収する。"""
     assert builder_prune_command() == ["docker", "builder", "prune", "-f"]
+
+
+def test_image_prune_command_is_force() -> None:
+    """disk 不足時の自動回収で dangling image を `-f` で削除する。"""
+    assert image_prune_command() == ["docker", "image", "prune", "-f"]
 
 
 def test_up_force_recreate_after_build() -> None:
