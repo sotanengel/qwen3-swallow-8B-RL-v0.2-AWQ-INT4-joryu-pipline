@@ -9,6 +9,9 @@ export type DistillJobSpec = {
   temperature: string;
   top_p: string;
   config: string;
+  tool_ids: string[];
+  tool_loop: boolean;
+  max_turns: number | null;
 };
 
 export type JobRecord = {
@@ -26,6 +29,7 @@ export type JobRecord = {
 export type JobOptions = {
   modes: string[];
   styles: Array<{ id: string; label: string }>;
+  tools: Array<{ id: string; description: string }>;
   defaults: {
     config: string;
     mode: string;
@@ -40,6 +44,9 @@ export type CreateJobRequest = {
   temperature?: string;
   top_p?: string;
   config?: string;
+  tool_ids?: string[];
+  tool_loop?: boolean;
+  max_turns?: number | null;
 };
 
 export type LogResponse = {
@@ -85,6 +92,12 @@ export function parseJobRecord(data: unknown): JobRecord {
       temperature: String(row.spec?.temperature ?? ""),
       top_p: String(row.spec?.top_p ?? ""),
       config: String(row.spec?.config ?? "config.yaml"),
+      tool_ids: Array.isArray(row.spec?.tool_ids) ? row.spec.tool_ids.map(String) : [],
+      tool_loop: Boolean(row.spec?.tool_loop),
+      max_turns:
+        row.spec?.max_turns === null || row.spec?.max_turns === undefined
+          ? null
+          : Number(row.spec.max_turns),
     },
     status: row.status,
     created_at: String(row.created_at),

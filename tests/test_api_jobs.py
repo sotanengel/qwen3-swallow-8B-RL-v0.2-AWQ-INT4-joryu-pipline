@@ -9,6 +9,26 @@ from fastapi.testclient import TestClient
 
 from joryu.api.app import create_app
 
+TOOLS_YAML = """
+tools:
+  search:
+    description: Web search
+    parameters:
+      type: object
+      properties:
+        query:
+          type: string
+      required: [query]
+  calc:
+    description: Calculator
+    parameters:
+      type: object
+      properties:
+        expression:
+          type: string
+      required: [expression]
+""".strip()
+
 
 @pytest.fixture
 def repo_root(tmp_path: Path) -> Path:
@@ -37,6 +57,7 @@ styles:
 """.strip(),
         encoding="utf-8",
     )
+    (tmp_path / "tools.yaml").write_text(TOOLS_YAML, encoding="utf-8")
     (tmp_path / "data" / "prompts").mkdir(parents=True)
     (tmp_path / "data" / "prompts" / "training_prompts.jsonl").write_text(
         '{"prompt":"hello"}\n',
@@ -63,6 +84,27 @@ def test_job_options(client: TestClient) -> None:
     body = resp.json()
     assert "polite" in {s["id"] for s in body["styles"]}
     assert body["defaults"]["mode"] == "thinking"
+    assert "auto" in body["modes"]
+    tool_ids = {t["id"] for t in body["tools"]}
+    assert "search" in tool_ids
+    assert "calc" in tool_ids
+
+
+def test_create_job_with_tool_ids(client: TestClient) -> None:
+    resp = client.post(
+        "/api/jobs",
+        json={
+            "count": 1,
+            "tool_ids": ["search", "calc"],
+            "tool_loop": True,
+            "max_turns": 3,
+        },
+    )
+    assert resp.status_code == 201
+    spec = resp.json()["spec"]
+    assert spec["tool_ids"] == ["search", "calc"]
+    assert spec["tool_loop"] is True
+    assert spec["max_turns"] == 3
 
 
 def test_create_and_list_jobs(client: TestClient, repo_root: Path) -> None:
