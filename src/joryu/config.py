@@ -16,8 +16,10 @@ Mode = Literal["thinking", "nothinking"]
 @dataclass
 class ModelConfig:
     name: str = "Qwen3-Swallow-8B-RL-v0.2-AWQ-INT4"
-    num_ctx: int = 2048
-    num_predict: int = 1024
+    # num_ctx/num_predict は KV cache FP8 + prefix caching 有効化前提で倍増。
+    # VRAM が足りない環境では VllmClient.from_config が probe 結果でクランプする。
+    num_ctx: int = 4096
+    num_predict: int = 2048
     limits_probe_file: str = "data/vllm_limits.json"
     temperature: float = 0.6
     top_p: float = 0.95
