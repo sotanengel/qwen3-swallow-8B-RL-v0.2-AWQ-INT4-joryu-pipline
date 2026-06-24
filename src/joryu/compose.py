@@ -42,13 +42,18 @@ def compose_down_command(*, volumes: bool) -> list[str]:
 
 
 def builder_prune_command() -> list[str]:
-    """`docker builder prune -f`。タグ付きイメージから参照されない層のみ削除する。
+    """`docker builder prune -af`。現行 image から参照されない全 cache を回収する。
 
-    `joryu-up` の build 直後に呼ぶことで、世代毎に発生する 16GB 規模の
-    中間 vLLM ビルドキャッシュがディスクに溜まり続けるのを防ぐ。
-    タグ付きイメージ (joryu:latest など) の層は参照中なので残る。
+    `-f` だけだと dangling (完全に孤立した) cache layer しか削除されず、
+    旧世代の reusable cache が世代毎に 10-20 GB ずつ積み増しされる
+    (実機で 40 GB に育つ事象を確認)。
+    `-a` も付けると「current image 群から参照されていない全 cache」を
+    削除でき、世代を跨いだ累積を断ち切れる。
+
+    build 直後に呼ぶ前提なので、現行 `joryu:latest` 等の参照層は残り、
+    次回の incremental build は通常通り cache hit する。
     """
-    return ["docker", "builder", "prune", "-f"]
+    return ["docker", "builder", "prune", "-a", "-f"]
 
 
 def image_prune_command() -> list[str]:

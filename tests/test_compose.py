@@ -65,9 +65,14 @@ def test_down_with_volumes() -> None:
     assert "-v" in cmd or "--volumes" in cmd
 
 
-def test_builder_prune_command_is_force() -> None:
-    """build キャッシュ累積防止のため `-f` 付きで unused 層を回収する。"""
-    assert builder_prune_command() == ["docker", "builder", "prune", "-f"]
+def test_builder_prune_command_is_all_and_force() -> None:
+    """build キャッシュ累積防止のため `-a -f` で current image 参照外の全 cache を回収する。
+
+    `-f` 単独では dangling layer しか落ちず、旧世代の reusable cache が
+    積み上がるため `-a` を付けて current image 群から参照されていない
+    キャッシュも一掃する。
+    """
+    assert builder_prune_command() == ["docker", "builder", "prune", "-a", "-f"]
 
 
 def test_image_prune_command_is_force() -> None:
