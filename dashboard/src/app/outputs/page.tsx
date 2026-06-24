@@ -26,7 +26,7 @@ export default function OutputsPage() {
       return rows;
     },
     [] as DistilledRecord[],
-    { shouldUpdate: jsonlDataChanged, intervalMs: fastPoll ? 1000 : 3000 },
+    { shouldUpdate: jsonlDataChanged, intervalMs: 3000, fastPoll },
   );
   const [query, setQuery] = useState("");
   const [mode, setMode] = useState<"all" | "thinking" | "nothinking">("all");

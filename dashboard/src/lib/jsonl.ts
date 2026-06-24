@@ -62,11 +62,11 @@ export function searchRecords(
   });
 }
 
-export async function loadJsonl(url = "/responses.jsonl"): Promise<DistilledRecord[]> {
+export async function loadJsonl(_url = "/responses.jsonl"): Promise<DistilledRecord[]> {
   try {
-    const r = await fetch(url, { cache: "no-store" });
-    if (!r.ok) return [];
-    const text = await r.text();
+    const { fetchLiveText, responsesFetchUrls } = await import("./live-data");
+    const text = await fetchLiveText(responsesFetchUrls());
+    if (text === null) return [];
     return parseJsonl(text);
   } catch {
     return [];

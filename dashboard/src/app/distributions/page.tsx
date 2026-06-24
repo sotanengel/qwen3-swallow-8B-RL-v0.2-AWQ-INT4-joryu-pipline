@@ -32,7 +32,8 @@ export default function DistributionsPage() {
     EMPTY_STATS,
     {
       shouldUpdate: statsDataChanged,
-      intervalMs: fastPoll ? 1000 : 3000,
+      intervalMs: 3000,
+      fastPoll,
     },
   );
 

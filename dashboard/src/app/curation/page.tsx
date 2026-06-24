@@ -64,7 +64,7 @@ export default function CurationPage() {
       return data;
     },
     EMPTY_CURATION,
-    { shouldUpdate: curationDataChanged, intervalMs: fastPoll ? 1000 : 3000 },
+    { shouldUpdate: curationDataChanged, intervalMs: 3000, fastPoll },
   );
 
   const refreshJobs = useCallback(async () => {

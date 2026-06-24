@@ -31,6 +31,23 @@ def test_write_stats_json_handles_missing_input(tmp_path: Path) -> None:
     assert out.exists()
 
 
+def test_write_stats_json_atomic_replace(tmp_path: Path) -> None:
+    """書き出し完了後のみ dst が valid JSON になる (tmp 経由の atomic replace)。"""
+    from joryu.dashboard_json import write_dashboard_json
+
+    src = tmp_path / "r.jsonl"
+    src.write_text(
+        json.dumps({"prompt": "P", "answer": "A", "model": "M"}) + "\n",
+        encoding="utf-8",
+    )
+    out = tmp_path / "stats.json"
+    write_dashboard_json(out, {"total": 1}, source_path=src)
+    data = json.loads(out.read_text(encoding="utf-8"))
+    assert data["total"] == 1
+    assert "_meta" in data
+    assert not out.with_suffix(".json.tmp").exists()
+
+
 def test_resolve_repo_root_from_distill_out_path(tmp_path: Path) -> None:
     out = tmp_path / "data" / "distilled" / "responses.jsonl"
     out.parent.mkdir(parents=True, exist_ok=True)

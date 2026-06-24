@@ -254,8 +254,10 @@ def _stats_refresh_loop(
     interval_sec: float | None = None,
 ) -> None:
     interval = STATS_REFRESH_INTERVAL_SEC if interval_sec is None else interval_sec
-    while not stop_event.wait(interval):
+    while True:
         refresh()
+        if stop_event.wait(interval):
+            break
 
 
 def run_subprocess_logged(

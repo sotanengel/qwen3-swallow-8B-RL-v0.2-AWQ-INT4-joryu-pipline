@@ -12,6 +12,7 @@ from joryu.jobs.models import CurateJobSpec, DistillJobSpec, JobKind, JobRecord,
 from joryu.jobs.runner import (
     JobRunner,
     _inject_container_name,
+    _stats_refresh_loop,
     build_curate_command,
     build_job_command,
     curate_job_dst_rel,
@@ -652,3 +653,25 @@ def test_runner_ensure_dashboard_data_paths_on_distill_start(tmp_path: Path, mon
         time.sleep(0.05)
 
     assert called == [tmp_path]
+
+
+def test_stats_refresh_loop_calls_refresh_before_wait() -> None:
+    calls: list[int] = []
+    stop = threading.Event()
+
+    def refresh() -> None:
+        calls.append(1)
+        if len(calls) >= 2:
+            stop.set()
+
+    thread = threading.Thread(
+        target=_stats_refresh_loop,
+        args=(refresh, stop),
+        kwargs={"interval_sec": 0.05},
+        daemon=True,
+    )
+    thread.start()
+    assert stop.wait(timeout=2.0)
+    thread.join(timeout=1.0)
+    assert calls[0] == 1
+    assert len(calls) >= 2
