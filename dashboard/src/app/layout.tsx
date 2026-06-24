@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import Link from "next/link";
 
+import { DistillLiveAlertBanner } from "@/components/DistillLiveAlertBanner";
+
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -27,6 +29,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <Link href="/jobs">ジョブ</Link>
           </nav>
         </header>
+        <DistillLiveAlertBanner />
         <main className="main">{children}</main>
         <footer className="footer">
           <span>

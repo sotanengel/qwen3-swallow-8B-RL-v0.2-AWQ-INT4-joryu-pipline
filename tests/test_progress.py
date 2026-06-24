@@ -40,6 +40,8 @@ def test_collects_run_keys(tmp_path: Path) -> None:
                 json.dumps(
                     {
                         "prompt": "a",
+                        "answer": "完了。",
+                        "finish_reason": "stop",
                         "mode": cfg.model.mode,
                         "sampling": {
                             "temperature": cfg.model.temperature,
@@ -51,6 +53,8 @@ def test_collects_run_keys(tmp_path: Path) -> None:
                 json.dumps(
                     {
                         "prompt": "b",
+                        "answer": "完了。",
+                        "finish_reason": "stop",
                         "style_id": "polite",
                         "mode": cfg.model.mode,
                         "sampling": {"temperature": 0.7, "top_p": 0.9},
@@ -93,6 +97,8 @@ def test_skips_malformed_lines(tmp_path: Path) -> None:
                 json.dumps(
                     {
                         "prompt": "a",
+                        "answer": "完了。",
+                        "finish_reason": "stop",
                         "mode": cfg.model.mode,
                         "sampling": {
                             "temperature": cfg.model.temperature,
@@ -107,6 +113,8 @@ def test_skips_malformed_lines(tmp_path: Path) -> None:
                 json.dumps(
                     {
                         "prompt": "b",
+                        "answer": "完了。",
+                        "finish_reason": "stop",
                         "mode": cfg.model.mode,
                         "sampling": {
                             "temperature": cfg.model.temperature,
@@ -133,3 +141,97 @@ def test_run_key_from_record_round_trip() -> None:
     assert key is not None
     assert '"prompt": "x"' in key
     assert '"style_id": "casual"' in key
+
+
+def test_load_done_keys_excludes_latest_truncated_record(tmp_path: Path) -> None:
+    cfg = Config()
+    p = tmp_path / "out.jsonl"
+    key = run_key_from_parts(
+        prompt="a",
+        style_id=None,
+        mode=cfg.model.mode,
+        temperature=cfg.model.temperature,
+        top_p=cfg.model.top_p,
+    )
+    p.write_text(
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "prompt": "a",
+                        "answer": "完了。",
+                        "finish_reason": "stop",
+                        "mode": cfg.model.mode,
+                        "sampling": {
+                            "temperature": cfg.model.temperature,
+                            "top_p": cfg.model.top_p,
+                        },
+                    },
+                    ensure_ascii=False,
+                ),
+                json.dumps(
+                    {
+                        "prompt": "a",
+                        "answer": "途中\n\n## 1. 章",
+                        "finish_reason": "length",
+                        "mode": cfg.model.mode,
+                        "sampling": {
+                            "temperature": cfg.model.temperature,
+                            "top_p": cfg.model.top_p,
+                        },
+                    },
+                    ensure_ascii=False,
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    assert key not in load_done_keys(p)
+
+
+def test_load_done_keys_includes_key_when_latest_is_complete(tmp_path: Path) -> None:
+    cfg = Config()
+    p = tmp_path / "out.jsonl"
+    key = run_key_from_parts(
+        prompt="a",
+        style_id=None,
+        mode=cfg.model.mode,
+        temperature=cfg.model.temperature,
+        top_p=cfg.model.top_p,
+    )
+    p.write_text(
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "prompt": "a",
+                        "answer": "途中\n\n## 1. 章",
+                        "finish_reason": "length",
+                        "mode": cfg.model.mode,
+                        "sampling": {
+                            "temperature": cfg.model.temperature,
+                            "top_p": cfg.model.top_p,
+                        },
+                    },
+                    ensure_ascii=False,
+                ),
+                json.dumps(
+                    {
+                        "prompt": "a",
+                        "answer": "完了。",
+                        "finish_reason": "stop",
+                        "mode": cfg.model.mode,
+                        "sampling": {
+                            "temperature": cfg.model.temperature,
+                            "top_p": cfg.model.top_p,
+                        },
+                    },
+                    ensure_ascii=False,
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    assert key in load_done_keys(p)
