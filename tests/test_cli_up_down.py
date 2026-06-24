@@ -39,6 +39,7 @@ def _patch_runner(
     monkeypatch.setattr("joryu.compose.subprocess.run", _fake_run)
     monkeypatch.setattr("joryu.cli.up.schedule_open_dashboard", lambda **_: None)
     monkeypatch.setattr("joryu.cli.up.open_dashboard_when_ready", lambda **_: None)
+    monkeypatch.setattr("joryu.cli.up.wait_for_up_services", lambda _services: True)
     monkeypatch.setattr("joryu.cli.up.is_first_up_run", lambda _root: False)
     # 空き容量チェックは環境依存なので既定で no-op 化 (insufficient disk テストでは上書き)
     monkeypatch.setattr("joryu.cli.up.check_disk_space", lambda *_args, **_kwargs: None)
@@ -60,7 +61,7 @@ def test_up_default_no_changes_builds_nothing(monkeypatch: pytest.MonkeyPatch) -
     rc = cli_up.main([])
     assert rc == 0
     assert len(calls) == 1
-    assert calls[0] == ["docker", "compose", "up", "dashboard", "api"]
+    assert calls[0] == ["docker", "compose", "up", "dashboard", "api", "joryu"]
 
 
 def test_up_joryu_diff_triggers_build_then_up(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -80,6 +81,7 @@ def test_up_joryu_diff_triggers_build_then_up(monkeypatch: pytest.MonkeyPatch) -
         "--force-recreate",
         "dashboard",
         "api",
+        "joryu",
     ]
     assert calls[4] == ["docker", "image", "prune", "-f"]
 
@@ -226,6 +228,7 @@ def test_up_build_flag_forces_rebuild(monkeypatch: pytest.MonkeyPatch) -> None:
         "--force-recreate",
         "dashboard",
         "api",
+        "joryu",
     ]
     assert calls[4] == ["docker", "image", "prune", "-f"]
 
@@ -258,6 +261,7 @@ def test_up_builds_joryu_when_image_missing(monkeypatch: pytest.MonkeyPatch) -> 
         "--force-recreate",
         "dashboard",
         "api",
+        "joryu",
     ]
     assert calls[4] == ["docker", "image", "prune", "-f"]
 
@@ -358,8 +362,30 @@ def test_up_force_bypasses_disk_check(monkeypatch: pytest.MonkeyPatch) -> None:
         "--force-recreate",
         "dashboard",
         "api",
+        "joryu",
     ]
     assert calls[4] == ["docker", "image", "prune", "-f"]
+
+
+def test_up_detach_waits_for_services(monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch_runner(monkeypatch)
+    monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: set())
+    waited: list[list[str]] = []
+    monkeypatch.setattr(
+        "joryu.cli.up.wait_for_up_services",
+        lambda services: waited.append(list(services)) or True,
+    )
+    rc = cli_up.main(["--detach"])
+    assert rc == 0
+    assert waited == [["dashboard", "api", "joryu"]]
+
+
+def test_up_detach_fails_when_wait_times_out(monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch_runner(monkeypatch)
+    monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: set())
+    monkeypatch.setattr("joryu.cli.up.wait_for_up_services", lambda _services: False)
+    rc = cli_up.main(["--detach"])
+    assert rc == 1
 
 
 def test_up_detach_opens_browser_after_dashboard_up(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -372,7 +398,7 @@ def test_up_detach_opens_browser_after_dashboard_up(monkeypatch: pytest.MonkeyPa
     )
     rc = cli_up.main(["--detach"])
     assert rc == 0
-    assert calls[-1] == ["docker", "compose", "up", "-d", "dashboard", "api"]
+    assert calls[-1] == ["docker", "compose", "up", "-d", "dashboard", "api", "joryu"]
     assert opened == [True]
 
 

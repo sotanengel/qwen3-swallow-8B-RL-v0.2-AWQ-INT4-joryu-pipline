@@ -9,10 +9,13 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
 import threading
+import urllib.error
+import urllib.request
 from dataclasses import dataclass
 from typing import Any, Protocol
 
@@ -26,8 +29,11 @@ __all__ = [
     "SupportsChat",
     "VllmClient",
     "VllmError",
+    "VllmHttpClient",
     "build_chat_template_kwargs",
     "compute_effective_max_tokens",
+    "resolve_chat_client",
+    "resolve_vllm_serve_url",
 ]
 
 logger = logging.getLogger(__name__)
@@ -320,3 +326,77 @@ class VllmClient:
 
 class VllmError(RuntimeError):
     """vLLM 関連エラー。"""
+
+
+def resolve_vllm_serve_url(vllm_cfg: VllmConfig) -> str | None:
+    """常駐 LLM デーモン URL。未設定時 None (in-process ロード)。"""
+    env_url = os.environ.get("JORYU_VLLM_URL", "").strip()
+    if env_url:
+        return env_url.rstrip("/")
+    cfg_url = (vllm_cfg.serve_url or "").strip()
+    if cfg_url:
+        return cfg_url.rstrip("/")
+    return None
+
+
+def resolve_chat_client(model_cfg: ModelConfig, vllm_cfg: VllmConfig) -> SupportsChat:
+    """HTTP デーモン URL があれば VllmHttpClient、未設定なら in-process VllmClient。"""
+    url = resolve_vllm_serve_url(vllm_cfg)
+    if url:
+        return VllmHttpClient(url)
+    return VllmClient.from_config(model_cfg, vllm_cfg)
+
+
+class VllmHttpClient:
+    """常駐 joryu-llm-serve へ HTTP で推論を委譲するクライアント (vllm 非 import)。"""
+
+    def __init__(self, base_url: str, *, timeout_s: float = 600.0) -> None:
+        self._base_url = base_url.rstrip("/")
+        self._timeout_s = timeout_s
+
+    def chat_via_template(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        enable_thinking: bool | None = True,
+        tools: list[dict[str, Any]] | None = None,
+        **sampling_overrides: Any,
+    ) -> ChatResult:
+        payload = {
+            "messages": messages,
+            "enable_thinking": enable_thinking,
+            "tools": tools,
+            "sampling": dict(sampling_overrides),
+        }
+        body = json.dumps(payload).encode("utf-8")
+        req = urllib.request.Request(
+            f"{self._base_url}/v1/chat",
+            data=body,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=self._timeout_s) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")
+            raise VllmError(f"vLLM daemon HTTP {exc.code}: {detail}") from exc
+        except urllib.error.URLError as exc:
+            raise VllmError(f"vLLM daemon unreachable at {self._base_url}: {exc}") from exc
+
+        tool_calls = tuple(
+            ParsedToolCall(name=tc["name"], arguments=tc.get("arguments", {}), raw="")
+            for tc in data.get("tool_calls", [])
+        )
+        return ChatResult(
+            thinking=data.get("thinking"),
+            answer=data.get("answer", ""),
+            finish_reason=data.get("finish_reason"),
+            prompt_tokens=data.get("prompt_tokens"),
+            completion_tokens=data.get("completion_tokens"),
+            effective_max_tokens=data.get("effective_max_tokens"),
+            tool_calls=tool_calls,
+        )
+
+    def close(self) -> None:
+        return None

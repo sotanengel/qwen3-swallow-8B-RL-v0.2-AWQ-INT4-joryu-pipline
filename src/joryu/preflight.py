@@ -52,6 +52,9 @@ _JORYU_JOB_RUNTIME_PATHS = frozenset(
         "src/joryu/vllm_client.py",
         "src/joryu/vllm_limits.py",
         "src/joryu/vllm_probe.py",
+        "src/joryu/llm_server.py",
+        "src/joryu/readiness.py",
+        "src/joryu/cli/llm_serve.py",
         "src/joryu/jobs/runner.py",
         "src/joryu/cli/distill.py",
         "src/joryu/cli/stats.py",
@@ -67,7 +70,7 @@ _DASHBOARD_RUNTIME_PATHS = frozenset(
 )
 
 _SERVICE_ORDER = ("dashboard", "api", "joryu")
-_DEFAULT_UP = ("dashboard", "api")
+_DEFAULT_UP = ("dashboard", "api", "joryu")
 _UP_STATE_REL = Path("data") / ".joryu" / "up-state.json"
 
 

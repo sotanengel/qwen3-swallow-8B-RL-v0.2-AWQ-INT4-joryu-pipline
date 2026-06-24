@@ -51,7 +51,7 @@ def test_curate_options(client: TestClient) -> None:
 
 
 def test_create_curate_job_without_vllm(client: TestClient, monkeypatch) -> None:
-    monkeypatch.setattr("joryu.api.routes.curate.joryu_container_running", lambda **_: False)
+    monkeypatch.setattr("joryu.api.routes.curate.is_vllm_daemon_ready", lambda **_: False)
     resp = client.post("/api/curate/jobs", json={"skip_llm": False})
     assert resp.status_code == 400
 
@@ -63,7 +63,7 @@ def test_create_curate_job_without_vllm(client: TestClient, monkeypatch) -> None
 
 
 def test_list_curate_jobs(client: TestClient, monkeypatch) -> None:
-    monkeypatch.setattr("joryu.api.routes.curate.joryu_container_running", lambda **_: False)
+    monkeypatch.setattr("joryu.api.routes.curate.is_vllm_daemon_ready", lambda **_: False)
     created = client.post("/api/curate/jobs", json={"skip_llm": True}).json()
     listed = client.get("/api/curate/jobs").json()
     assert len(listed) == 1
@@ -74,7 +74,7 @@ def test_curate_job_logs_and_cancel(client: TestClient, monkeypatch) -> None:
     from joryu.jobs.models import CurateJobSpec, JobRecord
     from joryu.jobs.runner import JobRunner
 
-    monkeypatch.setattr("joryu.api.routes.curate.joryu_container_running", lambda **_: False)
+    monkeypatch.setattr("joryu.api.routes.curate.is_vllm_daemon_ready", lambda **_: False)
     runner: JobRunner = client.app.state.job_runner
     store = client.app.state.job_store
 

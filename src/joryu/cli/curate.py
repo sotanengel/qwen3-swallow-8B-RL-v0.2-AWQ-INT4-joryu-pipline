@@ -145,10 +145,10 @@ def _build_judge(cfg: Config, args: argparse.Namespace) -> JudgeClient | None:
     if os.environ.get("JORYU_CURATE_FAKE_JUDGE") == "1":
         return FakeJudgeClient()
     try:
-        from joryu.vllm_client import VllmClient
+        from joryu.vllm_client import resolve_chat_client
     except Exception:  # pragma: no cover - lazy import only
         return None
-    chat = VllmClient.from_config(cfg.model, cfg.vllm)
+    chat = resolve_chat_client(cfg.model, cfg.vllm)
     return VllmJudgeClient(
         chat,
         rubric_prompt=DEFAULT_RUBRIC_PROMPT,

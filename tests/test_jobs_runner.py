@@ -29,7 +29,30 @@ def _skip_vllm_probe_in_runner(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("joryu.preflight.ensure_vllm_limits", lambda *_args, **_kwargs: None)
 
 
+def test_build_job_command_uses_local_distill_when_vllm_daemon(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("JORYU_USE_COMPOSE_RUN", "1")
+    monkeypatch.setenv("JORYU_VLLM_URL", "http://joryu:8100")
+    (tmp_path / "config.yaml").write_text("x: 1\n", encoding="utf-8")
+    spec = DistillJobSpec(count=2)
+    record = JobRecord.create(spec)
+    cmd = build_job_command(tmp_path, record)
+    assert cmd[1:4] == ["-m", "joryu.cli.distill", "--no-docker"]
+
+
+def test_build_curate_command_uses_local_when_vllm_daemon(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("JORYU_USE_COMPOSE_RUN", "1")
+    monkeypatch.setenv("JORYU_VLLM_URL", "http://joryu:8100")
+    (tmp_path / "config.yaml").write_text("x: 1\n", encoding="utf-8")
+    cmd = build_curate_command(tmp_path, CurateJobSpec(skip_llm=True), job_id="job-1")
+    assert cmd[1:3] == ["-m", "joryu.cli.curate"]
+
+
 def test_build_job_command_api_delegate(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.delenv("JORYU_VLLM_URL", raising=False)
     monkeypatch.setenv("JORYU_USE_COMPOSE_RUN", "1")
     monkeypatch.setattr("joryu.jobs.runner.resolve_docker_bin", lambda: "/usr/bin/docker")
     host_root = Path("C:/repo")
@@ -48,6 +71,7 @@ def test_build_job_command_api_delegate(tmp_path: Path, monkeypatch) -> None:
 
 
 def test_build_curate_command_api_delegate(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.delenv("JORYU_VLLM_URL", raising=False)
     monkeypatch.setenv("JORYU_USE_COMPOSE_RUN", "1")
     monkeypatch.setattr("joryu.jobs.runner.resolve_docker_bin", lambda: "/usr/bin/docker")
     host_root = Path("C:/repo")

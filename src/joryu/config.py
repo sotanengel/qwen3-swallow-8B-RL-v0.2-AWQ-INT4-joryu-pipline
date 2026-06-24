@@ -51,6 +51,9 @@ class VllmConfig:
     max_num_seqs: int = 1
     # KV を CPU 側に退避するための swap space (GiB)。0 で無効。
     swap_space_gib: int = 4
+    # 常駐 LLM デーモンの HTTP ポート / クライアント接続 URL。
+    serve_port: int = 8100
+    serve_url: str = ""
 
 
 _DEFAULT_SYSTEM_PROMPT = (

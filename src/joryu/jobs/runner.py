@@ -6,6 +6,7 @@ import os
 import platform
 import shutil
 import subprocess
+import sys
 import threading
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -48,6 +49,43 @@ def resolve_docker_bin() -> str:
         "(`docker compose build api`)."
     )
     raise FileNotFoundError(msg)
+
+
+def vllm_daemon_configured(*, env: dict[str, str] | None = None) -> bool:
+    """常駐 vLLM デーモン URL が設定されているか。"""
+    e = os.environ if env is None else env
+    return bool(e.get("JORYU_VLLM_URL", "").strip())
+
+
+def build_local_distill_command(repo_root: Path, spec: DistillJobSpec) -> list[str]:
+    """API コンテナ内で HTTP デーモン経由 distill を実行 (GPU docker run 不要)。"""
+    del repo_root
+    return [
+        sys.executable,
+        "-m",
+        "joryu.cli.distill",
+        "--no-docker",
+        "--config",
+        spec.config,
+        *spec.to_distill_argv(),
+    ]
+
+
+def build_local_curate_command(
+    repo_root: Path,
+    spec: CurateJobSpec,
+    *,
+    job_id: str,
+) -> list[str]:
+    del repo_root
+    return [
+        sys.executable,
+        "-m",
+        "joryu.cli.curate",
+        "--config",
+        spec.config,
+        *_curate_argv_with_dst(spec, job_id),
+    ]
 
 
 def build_compose_run_command(repo_root: Path, spec: DistillJobSpec) -> list[str]:
@@ -141,6 +179,8 @@ def build_job_command(repo_root: Path, record: JobRecord) -> list[str]:
 
 
 def build_distill_command(repo_root: Path, spec: DistillJobSpec) -> list[str]:
+    if vllm_daemon_configured():
+        return build_local_distill_command(repo_root, spec)
     if should_use_api_docker_delegate():
         return build_docker_delegate_command(repo_root, spec)
     if should_use_compose_run():
@@ -231,6 +271,8 @@ def build_curate_docker_delegate_command(
 
 
 def build_curate_command(repo_root: Path, spec: CurateJobSpec, *, job_id: str) -> list[str]:
+    if vllm_daemon_configured():
+        return build_local_curate_command(repo_root, spec, job_id=job_id)
     if should_use_api_docker_delegate():
         return build_curate_docker_delegate_command(repo_root, spec, job_id=job_id)
     if should_use_compose_run():

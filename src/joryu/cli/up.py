@@ -1,19 +1,19 @@
-"""joryu-up: フロント (dashboard) とバックエンド (joryu) を docker compose で起動する。
+"""joryu-up: フロント (dashboard) / API / vLLM 常駐デーモン (joryu) を docker compose で起動する。
 
 git 差分から rebuild 対象を自動判定し、必要時は `docker compose build` → `up` を実行する。
 未コミット差分に加え、前回起動後の `git pull` 分も rebuild 対象に含める。
 joryu ビルド前にホスト空き容量を検査し、不足時は `--force` なしでは中止する。
 
-**既定は dashboard + api** — `/jobs` から蒸留ジョブを投入できる。
-API ジョブ用の `joryu:latest` イメージは、初回起動・git 差分・未作成時に自動 build する。
-vLLM 常駐コンテナとして joryu を up する場合は `--full` か `--backend-only` を使う。
+**既定は dashboard + api + joryu (vLLM 常駐)** — `/jobs` から蒸留ジョブを即投入できる。
+`--detach` 時は API / vLLM デーモン / dashboard が ready になるまで待機する。
 
 簡略コマンド:
-    uv run joryu-up                     # dashboard + api (git 差分に応じて build)
+    uv run joryu-up                     # dashboard + api + joryu (git 差分に応じて build)
     uv run joryu-up --frontend-only     # dashboard のみ
-    uv run joryu-up --full              # joryu + dashboard + api を up
+    uv run joryu-up --full              # dashboard + api + joryu (--full は後方互換)
     uv run joryu-up --backend-only      # joryu コンテナのみ
-    uv run joryu-up --detach            # バックグラウンド起動
+    uv run joryu-up --detach            # バックグラウンド起動 + ready 待ち
+    uv run joryu-up --no-wait           # ready 待ちをスキップ
     uv run joryu-up --no-open           # ブラウザ自動起動を無効化
     uv run joryu-up --force             # ディスク不足でも続行
     uv run joryu-up --refresh-stats     # 起動前に joryu-stats を回して dashboard 表示を最新化
@@ -50,12 +50,15 @@ from joryu.preflight import (
     services_to_build,
     should_force_recreate,
 )
+from joryu.readiness import wait_for_up_services
 
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="joryu-up",
-        description=("git 差分に応じて docker compose build/up する (既定: dashboard + api)。"),
+        description=(
+            "git 差分に応じて docker compose build/up する (既定: dashboard + api + joryu)。"
+        ),
     )
     g = p.add_mutually_exclusive_group()
     g.add_argument(
@@ -94,6 +97,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--no-open",
         action="store_true",
         help="dashboard 起動後にブラウザを開かない",
+    )
+    p.add_argument(
+        "--no-wait",
+        action="store_true",
+        help="compose up 後の API / vLLM / dashboard ready 待ちをスキップ",
     )
     return p
 
@@ -214,9 +222,16 @@ def main(argv: list[str] | None = None) -> int:
                 head,
                 built_services=build_services if build_services else None,
             )
-    if rc == 0 and open_browser and args.detach:
+    if rc != 0:
+        return rc
+
+    if not args.no_wait and args.detach:
+        if not wait_for_up_services(up_services):
+            return 1
+
+    if open_browser and args.detach:
         open_dashboard_when_ready()
-    return rc
+    return 0
 
 
 if __name__ == "__main__":  # pragma: no cover

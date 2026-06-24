@@ -188,18 +188,18 @@ def test_services_to_build_force_build() -> None:
 
 def test_resolve_up_services_default_no_changes() -> None:
     args = argparse.Namespace(full=False, frontend_only=False, backend_only=False)
-    assert resolve_up_services(args, set()) == ["dashboard", "api"]
+    assert resolve_up_services(args, set()) == ["dashboard", "api", "joryu"]
 
 
 def test_resolve_up_services_default_with_joryu_diff() -> None:
     args = argparse.Namespace(full=False, frontend_only=False, backend_only=False)
-    assert resolve_up_services(args, {"joryu"}) == ["dashboard", "api"]
+    assert resolve_up_services(args, {"joryu"}) == ["dashboard", "api", "joryu"]
 
 
 def test_resolve_up_services_default_with_both_diffs() -> None:
     args = argparse.Namespace(full=False, frontend_only=False, backend_only=False)
-    assert resolve_up_services(args, {"joryu", "dashboard"}) == ["dashboard", "api"]
-    assert resolve_up_services(args, {"api", "dashboard"}) == ["dashboard", "api"]
+    assert resolve_up_services(args, {"joryu", "dashboard"}) == ["dashboard", "api", "joryu"]
+    assert resolve_up_services(args, {"api", "dashboard"}) == ["dashboard", "api", "joryu"]
 
 
 def test_resolve_up_services_full() -> None:

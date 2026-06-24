@@ -27,7 +27,7 @@ from joryu.styles import StylePreset, load_styles, resolve_style_ids
 from joryu.tool_executor import ToolExecutor, build_default_executor
 from joryu.tools import load_tools
 from joryu.variants import DistillVariant, expand_variants
-from joryu.vllm_client import ChatResult, SupportsChat, VllmClient, VllmError
+from joryu.vllm_client import ChatResult, SupportsChat, VllmError
 from joryu.writer import JsonlAppendWriter
 
 logger = logging.getLogger(__name__)
@@ -382,7 +382,9 @@ def run_distill(
     work = pending[:count] if count else pending
 
     if client is None:
-        client = VllmClient.from_config(config.model, config.vllm)
+        from joryu.vllm_client import resolve_chat_client
+
+        client = resolve_chat_client(config.model, config.vllm)
 
     use_tool_loop = config.distill.tool_loop if tool_loop is None else tool_loop
     loop_max_turns = (

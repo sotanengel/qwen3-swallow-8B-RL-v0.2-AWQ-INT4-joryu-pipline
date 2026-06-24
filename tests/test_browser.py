@@ -11,8 +11,8 @@ from joryu.browser import (
     open_dashboard,
     open_dashboard_when_ready,
     schedule_open_dashboard,
-    wait_for_dashboard,
 )
+from joryu.readiness import wait_for_dashboard
 
 
 class _FakeResponse:
@@ -44,7 +44,7 @@ def test_wait_for_dashboard_returns_true_on_200(monkeypatch: pytest.MonkeyPatch)
             raise urllib.error.URLError("connection refused")
         return _FakeResponse(200)
 
-    monkeypatch.setattr("joryu.browser.urllib.request.urlopen", _urlopen)
+    monkeypatch.setattr("joryu.readiness.urllib.request.urlopen", _urlopen)
     assert wait_for_dashboard(poll_interval_s=0, timeout_s=1)
 
 
@@ -52,7 +52,7 @@ def test_wait_for_dashboard_returns_false_on_timeout(monkeypatch: pytest.MonkeyP
     def _urlopen(url: str, timeout: int = 0) -> _FakeResponse:
         raise urllib.error.URLError("down")
 
-    monkeypatch.setattr("joryu.browser.urllib.request.urlopen", _urlopen)
+    monkeypatch.setattr("joryu.readiness.urllib.request.urlopen", _urlopen)
     assert wait_for_dashboard(poll_interval_s=0, timeout_s=0.01) is False
 
 
