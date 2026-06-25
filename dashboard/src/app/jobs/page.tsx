@@ -4,10 +4,13 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 
 import {
   CreateJobRequest,
+  DurationUnit,
   JobOptions,
   JobRecord,
   cancelJob,
   createJob,
+  defaultJobSelections,
+  formatJobDuration,
   getJobLogs,
   isJobActive,
   listJobs,
@@ -30,12 +33,13 @@ export default function JobsPage() {
   const [cancellingId, setCancellingId] = useState<string | null>(null);
 
   const [count, setCount] = useState(0);
-  const [duration, setDuration] = useState("");
+  const [durationValue, setDurationValue] = useState<number | "">(2);
+  const [durationUnit, setDurationUnit] = useState<DurationUnit>("h");
   const [styles, setStyles] = useState<string[]>([]);
   const [temperature, setTemperature] = useState("");
   const [topP, setTopP] = useState("");
   const [toolIds, setToolIds] = useState<string[]>([]);
-  const [toolLoop, setToolLoop] = useState(false);
+  const [toolLoop, setToolLoop] = useState(true);
   const [maxTurns, setMaxTurns] = useState<number | "">("");
 
   const refreshJobs = useCallback(async () => {
@@ -52,6 +56,10 @@ export default function JobsPage() {
     loadJobOptions()
       .then((opts) => {
         setOptions(opts);
+        const defaults = defaultJobSelections(opts);
+        setStyles(defaults.styles);
+        setToolIds(defaults.toolIds);
+        setToolLoop(defaults.toolLoop);
       })
       .catch((exc) => setError(exc instanceof Error ? exc.message : String(exc)));
     refreshJobs();
@@ -126,7 +134,7 @@ export default function JobsPage() {
     setError(null);
     const body: CreateJobRequest = {
       count,
-      duration: duration.trim(),
+      duration: formatJobDuration(durationValue, durationUnit),
       style: styles,
       temperature: temperature.trim(),
       top_p: topP.trim(),
@@ -167,12 +175,24 @@ export default function JobsPage() {
           </label>
           <label>
             時間上限 (duration)
-            <input
-              type="text"
-              placeholder="例: 2h, 30m"
-              value={duration}
-              onChange={(e) => setDuration(e.target.value)}
-            />
+            <div className="duration-inputs">
+              <input
+                type="number"
+                min={1}
+                placeholder="制限なし"
+                value={durationValue}
+                onChange={(e) =>
+                  setDurationValue(e.target.value === "" ? "" : Number(e.target.value))
+                }
+              />
+              <select
+                value={durationUnit}
+                onChange={(e) => setDurationUnit(e.target.value as DurationUnit)}
+              >
+                <option value="h">h</option>
+                <option value="m">min</option>
+              </select>
+            </div>
           </label>
           <label>
             temperature (カンマ区切り)
