@@ -40,7 +40,7 @@ def test_from_cli_namespace_round_trips_to_distill_argv() -> None:
             "--mode",
             "nothinking",
             "--style",
-            "polite,casual",
+            "prose,dialog",
             "--temperature",
             "0.7,1.0",
             "--top-p",
@@ -65,7 +65,7 @@ def test_from_cli_namespace_round_trips_to_distill_argv() -> None:
         "--mode",
         "nothinking",
         "--style",
-        "polite,casual",
+        "prose,dialog",
         "--temperature",
         "0.7,1.0",
         "--top-p",
@@ -78,14 +78,14 @@ def test_from_dict_accepts_api_body_shape() -> None:
         "count": 2,
         "duration": "1h",
         "mode": "thinking",
-        "style": ["polite"],
+        "style": ["prose"],
         "temperature": "0.6",
         "top_p": "0.95",
         "config": "config.yaml",
     }
     spec = DistillJobSpec.from_dict(body)
     assert spec.count == 2
-    assert spec.style == ["polite"]
+    assert spec.style == ["prose"]
     assert spec.to_distill_argv() == [
         "--count",
         "2",
@@ -94,7 +94,7 @@ def test_from_dict_accepts_api_body_shape() -> None:
         "--mode",
         "thinking",
         "--style",
-        "polite",
+        "prose",
         "--temperature",
         "0.6",
         "--top-p",
@@ -123,9 +123,9 @@ export:
     (tmp_path / "styles.yaml").write_text(
         """
 styles:
-  polite:
-    label: 丁寧語
-    instruction: 丁寧に。
+  prose:
+    label: 散文
+    instruction: 散文で。
 """.strip(),
         encoding="utf-8",
     )

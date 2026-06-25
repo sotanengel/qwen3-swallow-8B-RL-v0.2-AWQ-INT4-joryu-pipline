@@ -198,25 +198,6 @@ def test_style_adh_no_style_id_returns_neutral():
     assert r.score == 1.0
 
 
-def test_style_adh_polite_match_passes():
-    sig = StyleAdherence(th=CurateSignalThresholds(), rules=DEFAULT_STYLE_RULES)
-    polite_text = (
-        "本日はお越しいただきありがとうございます。"
-        "資料を共有いたします。"
-        "ご不明な点があればお知らせください。"
-    )
-    r = sig.evaluate(_rec(style_id="polite", answer=polite_text))
-    assert r.hard_reject is False
-    assert r.score >= 0.3
-
-
-def test_style_adh_polite_violates_when_casual_text():
-    sig = StyleAdherence(th=CurateSignalThresholds(), rules=DEFAULT_STYLE_RULES)
-    casual_text = "今日は超楽しいだよ。マジでヤバいかな。明日もそうだね。"
-    r = sig.evaluate(_rec(style_id="polite", answer=casual_text))
-    assert r.hard_reject is True
-
-
 def test_style_adh_unknown_style_returns_neutral():
     sig = StyleAdherence(th=CurateSignalThresholds(), rules=DEFAULT_STYLE_RULES)
     r = sig.evaluate(_rec(style_id="unknown_preset", answer="something"))

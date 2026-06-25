@@ -53,9 +53,9 @@ def test_parser_defaults() -> None:
 
 def test_parser_style_and_sampling() -> None:
     args = build_parser().parse_args(
-        ["--style", "polite,casual", "--temperature", "0.5,0.8", "--top-p", "0.8,0.9"]
+        ["--style", "prose,dialog", "--temperature", "0.5,0.8", "--top-p", "0.8,0.9"]
     )
-    assert args.style == "polite,casual"
+    assert args.style == "prose,dialog"
     assert args.temperature == "0.5,0.8"
     assert args.top_p == "0.8,0.9"
 
@@ -133,7 +133,7 @@ def test_distill_job_spec_to_distill_argv_includes_style_and_sampling() -> None:
     args = build_parser().parse_args(
         [
             "--style",
-            "polite",
+            "prose",
             "--temperature",
             "0.5,0.8",
             "--top-p",
@@ -145,7 +145,7 @@ def test_distill_job_spec_to_distill_argv_includes_style_and_sampling() -> None:
     spec = DistillJobSpec.from_cli_namespace(args)
     extra = spec.to_distill_argv()
     assert "--style" in extra
-    assert "polite" in extra
+    assert "prose" in extra
     assert "--temperature" in extra
     assert "0.5,0.8" in extra
     assert "--top-p" in extra

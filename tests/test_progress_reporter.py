@@ -82,14 +82,14 @@ def test_reporter_shows_recent_completions() -> None:
         log=capture,
         tty=False,
     )
-    reporter.record_success("プロンプトA", "回答A", style_id="polite")
-    reporter.record_success("プロンプトB", "回答B", style_id="casual")
+    reporter.record_success("プロンプトA", "回答A", style_id="prose")
+    reporter.record_success("プロンプトB", "回答B", style_id="dialog")
     reporter.update(2)
     joined = "\n".join(messages)
     assert "直近の完了" in joined
     assert "プロンプトA" in joined
     assert "回答A" in joined
-    assert "[polite]" in joined
+    assert "[prose]" in joined
 
 
 def test_reporter_keeps_at_most_five_recent() -> None:

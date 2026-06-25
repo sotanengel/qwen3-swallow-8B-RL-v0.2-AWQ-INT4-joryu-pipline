@@ -42,47 +42,11 @@ class StyleRule:
         return 0.7 * sentence_ratio + 0.3 * kw_ratio
 
 
-DEFAULT_STYLE_RULES: dict[str, StyleRule] = {
-    "polite": StyleRule(
-        style_id="polite",
-        sentence_end_patterns=(
-            re.compile(r"です$"),
-            re.compile(r"ます$"),
-            re.compile(r"でしょう$"),
-            re.compile(r"ました$"),
-            re.compile(r"ません$"),
-            re.compile(r"ですね$"),
-            re.compile(r"ですよ$"),
-        ),
-        keywords=("ございます", "いたします", "申し上げ"),
-        min_adherence=0.4,
-    ),
-    "casual": StyleRule(
-        style_id="casual",
-        sentence_end_patterns=(
-            re.compile(r"[だよねかな]$"),
-            re.compile(r"だね$"),
-            re.compile(r"だよ$"),
-            re.compile(r"かな$"),
-            re.compile(r"るよ$"),
-            re.compile(r"るね$"),
-        ),
-        keywords=("だよ", "じゃん", "って感じ"),
-        min_adherence=0.25,
-    ),
-    "expert": StyleRule(
-        style_id="expert",
-        sentence_end_patterns=(
-            re.compile(r"である$"),
-            re.compile(r"られる$"),
-            re.compile(r"考えられる$"),
-            re.compile(r"といえる$"),
-            re.compile(r"とされる$"),
-        ),
-        keywords=("したがって", "すなわち", "ゆえに", "一方", "本研究", "本稿"),
-        min_adherence=0.2,
-    ),
-}
+DEFAULT_STYLE_RULES: dict[str, StyleRule] = {}
+# tone-only プリセット (polite/casual/expert) は SFT データに効果が無いため #90 で削除。
+# 現在のスタイルは形式軸のみ (prose/qa_short/dialog/report) で、STYLE-ADH を文末規則で
+# 計測する意味が薄いため DEFAULT_STYLE_RULES は空とする。
+# 必要に応じて prose/qa_short/dialog/report 用のルールを追加することは可能。
 
 
 def load_style_rules(

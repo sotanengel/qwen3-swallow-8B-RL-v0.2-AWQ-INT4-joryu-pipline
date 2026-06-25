@@ -12,14 +12,14 @@ from joryu.jobs.store import JobStore
 
 def test_save_load_roundtrip(tmp_path: Path) -> None:
     store = JobStore(tmp_path)
-    spec = DistillJobSpec(count=5, duration="30m", mode="thinking", style=["polite"])
+    spec = DistillJobSpec(count=5, duration="30m", mode="thinking", style=["prose"])
     record = JobRecord.create(spec)
     store.save(record)
 
     loaded = store.load(record.id)
     assert loaded.id == record.id
     assert loaded.spec.count == 5
-    assert loaded.spec.style == ["polite"]
+    assert loaded.spec.style == ["prose"]
     assert loaded.status == JobStatus.QUEUED
 
 

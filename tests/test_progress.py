@@ -29,7 +29,7 @@ def test_collects_run_keys(tmp_path: Path) -> None:
     )
     key_b = run_key_from_parts(
         prompt="b",
-        style_id="polite",
+        style_id="prose",
         mode=cfg.model.mode,
         temperature=0.7,
         top_p=0.9,
@@ -55,7 +55,7 @@ def test_collects_run_keys(tmp_path: Path) -> None:
                         "prompt": "b",
                         "answer": "完了。",
                         "finish_reason": "stop",
-                        "style_id": "polite",
+                        "style_id": "prose",
                         "mode": cfg.model.mode,
                         "sampling": {"temperature": 0.7, "top_p": 0.9},
                     },
@@ -78,14 +78,14 @@ def test_same_prompt_different_style_is_distinct_key() -> None:
         temperature=cfg.model.temperature,
         top_p=cfg.model.top_p,
     )
-    key_polite = run_key_from_parts(
+    key_prose = run_key_from_parts(
         prompt="p",
-        style_id="polite",
+        style_id="prose",
         mode=cfg.model.mode,
         temperature=cfg.model.temperature,
         top_p=cfg.model.top_p,
     )
-    assert key_default != key_polite
+    assert key_default != key_prose
 
 
 def test_skips_malformed_lines(tmp_path: Path) -> None:
@@ -133,14 +133,14 @@ def test_skips_malformed_lines(tmp_path: Path) -> None:
 def test_run_key_from_record_round_trip() -> None:
     rec = {
         "prompt": "x",
-        "style_id": "casual",
+        "style_id": "dialog",
         "mode": "nothinking",
         "sampling": {"temperature": 0.8, "top_p": 0.85},
     }
     key = run_key_from_record(rec)
     assert key is not None
     assert '"prompt": "x"' in key
-    assert '"style_id": "casual"' in key
+    assert '"style_id": "dialog"' in key
 
 
 def test_load_done_keys_excludes_latest_truncated_record(tmp_path: Path) -> None:
