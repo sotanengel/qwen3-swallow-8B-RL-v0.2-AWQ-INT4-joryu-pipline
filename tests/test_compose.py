@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from joryu.compose import (
     build_artifact_cleanup_commands,
     builder_prune_command,
@@ -10,6 +12,7 @@ from joryu.compose import (
     compose_stop_command,
     compose_up_command,
     image_prune_command,
+    run_up_startup_cleanup,
 )
 
 
@@ -93,6 +96,25 @@ def test_build_artifact_cleanup_commands() -> None:
         ["docker", "image", "prune", "-f"],
         ["docker", "builder", "prune", "-a", "-f"],
     ]
+
+
+def test_run_up_startup_cleanup_prunes_dangling_only(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """起動時 cleanup は dangling image のみ削除する。"""
+    calls: list[list[str]] = []
+
+    def _fake_run(cmd: list[str], **_kwargs: object) -> object:
+        calls.append(cmd)
+
+        class _Done:
+            returncode = 0
+
+        return _Done()
+
+    monkeypatch.setattr("joryu.compose.subprocess.run", _fake_run)
+    run_up_startup_cleanup()
+    assert calls == [image_prune_command()]
 
 
 def test_up_force_recreate_after_build() -> None:

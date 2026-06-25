@@ -33,6 +33,8 @@ from joryu.compose import (
     image_prune_command,
     run,
     run_build_artifact_cleanup,
+    run_builder_cache_cleanup,
+    run_up_startup_cleanup,
 )
 from joryu.docker_delegate import stop_orphan_joryu_containers
 from joryu.preflight import (
@@ -114,6 +116,12 @@ def _should_open_browser(args: argparse.Namespace, up_services: list[str]) -> bo
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    print(
+        "[joryu-up] removing dangling images (<none>) before startup",
+        file=sys.stderr,
+    )
+    run_up_startup_cleanup()
+
     repo_root = Path.cwd()
 
     changed = changed_services_from_git(repo_root)
@@ -135,11 +143,10 @@ def main(argv: list[str] | None = None) -> int:
         # 自動で回収して再チェックする (joryu-up が世代毎に積み上げた中間層が主因のため)。
         if build_services and not args.force:
             print(
-                "[joryu-up] 容量不足のため `docker image prune` / "
-                "`docker builder prune` を試行します",
+                "[joryu-up] 容量不足のため `docker builder prune` を試行します",
                 file=sys.stderr,
             )
-            run_build_artifact_cleanup()
+            run_builder_cache_cleanup()
             try:
                 check_disk_space(build_services, repo_root, force=args.force)
             except PreflightError as exc2:

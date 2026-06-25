@@ -78,9 +78,19 @@ def build_artifact_cleanup_commands() -> list[list[str]]:
 
 
 def run_build_artifact_cleanup() -> None:
-    """build 後 / disk preflight リトライ時の cleanup を実行する。"""
+    """build 後: dangling image と旧 build cache を回収する。"""
     for cmd in build_artifact_cleanup_commands():
         run(cmd)
+
+
+def run_up_startup_cleanup() -> None:
+    """joryu-up 開始直後: dangling (<none>) image を回収する。"""
+    run(image_prune_command())
+
+
+def run_builder_cache_cleanup() -> None:
+    """disk 不足リトライ時: 未参照 build cache のみ回収 (image prune は起動時済み)。"""
+    run(builder_prune_command())
 
 
 def run(cmd: list[str]) -> int:
