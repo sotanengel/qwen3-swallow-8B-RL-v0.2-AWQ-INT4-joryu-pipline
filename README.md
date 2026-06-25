@@ -40,8 +40,8 @@ docker compose build joryu
 # 3. 推論モードで蒸留
 uv run joryu-distill --count 50 --duration 1h
 
-# 3b. 文体 × サンプリングの直積スイープ（同一プロンプトを複数条件で生成）
-uv run joryu-distill --style polite,casual,expert --temperature 0.5,0.8,1.0 --top-p 0.8,0.9,0.95 --count 100
+# 3b. 形式 × サンプリングの直積スイープ（同一プロンプトを複数条件で生成）
+uv run joryu-distill --style prose,qa_short,dialog,report --temperature 0.5,0.8,1.0 --top-p 0.8,0.9,0.95 --count 100
 
 # 4. 形式プリセット混合で蒸留
 uv run joryu-distill --count 50 --style prose,dialog,qa_short

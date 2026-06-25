@@ -17,7 +17,7 @@ def _score_row(**overrides):
         "signal_versions": {},
         "signal_scores": {},
         "signal_raw": {},
-        "style_id": "polite",
+        "style_id": "prose",
     }
     base.update(overrides)
     return base
@@ -33,13 +33,13 @@ def _write(p: Path, rows: list[dict]) -> None:
 def test_compute_curation_stats_basic(tmp_path: Path) -> None:
     src = tmp_path / "scores.jsonl"
     rows = [
-        _score_row(final_score=0.9, accepted=True, style_id="polite"),
-        _score_row(final_score=0.1, accepted=False, rejected_by=["LEN-A"], style_id="polite"),
+        _score_row(final_score=0.9, accepted=True, style_id="prose"),
+        _score_row(final_score=0.1, accepted=False, rejected_by=["LEN-A"], style_id="prose"),
         _score_row(
             final_score=0.3,
             accepted=False,
             rejected_by=["LEN-A", "LANG-JA"],
-            style_id="casual",
+            style_id="dialog",
         ),
     ]
     _write(src, rows)
@@ -52,8 +52,8 @@ def test_compute_curation_stats_basic(tmp_path: Path) -> None:
     reasons = dict(stats["rejected_reasons_top"])
     assert reasons["LEN-A"] == 2
     assert reasons["LANG-JA"] == 1
-    assert stats["by_style"]["polite"]["total"] == 2
-    assert stats["by_style"]["polite"]["kept"] == 1
+    assert stats["by_style"]["prose"]["total"] == 2
+    assert stats["by_style"]["prose"]["kept"] == 1
 
 
 def test_compute_curation_stats_with_rubric(tmp_path: Path) -> None:
@@ -114,18 +114,18 @@ def test_compute_curation_stats_by_sampling(tmp_path: Path) -> None:
         _score_row(
             sampling={"temperature": 0.6, "top_p": 0.95},
             accepted=True,
-            style_id="polite",
+            style_id="prose",
         ),
         _score_row(
             sampling={"temperature": 0.6, "top_p": 0.95},
             accepted=False,
             rejected_by=["LEN-A"],
-            style_id="polite",
+            style_id="prose",
         ),
         _score_row(
             sampling={"temperature": 0.9, "top_p": 0.8},
             accepted=True,
-            style_id="casual",
+            style_id="dialog",
         ),
     ]
     _write(src, rows)
@@ -142,13 +142,13 @@ def test_compute_curation_stats_by_sampling_style_cells(tmp_path: Path) -> None:
         _score_row(
             sampling={"temperature": 0.6, "top_p": 0.95},
             accepted=True,
-            style_id="polite",
+            style_id="prose",
         ),
         _score_row(
             sampling={"temperature": 0.6, "top_p": 0.95},
             accepted=False,
             rejected_by=["LEN-A"],
-            style_id="casual",
+            style_id="dialog",
         ),
     ]
     _write(src, rows)
@@ -156,8 +156,8 @@ def test_compute_curation_stats_by_sampling_style_cells(tmp_path: Path) -> None:
     cells = stats["by_sampling_style"]
     assert isinstance(cells, list)
     matched = {(c["sampling"], c["style_id"]): c for c in cells}
-    assert matched[("t=0.6,p=0.95", "polite")]["kept"] == 1
-    assert matched[("t=0.6,p=0.95", "casual")]["kept"] == 0
+    assert matched[("t=0.6,p=0.95", "prose")]["kept"] == 1
+    assert matched[("t=0.6,p=0.95", "dialog")]["kept"] == 0
 
 
 def test_compute_curation_stats_by_mode(tmp_path: Path) -> None:

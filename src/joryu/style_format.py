@@ -73,14 +73,14 @@ def aggregate_by_style(records: list[dict[str, Any]]) -> dict[str, dict[str, flo
 
 def check_style_format_criteria(
     aggregates: dict[str, dict[str, float]],
-    *,
-    tone_styles: tuple[str, ...] = ("polite", "casual", "expert"),
 ) -> list[str]:
-    """Y1/Y3 受け入れ基準。違反メッセージのリスト (空なら OK)。"""
+    """Y1 受け入れ基準。違反メッセージのリスト (空なら OK)。
+
+    Y3 (tone-styles の format suppression) は #90 で tone-styles 削除のため撤回済み。
+    """
     errors: list[str] = []
     dialog = aggregates.get("dialog")
     prose = aggregates.get("prose")
-    report = aggregates.get("report")
 
     if dialog and prose:
         if dialog["md_marker_rate"] > prose["md_marker_rate"] + 0.1:
@@ -94,15 +94,5 @@ def check_style_format_criteria(
                 f"Y1: dialog mean_sentence_count ({dialog['mean_sentence_count']:.1f}) "
                 "not in [2, 5]"
             )
-
-    if report:
-        report_rate = report["md_marker_rate"]
-        for sid in tone_styles:
-            agg = aggregates.get(sid)
-            if agg and agg["md_marker_rate"] >= report_rate:
-                errors.append(
-                    f"Y3: {sid} md_marker_rate ({agg['md_marker_rate']:.2f}) "
-                    f">= report ({report_rate:.2f})"
-                )
 
     return errors

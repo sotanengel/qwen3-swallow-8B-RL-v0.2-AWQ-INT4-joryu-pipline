@@ -25,7 +25,7 @@ def _make_input(tmp_path: Path) -> Path:
             "sampling": {"temperature": 0.6, "top_p": 0.95},
             "system_prompt": "あなたは日本語アシスタントです。",
             "config_hash": "sha256-test",
-            "style_id": "polite",
+            "style_id": "prose",
             "category": "国語",
         },
         {
@@ -35,7 +35,7 @@ def _make_input(tmp_path: Path) -> Path:
             "sampling": {"temperature": 0.6},
             "system_prompt": "",
             "config_hash": "sha256-test",
-            "style_id": "polite",
+            "style_id": "prose",
             "category": "国語",
         },
     ]
@@ -232,7 +232,7 @@ def test_curate_cli_best_of_n_rubric_max(tmp_path: Path) -> None:
             "sampling": {"temperature": t, "top_p": 0.95},
             "system_prompt": "",
             "config_hash": "h",
-            "style_id": "polite",
+            "style_id": "prose",
         }
         for i, t in enumerate([0.4, 0.6, 0.9])
     ]

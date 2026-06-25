@@ -1,14 +1,8 @@
-# 文体プリセット。`joryu-distill --style polite,casual` で参照。
+# 形式（フォーマット）プリセット。SFT 教師データの多様性確保用。
+# `joryu-distill --style prose,qa_short,dialog,report` で参照。
+#
+# 文体（口調）プリセット polite/casual/expert は実測で形式に影響しないため #90 で削除した。
 styles:
-  polite:
-    label: "丁寧語"
-    instruction: "回答は丁寧語（です・ます調）で書いてください。形式は内容に応じて自然に選んでください。"
-  casual:
-    label: "カジュアル"
-    instruction: "回答はカジュアルで親しみやすい口調で書いてください。形式は内容に応じて自然に選んでください。"
-  expert:
-    label: "専門家向け"
-    instruction: "回答は専門家向けに、専門用語を適切に使い、論理的かつ簡潔に書いてください。形式は内容に応じて自然に選んでください。"
   prose:
     label: "散文"
     instruction: "マークダウン記号や箇条書き、表は使わず、一段落の自然な日本語の文章で答えてください。"

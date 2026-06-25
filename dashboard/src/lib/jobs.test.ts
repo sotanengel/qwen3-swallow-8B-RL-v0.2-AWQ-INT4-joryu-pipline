@@ -9,7 +9,7 @@ describe("parseJobRecord", () => {
       kind: "distill",
       spec: {
         count: 3,
-        style: ["polite"],
+        style: ["prose"],
         mode: "thinking",
         tool_ids: ["search"],
         tool_loop: true,
@@ -21,7 +21,7 @@ describe("parseJobRecord", () => {
     expect(job.id).toBe("abc");
     expect(job.kind).toBe("distill");
     expect(job.spec.count).toBe(3);
-    expect(job.spec.style).toEqual(["polite"]);
+    expect(job.spec.style).toEqual(["prose"]);
     expect(job.spec.tool_ids).toEqual(["search"]);
     expect(job.spec.tool_loop).toBe(true);
     expect(job.spec.max_turns).toBe(4);

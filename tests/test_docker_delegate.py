@@ -86,7 +86,7 @@ def test_build_docker_command_mounts_styles_when_provided(tmp_path: Path) -> Non
         hf_cache=hf_cache,
         styles_path=styles_path,
         styles_rel="styles.yaml",
-        extra_args=["--style", "polite"],
+        extra_args=["--style", "prose"],
     )
 
     flat = " ".join(cmd)
@@ -95,7 +95,7 @@ def test_build_docker_command_mounts_styles_when_provided(tmp_path: Path) -> Non
     assert "joryu.cli.distill" in flat or "joryu-distill" in flat
     assert "--no-docker" in cmd
     assert "--config" in cmd
-    assert "--style" in cmd and "polite" in cmd
+    assert "--style" in cmd and "prose" in cmd
 
 
 def test_build_docker_command_mounts_tools_when_provided(tmp_path: Path) -> None:

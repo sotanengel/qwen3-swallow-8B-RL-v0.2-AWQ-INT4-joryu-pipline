@@ -52,9 +52,9 @@ def test_parser_defaults() -> None:
 
 def test_parser_style_and_sampling() -> None:
     args = build_parser().parse_args(
-        ["--style", "polite,casual", "--temperature", "0.5,0.8", "--top-p", "0.8,0.9"]
+        ["--style", "prose,dialog", "--temperature", "0.5,0.8", "--top-p", "0.8,0.9"]
     )
-    assert args.style == "polite,casual"
+    assert args.style == "prose,dialog"
     assert args.temperature == "0.5,0.8"
     assert args.top_p == "0.8,0.9"
 

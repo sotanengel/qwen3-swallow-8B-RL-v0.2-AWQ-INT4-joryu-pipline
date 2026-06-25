@@ -41,13 +41,13 @@ def test_category_and_style_histograms(tmp_path: Path) -> None:
         p,
         [
             {"prompt": "P", "category": "国語", "style_id": "formal", "answer": "a"},
-            {"prompt": "P", "category": "国語", "style_id": "casual", "answer": "a"},
+            {"prompt": "P", "category": "国語", "style_id": "dialog", "answer": "a"},
             {"prompt": "P", "category": "数学", "style_id": "formal", "answer": "a"},
         ],
     )
     stats = compute_stats(p)
     assert stats["categories"] == {"国語": 2, "数学": 1}
-    assert stats["styles"] == {"formal": 2, "casual": 1}
+    assert stats["styles"] == {"formal": 2, "dialog": 1}
 
 
 def test_length_bins_buckets() -> None:

@@ -277,7 +277,7 @@ def test_run_distill_style_temperature_cartesian(tmp_path: Path) -> None:
         bank_path=bank,
         out_path=out,
         client=client,
-        style_presets=[styles["polite"], styles["casual"]],
+        style_presets=[styles["prose"], styles["dialog"]],
         temperatures=[0.5, 0.8],
     )
     assert n == 4
@@ -285,7 +285,7 @@ def test_run_distill_style_temperature_cartesian(tmp_path: Path) -> None:
     assert len(records) == 4
     style_ids = {r["style_id"] for r in records}
     temps = {r["sampling"]["temperature"] for r in records}
-    assert style_ids == {"polite", "casual"}
+    assert style_ids == {"prose", "dialog"}
     assert temps == {0.5, 0.8}
 
 
