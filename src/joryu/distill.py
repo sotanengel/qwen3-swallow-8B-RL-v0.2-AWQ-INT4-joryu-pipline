@@ -27,6 +27,7 @@ from joryu.progress_reporter import DistillProgressReporter
 from joryu.prompt_bank import EffectiveSampling, PromptRow, load_prompt_bank
 from joryu.stats import compute_stats, resolve_stats_output_path
 from joryu.styles import StylePreset, load_styles, resolve_style_ids
+from joryu.tool_calls import ParsedToolCall
 from joryu.tool_executor import ToolExecutor, build_default_executor
 from joryu.tools import load_tools
 from joryu.variants import DistillVariant, expand_variants
@@ -115,9 +116,43 @@ def _record_from_chat(
     )
 
 
+def _tool_calls_to_openai(tool_calls: tuple[ParsedToolCall, ...]) -> list[dict[str, Any]]:
+    """Qwen3 chat_template 互換の assistant.tool_calls 配列を組み立てる。"""
+    return [
+        {
+            "function": {
+                "name": call.name,
+                "arguments": json.dumps(call.arguments, ensure_ascii=False),
+            }
+        }
+        for call in tool_calls
+    ]
+
+
+def _append_tool_turn_messages(
+    working_messages: list[dict[str, Any]],
+    *,
+    assistant_content: str,
+    tool_calls: tuple[ParsedToolCall, ...],
+    tool_results: list[tuple[str, str]],
+) -> list[dict[str, Any]]:
+    """assistant (tool_calls 付き) + tool 応答を working_messages に追記する。"""
+    updated: list[dict[str, Any]] = [
+        *working_messages,
+        {
+            "role": "assistant",
+            "content": assistant_content,
+            "tool_calls": _tool_calls_to_openai(tool_calls),
+        },
+    ]
+    for name, content in tool_results:
+        updated.append({"role": "tool", "content": content, "name": name})
+    return updated
+
+
 def _run_chat_loop(
     client: SupportsChat,
-    messages: list[dict[str, str]],
+    messages: list[dict[str, Any]],
     *,
     tools: list[dict[str, Any]] | None,
     executor: ToolExecutor | None,
@@ -149,6 +184,7 @@ def _run_chat_loop(
             break
 
         assistant_content = chat.answer or ""
+        tool_results: list[tuple[str, str]] = []
         for call in chat.tool_calls:
             if call.name == "<malformed>":
                 result = "error: malformed tool_call"
@@ -157,12 +193,14 @@ def _run_chat_loop(
                     result = executor.run(call)
                 except (KeyError, ValueError) as exc:
                     result = f"error: {exc}"
+            tool_results.append((call.name, result))
             turns.append({"role": "tool", "name": call.name, "content": result})
-            working_messages = [
-                *working_messages,
-                {"role": "assistant", "content": assistant_content},
-                {"role": "tool", "content": result},
-            ]
+        working_messages = _append_tool_turn_messages(
+            working_messages,
+            assistant_content=assistant_content,
+            tool_calls=chat.tool_calls,
+            tool_results=tool_results,
+        )
     else:
         exhausted = final_chat is not None and bool(final_chat.tool_calls)
 
