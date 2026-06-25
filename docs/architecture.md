@@ -115,3 +115,35 @@ tools.yaml ───┤
 - `config_hash` (`config.yaml` 全体の SHA256)
 
 下流 SFT は config_hash で蒸留時の設定を一意に特定できる。
+
+## tool calling 品質フロー (#109)
+
+compass 調査に基づき、蒸留〜curate で次の責務分担を取る。
+
+```
+vLLM 生成
+    │
+    ▼
+tool_calls.py (+ raw_completion 診断)     ← parser ロスト検出
+    │
+    ▼
+tool_intent.py → tool_call_recovery.py    ← intent あり & calls 空 → 強制リトライ
+    │                                         (optional: no_think_fallback)
+    ▼
+responses.jsonl (+ tool_call_recovery メタ)
+    │
+    ▼
+curate/signals/tool_use.py                ← TOOL-PLAN / TOOL-CLAIM で hard reject
+    │
+    ▼
+responses.high_quality.jsonl              ← SFT 教師データ
+```
+
+| 段階 | 救済するもの | 救済しないもの |
+|---|---|---|
+| 蒸留 (recovery) | thinking 内 intent + calls 空、raw に `<tool_call>` 残骸 | モデルが tool 系列を一切生成しないケース |
+| curate (TOOL-*) | 計画のみ / 捏造応答 | 低品質だが tool call は正しいケース |
+| スコープ外 | — | 教師能力そのもの（Swallow 未学習）→ 段階3で別モデル or post-training |
+
+**判断閾値**: curate 通過率が 40% 未満なら教師変更を優先。stats の
+`tool_planned_but_not_called_rate` / `no_think_fallback_rescued_count` で A/B 計測する。
