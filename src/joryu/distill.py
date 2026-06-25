@@ -168,6 +168,7 @@ def _run_chat_loop(
     executor: ToolExecutor | None,
     max_turns: int,
     sampling: dict[str, Any],
+    no_think_fallback: bool = False,
 ) -> tuple[ChatResult, list[dict[str, Any]]]:
     """tool_call が無くなるか max_turns に達するまで chat を回す。"""
     turns: list[dict[str, Any]] = []
@@ -189,6 +190,7 @@ def _run_chat_loop(
                 messages=working_messages,
                 tools=tools,
                 sampling=sampling,
+                no_think_fallback=no_think_fallback,
             )
         final_chat = chat
         assistant_turn: dict[str, Any] = {
@@ -248,6 +250,8 @@ def _make_tool_loop_chat_fn(
     executor: ToolExecutor,
     max_turns: int,
     turns_holder: dict[str, list[dict[str, Any]]],
+    *,
+    no_think_fallback: bool = False,
 ) -> Callable[..., ChatResult]:
     def _chat_with_loop(
         loop_messages: list[dict[str, str]],
@@ -262,6 +266,7 @@ def _make_tool_loop_chat_fn(
             executor=executor,
             max_turns=max_turns,
             sampling=sampling_kwargs,
+            no_think_fallback=no_think_fallback,
         )
         turns_holder["turns"] = turns
         return chat
@@ -290,6 +295,7 @@ def _make_build_with_turns(
     messages: list[dict[str, str]] | None = None,
     tools: list[dict[str, Any]] | None = None,
     sampling: dict[str, Any] | None = None,
+    no_think_fallback: bool = False,
 ) -> Callable[[ChatResult], dict[str, Any]]:
     def _build_with_turns(chat: ChatResult) -> dict[str, Any]:
         final_chat = chat
@@ -301,10 +307,14 @@ def _make_build_with_turns(
                 messages=messages,
                 tools=tools,
                 sampling=sampling,
+                no_think_fallback=no_think_fallback,
             )
         record = build_record(final_chat)
         if recovery_meta and recovery_meta.get("attempts"):
             record["tool_call_recovery"] = recovery_meta
+        record["no_think_fallback_used"] = bool(
+            recovery_meta.get("no_think_fallback_used") if recovery_meta else False
+        )
         if use_tool_loop:
             record["turns"] = turns_holder["turns"]
             aggregated = _aggregate_tool_calls_from_turns(turns_holder["turns"])
@@ -464,6 +474,7 @@ def run_distill(
         client = resolve_chat_client(config.model, config.vllm)
 
     use_tool_loop = config.distill.tool_loop if tool_loop is None else tool_loop
+    no_think_fallback = config.distill.no_think_fallback
     loop_max_turns = (
         config.distill.tool_loop_max_turns if tool_loop_max_turns is None else tool_loop_max_turns
     )
@@ -517,6 +528,7 @@ def run_distill(
                         loop_executor,
                         loop_max_turns,
                         turns_holder,
+                        no_think_fallback=no_think_fallback,
                     )
                     if use_tool_loop and loop_executor is not None
                     else None
@@ -529,6 +541,7 @@ def run_distill(
                     messages=messages,
                     tools=eff.tools or None,
                     sampling=eff.sampling,
+                    no_think_fallback=no_think_fallback,
                 )
 
                 on_retry = partial(

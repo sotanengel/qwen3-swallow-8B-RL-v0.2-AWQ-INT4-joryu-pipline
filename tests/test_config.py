@@ -118,3 +118,8 @@ def test_dataclass_types() -> None:
     assert isinstance(cfg.vllm, VllmConfig)
     assert isinstance(cfg.distill, DistillConfig)
     assert isinstance(cfg.export, ExportConfig)
+
+
+def test_distill_no_think_fallback_defaults_false() -> None:
+    cfg = Config()
+    assert cfg.distill.no_think_fallback is False

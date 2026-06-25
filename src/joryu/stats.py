@@ -137,6 +137,8 @@ def compute_stats(jsonl_path: str | Path) -> dict[str, Any]:
     planned_not_called = 0
     bare_json_tool_call_records = 0
     suspected_unparsed_tool_call_records = 0
+    no_think_fallback_used_records = 0
+    no_think_fallback_rescued_count = 0
 
     for rec in iter_jsonl(p):
         prompt = rec.get("prompt")
@@ -191,6 +193,14 @@ def compute_stats(jsonl_path: str | Path) -> dict[str, Any]:
         if _record_has_suspected_unparsed_tool_call(rec):
             suspected_unparsed_tool_call_records += 1
 
+        if rec.get("no_think_fallback_used"):
+            no_think_fallback_used_records += 1
+            recovery = rec.get("tool_call_recovery")
+            if isinstance(recovery, dict) and recovery.get("no_think_fallback_succeeded"):
+                no_think_fallback_rescued_count += 1
+            elif call_names:
+                no_think_fallback_rescued_count += 1
+
     truncated_rate = (truncated_count / total) if total else 0.0
     tool_call_rate = (tool_call_records / tool_records) if tool_records else 0.0
     tool_calls_per_record = (total_tool_calls / total) if total else 0.0
@@ -209,6 +219,8 @@ def compute_stats(jsonl_path: str | Path) -> dict[str, Any]:
         "tool_planned_but_not_called_rate": tool_planned_but_not_called_rate,
         "bare_json_tool_call_records": bare_json_tool_call_records,
         "suspected_unparsed_tool_call_records": suspected_unparsed_tool_call_records,
+        "no_think_fallback_used_records": no_think_fallback_used_records,
+        "no_think_fallback_rescued_count": no_think_fallback_rescued_count,
         "models": dict(models),
         "modes": dict(modes),
         "categories": dict(categories),
@@ -246,6 +258,8 @@ def _empty_stats() -> dict[str, Any]:
         "tool_planned_but_not_called_rate": 0.0,
         "bare_json_tool_call_records": 0,
         "suspected_unparsed_tool_call_records": 0,
+        "no_think_fallback_used_records": 0,
+        "no_think_fallback_rescued_count": 0,
     }
 
 

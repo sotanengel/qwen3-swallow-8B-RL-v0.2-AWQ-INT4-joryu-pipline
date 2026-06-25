@@ -70,6 +70,8 @@ class DistillConfig:
     tools_file: str = "tools.yaml"
     tool_loop: bool = False
     tool_loop_max_turns: int = 4
+    # named function リトライ後も tool_calls 空のとき enable_thinking=False で再生成 (#111)
+    no_think_fallback: bool = False
 
 
 @dataclass
