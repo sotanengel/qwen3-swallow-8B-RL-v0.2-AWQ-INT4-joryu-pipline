@@ -13,12 +13,19 @@ def test_load_styles_from_repo_default() -> None:
     assert set(styles) == set(expected_ids)
     assert styles["polite"].label == "丁寧語"
     assert "です・ます調" in styles["polite"].instruction
+    assert "形式は内容に応じて" in styles["polite"].instruction
+    assert styles["casual"].label == "カジュアル"
+    assert "形式は内容に応じて" in styles["casual"].instruction
+    assert styles["expert"].label == "専門家向け"
+    assert "形式は内容に応じて" in styles["expert"].instruction
     assert styles["prose"].label == "散文"
     assert "マークダウン記号" in styles["prose"].instruction
     assert styles["qa_short"].label == "短答"
     assert "結論を最初" in styles["qa_short"].instruction
     assert styles["dialog"].label == "対話"
-    assert "会話のように" in styles["dialog"].instruction
+    assert "マークダウン記号" in styles["dialog"].instruction
+    assert "2〜4 文" in styles["dialog"].instruction
+    assert "短く" in styles["dialog"].instruction
     assert styles["report"].label == "レポート"
     assert "構造化されたレポート" in styles["report"].instruction
 
