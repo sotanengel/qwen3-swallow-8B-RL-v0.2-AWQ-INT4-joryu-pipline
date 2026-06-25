@@ -27,6 +27,7 @@ from joryu.progress_reporter import DistillProgressReporter
 from joryu.prompt_bank import EffectiveSampling, PromptRow, load_prompt_bank
 from joryu.stats import compute_stats, resolve_stats_output_path
 from joryu.styles import StylePreset, load_styles, resolve_style_ids
+from joryu.tool_call_recovery import recover_tool_call
 from joryu.tool_calls import ParsedToolCall
 from joryu.tool_executor import ToolExecutor, build_default_executor
 from joryu.tools import load_tools
@@ -181,6 +182,14 @@ def _run_chat_loop(
             tools=tools,
             **sampling,
         )
+        if tools:
+            chat, _recovery = recover_tool_call(
+                client,
+                chat,
+                messages=working_messages,
+                tools=tools,
+                sampling=sampling,
+            )
         final_chat = chat
         assistant_turn: dict[str, Any] = {
             "role": "assistant",
@@ -277,9 +286,25 @@ def _make_build_with_turns(
     *,
     use_tool_loop: bool,
     turns_holder: dict[str, list[dict[str, Any]]],
+    client: SupportsChat | None = None,
+    messages: list[dict[str, str]] | None = None,
+    tools: list[dict[str, Any]] | None = None,
+    sampling: dict[str, Any] | None = None,
 ) -> Callable[[ChatResult], dict[str, Any]]:
     def _build_with_turns(chat: ChatResult) -> dict[str, Any]:
-        record = build_record(chat)
+        final_chat = chat
+        recovery_meta: dict[str, Any] | None = None
+        if client is not None and messages is not None and sampling is not None:
+            final_chat, recovery_meta = recover_tool_call(
+                client,
+                chat,
+                messages=messages,
+                tools=tools,
+                sampling=sampling,
+            )
+        record = build_record(final_chat)
+        if recovery_meta and recovery_meta.get("attempts"):
+            record["tool_call_recovery"] = recovery_meta
         if use_tool_loop:
             record["turns"] = turns_holder["turns"]
             aggregated = _aggregate_tool_calls_from_turns(turns_holder["turns"])
@@ -500,6 +525,10 @@ def run_distill(
                     build_record,
                     use_tool_loop=use_tool_loop,
                     turns_holder=turns_holder,
+                    client=client,
+                    messages=messages,
+                    tools=eff.tools or None,
+                    sampling=eff.sampling,
                 )
 
                 on_retry = partial(

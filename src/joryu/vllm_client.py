@@ -115,6 +115,7 @@ class SupportsChat(Protocol):
         *,
         enable_thinking: bool = True,
         tools: list[dict[str, Any]] | None = None,
+        tool_choice: dict[str, Any] | str | None = None,
         **sampling_overrides: Any,
     ) -> ChatResult: ...
 
@@ -257,6 +258,7 @@ class VllmClient:
         *,
         enable_thinking: bool = True,
         tools: list[dict[str, Any]] | None = None,
+        tool_choice: dict[str, Any] | str | None = None,
         **sampling_overrides: Any,
     ) -> ChatResult:
         """トークナイザの chat_template を使って生成。`ChatResult` を返す。"""
@@ -265,6 +267,8 @@ class VllmClient:
         chat_kwargs["chat_template_kwargs"] = build_chat_template_kwargs(enable_thinking)
         if tools:
             chat_kwargs["tools"] = tools
+        if tool_choice is not None:
+            chat_kwargs["tool_choice"] = tool_choice
 
         requested_max = int(sampling_overrides.get("max_tokens", self._max_tokens))
         prompt_tokens = self._estimate_prompt_tokens(
@@ -396,12 +400,14 @@ class VllmHttpClient:
         *,
         enable_thinking: bool = True,
         tools: list[dict[str, Any]] | None = None,
+        tool_choice: dict[str, Any] | str | None = None,
         **sampling_overrides: Any,
     ) -> ChatResult:
         payload = {
             "messages": messages,
             "enable_thinking": enable_thinking,
             "tools": tools,
+            "tool_choice": tool_choice,
             "sampling": dict(sampling_overrides),
         }
         body = json.dumps(payload).encode("utf-8")
