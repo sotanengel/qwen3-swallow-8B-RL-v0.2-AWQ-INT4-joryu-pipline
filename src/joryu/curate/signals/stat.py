@@ -17,6 +17,7 @@ from joryu.curate.minhash_index import GlobalDuplicateIndex
 from joryu.curate.style_presets import DEFAULT_STYLE_RULES, StyleRule
 
 from . import Signal, SignalResult
+from .tool_use import ActionClaimWithoutCall, ToolPlannedNotCalled
 
 SAMP_OUT_CODE = "SAMP-OUT"
 SAMP_OUT_VERSION = "v1"
@@ -367,6 +368,8 @@ def build_default_stat_signals(
         RatioTA(th=th),
         Truncated(),
         ThinkTag(),
+        ToolPlannedNotCalled(),
+        ActionClaimWithoutCall(),
         LangJapanese(th=th),
         RepeatNGram(th=th),
         RepeatChar(th=th),
