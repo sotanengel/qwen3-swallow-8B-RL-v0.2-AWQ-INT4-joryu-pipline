@@ -1,6 +1,45 @@
 import { describe, expect, it } from "vitest";
 
-import { parseJobRecord, statusLabel } from "./jobs";
+import { defaultJobSelections, formatJobDuration, parseJobRecord, statusLabel } from "./jobs";
+
+describe("formatJobDuration", () => {
+  it("returns empty string when value is empty", () => {
+    expect(formatJobDuration("", "h")).toBe("");
+    expect(formatJobDuration("", "m")).toBe("");
+  });
+
+  it("returns empty string for zero or negative values", () => {
+    expect(formatJobDuration(0, "h")).toBe("");
+    expect(formatJobDuration(-1, "m")).toBe("");
+  });
+
+  it("formats hours", () => {
+    expect(formatJobDuration(2, "h")).toBe("2h");
+  });
+
+  it("formats minutes", () => {
+    expect(formatJobDuration(30, "m")).toBe("30m");
+  });
+});
+
+describe("defaultJobSelections", () => {
+  it("selects all styles, tools, and enables tool_loop", () => {
+    const selections = defaultJobSelections({
+      styles: [
+        { id: "prose", label: "Prose" },
+        { id: "qa_short", label: "Q&A" },
+      ],
+      tools: [
+        { id: "search", description: "Search" },
+        { id: "calc", description: "Calc" },
+      ],
+      defaults: { config: "config.yaml" },
+    });
+    expect(selections.styles).toEqual(["prose", "qa_short"]);
+    expect(selections.toolIds).toEqual(["search", "calc"]);
+    expect(selections.toolLoop).toBe(true);
+  });
+});
 
 describe("parseJobRecord", () => {
   it("normalizes API payload", () => {

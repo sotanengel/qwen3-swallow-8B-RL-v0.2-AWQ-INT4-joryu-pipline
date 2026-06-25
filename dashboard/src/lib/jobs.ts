@@ -45,6 +45,27 @@ export type CreateJobRequest = {
   max_turns?: number | null;
 };
 
+export type DurationUnit = "h" | "m";
+
+export function formatJobDuration(value: number | "", unit: DurationUnit): string {
+  if (value === "" || value <= 0) {
+    return "";
+  }
+  return `${value}${unit}`;
+}
+
+export function defaultJobSelections(options: JobOptions): {
+  styles: string[];
+  toolIds: string[];
+  toolLoop: true;
+} {
+  return {
+    styles: options.styles.map((s) => s.id),
+    toolIds: options.tools.map((t) => t.id),
+    toolLoop: true,
+  };
+}
+
 export type LogResponse = {
   chunk: string;
   offset: number;
