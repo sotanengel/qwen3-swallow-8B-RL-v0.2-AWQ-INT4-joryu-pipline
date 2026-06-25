@@ -4,38 +4,16 @@ from __future__ import annotations
 
 import sys
 import threading
-import time
-import urllib.error
-import urllib.request
 import webbrowser
 from typing import Protocol
 
-DASHBOARD_URL = "http://localhost:3000"
+from joryu.readiness import DASHBOARD_URL, wait_for_dashboard
+
 DEFAULT_READY_TIMEOUT_S = 120.0
-DEFAULT_POLL_INTERVAL_S = 0.5
 
 
 class _WebBrowser(Protocol):
     def open(self, url: str, new: int = 0, autoraise: bool = True) -> bool: ...
-
-
-def wait_for_dashboard(
-    url: str = DASHBOARD_URL,
-    *,
-    timeout_s: float = DEFAULT_READY_TIMEOUT_S,
-    poll_interval_s: float = DEFAULT_POLL_INTERVAL_S,
-) -> bool:
-    """HTTP 200 が返るまでポーリング。タイムアウト時は False。"""
-    deadline = time.monotonic() + timeout_s
-    while time.monotonic() < deadline:
-        try:
-            with urllib.request.urlopen(url, timeout=2) as resp:
-                if resp.status == 200:
-                    return True
-        except (urllib.error.URLError, OSError, TimeoutError):
-            pass
-        time.sleep(poll_interval_s)
-    return False
 
 
 def open_dashboard(

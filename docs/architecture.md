@@ -18,8 +18,8 @@ tools.yaml ───┤
    variants.py (style × temperature × top_p × mode の直積)
               │
               ▼
-   distill.py ─── chat_via_template ───▶ vllm_client.py ──▶ vLLM (GPU)
-              │         ▲                      │
+   distill.py ─── chat_via_template ───▶ vllm_client.py ──┬──▶ vLLM (GPU, in-process)
+              │         ▲                      │          └──▶ joryu-llm-serve :8100 (HTTP)
               │         └── tool_loop 時: tool_executor.py (Stub/Registry)
               │   ◄── enable_thinking で <think> 切替 (auto は kwargs 省略) ──┘
               │
@@ -62,7 +62,10 @@ tools.yaml ───┤
                           joryu-api (FastAPI) :8000
                                     │
                                     ▼
-                          jobs/runner → docker compose run joryu
+                          jobs/runner → distill (JORYU_VLLM_URL 時は api 内 subprocess)
+                                    │
+                                    ▼ HTTP /v1/chat
+                          joryu-llm-serve (vLLM 常駐) :8100
                                     │
                                     ▼
                           data/jobs/*.json (状態・ログ)
@@ -84,7 +87,8 @@ tools.yaml ───┤
 | 統計 | JSONL | dashboard 用 JSON | stats.py |
 | Docker 委譲 | Windows ネイティブ呼び出し | `docker run` 実行 | docker_delegate.py |
 | ジョブ API | HTTP POST ジョブ spec | queued/running 状態 + ログ | jobs/ + api/ |
-| ジョブ実行 | spec | GPU 蒸留 subprocess | jobs/runner.py |
+| ジョブ実行 | spec | 蒸留 subprocess (daemon 経由 or GPU docker run) | jobs/runner.py |
+| vLLM 常駐 | config.yaml | HTTP `/health`, `/v1/chat` | llm_server.py, cli/llm_serve.py |
 
 ## CLI 構成
 
@@ -95,8 +99,9 @@ tools.yaml ───┤
 | `joryu-stats` | dashboard JSON 生成 (`--curation <run_dir>` で curation.json も) |
 | `joryu-curate` | 蒸留 JSONL から高品質サブセットを抽出 |
 | `joryu-api` | 蒸留ジョブ REST API (FastAPI, :8000) |
-| `joryu-up` | git 差分 → `compose build` → `compose up` (既定: dashboard + api)。API ジョブ用 `joryu:latest` は初回・差分・未作成時に build |
-| `joryu-up --full` | dashboard + api + joryu を up、差分がある方だけ build |
+| `joryu-llm-serve` | vLLM 常駐デーモン (FastAPI, :8100) |
+| `joryu-up` | git 差分 → `compose build` → `compose up` (既定: dashboard + api + joryu)。`--detach` 時 ready 待ち |
+| `joryu-up --full` | 上記と同義 (後方互換) |
 | `joryu-up --force` | ディスク preflight をスキップ |
 | `joryu-serve` | `joryu-up --frontend-only` の互換エイリアス |
 

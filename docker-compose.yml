@@ -11,7 +11,10 @@ services:
     # vLLM v1 はワーカ IPC で /dev/shm を使う。デフォルト 64MB だと
     # prefix cache / KV swap が詰まることがあるため 2GiB に拡張。
     shm_size: "2gb"
+    ports:
+      - "8100:8100"
     environment:
+      - JORYU_REPO_ROOT=/app
       - VLLM_USE_DEEP_GEMM=0
       - VLLM_DEEP_GEMM_WARMUP=skip
       - VLLM_USE_FLASHINFER_SAMPLER=0
@@ -32,8 +35,14 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
-    # 手動キック用: `docker compose run --rm joryu joryu-distill --no-docker --count 1`
-    command: ["python", "-c", "import joryu; print('joryu', joryu.__version__)"]
+    command: ["joryu-llm-serve", "--host", "0.0.0.0", "--port", "8100"]
+    restart: "on-failure:3"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8100/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 40
+      start_period: 300s
 
   dashboard:
     build:
@@ -46,7 +55,8 @@ services:
     environment:
       - JORYU_API_PROXY_TARGET=http://api:8000
     depends_on:
-      - api
+      api:
+        condition: service_started
     volumes:
       # public は rw にして responses.jsonl の bind mount マウントポイントを作成可能にする。
       # stats.json / responses.jsonl はホスト側 (joryu-stats / 蒸留) から更新される。
@@ -69,9 +79,13 @@ services:
     environment:
       - JORYU_REPO_ROOT=/workspace
       - JORYU_USE_COMPOSE_RUN=1
+      - JORYU_VLLM_URL=http://joryu:8100
       - PYTHONPATH=/workspace/src
       # DooD: api コンテナ内 /workspace をホストパスへ解決できない場合の手動指定
       - JORYU_HOST_REPO_ROOT=${JORYU_HOST_REPO_ROOT:-}
+    depends_on:
+      joryu:
+        condition: service_healthy
     restart: "on-failure:3"
 
 volumes:
