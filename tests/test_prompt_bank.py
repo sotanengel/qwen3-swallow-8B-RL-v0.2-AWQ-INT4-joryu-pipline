@@ -109,3 +109,21 @@ def test_unicode_jsonl_round_trip(tmp_path: Path) -> None:
 def test_load_missing_file(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError):
         load_prompt_bank(tmp_path / "none.jsonl")
+
+
+def test_merge_with_defaults_appends_tool_hint_when_tools_resolved() -> None:
+    from joryu.tools import load_tools
+
+    cfg = Config()
+    row = PromptRow(prompt="p", tool_ids=["search"])
+    eff = merge_with_defaults(row, cfg, tools_registry=load_tools("tools.yaml"))
+    assert "ツール" in eff.system_prompt
+    assert "架空" in eff.system_prompt
+    assert len(eff.tools) == 1
+
+
+def test_merge_with_defaults_no_tool_hint_without_tools() -> None:
+    cfg = Config()
+    row = PromptRow(prompt="p")
+    eff = merge_with_defaults(row, cfg)
+    assert "架空" not in eff.system_prompt

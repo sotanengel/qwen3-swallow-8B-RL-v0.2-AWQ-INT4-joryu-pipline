@@ -82,8 +82,37 @@ def _calc_fn(arguments: dict[str, Any]) -> str:
     return _eval_arithmetic(expression)
 
 
+def _search_fn(arguments: dict[str, Any]) -> str:
+    query = arguments.get("query")
+    if not isinstance(query, str) or not query.strip():
+        raise ValueError("search requires string 'query'")
+    top_k = arguments.get("top_k", 5)
+    if not isinstance(top_k, int) or top_k < 1:
+        top_k = 5
+    lines = [f"[search results for {query!r}, top_k={top_k}]"]
+    for i in range(1, min(top_k, 5) + 1):
+        lines.append(
+            f"{i}. snippet: 「{query}」に関する参考情報 (synthetic result #{i} for distillation)"
+        )
+    return "\n".join(lines)
+
+
+def _fetch_url_fn(arguments: dict[str, Any]) -> str:
+    url = arguments.get("url")
+    if not isinstance(url, str) or not url.strip():
+        raise ValueError("fetch_url requires string 'url'")
+    return (
+        f"[page content from {url}]\n"
+        f"Title: サンプルページ ({url})\n"
+        "Body: この URL から取得した本文の synthetic スタブです。"
+        "蒸留用に決定論的なテキストを返しています。"
+    )
+
+
 def build_default_executor() -> RegistryToolExecutor:
-    """既定登録 (calc のみ。search/fetch_url は Stub 推奨)。"""
+    """既定登録: calc + search/fetch_url の決定論的スタブ。"""
     executor = RegistryToolExecutor()
     executor.register("calc", _calc_fn)
+    executor.register("search", _search_fn)
+    executor.register("fetch_url", _fetch_url_fn)
     return executor

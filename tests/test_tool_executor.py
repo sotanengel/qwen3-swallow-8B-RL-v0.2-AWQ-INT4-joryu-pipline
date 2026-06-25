@@ -27,3 +27,19 @@ def test_registry_unknown_tool_raises() -> None:
     ex = RegistryToolExecutor()
     with pytest.raises(KeyError):
         ex.run(ParsedToolCall(name="missing", arguments={}, raw=""))
+
+
+def test_default_executor_search_returns_query_specific_stub() -> None:
+    ex = build_default_executor()
+    out = ex.run(
+        ParsedToolCall(name="search", arguments={"query": "日本の再犯率", "top_k": 3}, raw="")
+    )
+    assert "日本の再犯率" in out
+    assert "snippet" in out.lower() or "スニペット" in out or "result" in out.lower()
+
+
+def test_default_executor_fetch_url_returns_url_specific_stub() -> None:
+    ex = build_default_executor()
+    url = "https://example.com/stats"
+    out = ex.run(ParsedToolCall(name="fetch_url", arguments={"url": url}, raw=""))
+    assert url in out
