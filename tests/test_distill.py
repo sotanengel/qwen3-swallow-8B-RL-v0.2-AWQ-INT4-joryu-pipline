@@ -633,3 +633,77 @@ def test_run_distill_override_tool_ids_applies_only_to_empty_rows(tmp_path: Path
     assert len(search_calls) == 2
     names = {c["tools"][0]["function"]["name"] for c in search_calls}
     assert names == {"search", "calc"}
+
+
+def test_run_distill_applies_tool_call_recovery(tmp_path: Path) -> None:
+    """#110: intent あり & tool_calls 空 → named function 強制リトライ。"""
+    from joryu.config import load_config
+    from joryu.tool_calls import ParsedToolCall
+    from joryu.vllm_client import ChatResult
+
+    bank = tmp_path / "bank.jsonl"
+    tools_yaml = tmp_path / "tools.yaml"
+    tools_yaml.write_text(
+        "tools:\n  search:\n    description: search\n    parameters:\n"
+        "      type: object\n      properties:\n        query:\n          type: string\n"
+        "      required: [query]\n",
+        encoding="utf-8",
+    )
+    cfg_dir = tmp_path / "cfg"
+    cfg_dir.mkdir()
+    config_path = cfg_dir / "config.yaml"
+    config_path.write_text(
+        f"distill:\n  tools_file: {tools_yaml.as_posix()}\n",
+        encoding="utf-8",
+    )
+    _write_bank(bank, [{"prompt": "最新の統計は？", "tool_ids": ["search"]}])
+    out = tmp_path / "out.jsonl"
+
+    class RecoveryDistillClient(FakeVllmClient):
+        def chat_via_template(
+            self,
+            messages,
+            *,
+            enable_thinking=True,
+            tools=None,
+            tool_choice=None,
+            **kw,
+        ):
+            self.calls.append(
+                {
+                    "messages": messages,
+                    "enable_thinking": enable_thinking,
+                    "tools": tools,
+                    "tool_choice": tool_choice,
+                    "sampling": dict(kw),
+                }
+            )
+            if tool_choice is not None:
+                return ChatResult(
+                    thinking=None,
+                    answer="",
+                    finish_reason="stop",
+                    prompt_tokens=1,
+                    completion_tokens=1,
+                    tool_calls=(
+                        ParsedToolCall(name="search", arguments={"query": "統計"}, raw=""),
+                    ),
+                )
+            return ChatResult(
+                thinking="I'll use the search function.",
+                answer="検索しました。",
+                finish_reason="stop",
+                prompt_tokens=1,
+                completion_tokens=1,
+                tool_calls=(),
+            )
+
+    cfg = load_config(config_path)
+    client = RecoveryDistillClient()
+    run_distill(cfg, bank_path=bank, out_path=out, client=client, config_path=config_path)
+
+    rec = _load_jsonl(out)[0]
+    assert rec["tool_call_recovery"]["succeeded"] is True
+    assert rec["tool_call_recovery"]["method"] == "named_function"
+    assert len(rec["tool_calls"]) == 1
+    assert client.calls[1]["tool_choice"]["function"]["name"] == "search"

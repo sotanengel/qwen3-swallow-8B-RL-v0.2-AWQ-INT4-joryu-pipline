@@ -35,6 +35,7 @@ class FakeVllmClient:
         *,
         enable_thinking: bool | None = True,
         tools: list[dict[str, Any]] | None = None,
+        tool_choice: dict[str, Any] | str | None = None,
         **sampling_overrides: Any,
     ) -> ChatResult:
         self.calls.append(
@@ -42,6 +43,7 @@ class FakeVllmClient:
                 "messages": messages,
                 "enable_thinking": enable_thinking,
                 "tools": tools,
+                "tool_choice": tool_choice,
                 "sampling": dict(sampling_overrides),
             }
         )

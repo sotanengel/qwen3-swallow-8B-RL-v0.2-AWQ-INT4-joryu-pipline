@@ -15,6 +15,7 @@ class ChatRequest(BaseModel):
     messages: list[dict[str, str]]
     enable_thinking: bool | None = True
     tools: list[dict[str, Any]] | None = None
+    tool_choice: dict[str, Any] | str | None = None
     sampling: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -66,6 +67,7 @@ def create_llm_app(
             body.messages,
             enable_thinking=body.enable_thinking,
             tools=body.tools,
+            tool_choice=body.tool_choice,
             **body.sampling,
         )
         return chat_result_to_dict(result)

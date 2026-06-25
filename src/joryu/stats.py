@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
@@ -11,6 +10,7 @@ from typing import Any
 from joryu.dashboard_json import write_dashboard_json
 from joryu.io.jsonl import iter_jsonl
 from joryu.paths import STATS_JSON_REL, resolve_repo_root, resolve_stats_output_path
+from joryu.tool_intent import thinking_plans_tool_use
 from joryu.truncation import record_looks_truncated
 
 DEFAULT_STATS_OUTPUT = STATS_JSON_REL
@@ -26,14 +26,6 @@ __all__ = [
 
 # 文字数ベースのビン (token 換算はモデル依存なので char で近似する)。
 _LENGTH_BIN_EDGES: tuple[int, ...] = (0, 50, 100, 200, 500, 1000, 2000, 5000)
-
-_TOOL_INTENT_RE = re.compile(
-    r"(?i)(use\s+(?:search|calc|fetch_url|the)\s+function|"
-    r"call\s+(?:search|calc|fetch_url)\b|"
-    r"(?:we|let's|should)\s+(?:use|call)\s+(?:search|calc|fetch_url|a\s+search)|"
-    r"search\s+function|fetch_url|tool\s+(?:usage|function)|"
-    r"検索ツール|ツールで)",
-)
 
 
 def length_bins(values: list[int], edges: tuple[int, ...] = _LENGTH_BIN_EDGES) -> list[dict]:
@@ -118,7 +110,7 @@ def _thinking_plans_tool_use(rec: dict[str, Any]) -> bool:
     trace = rec.get("thinking_trace") or rec.get("reasoning") or ""
     if not isinstance(trace, str) or not trace.strip():
         return False
-    return _TOOL_INTENT_RE.search(trace) is not None
+    return thinking_plans_tool_use(trace)
 
 
 def compute_stats(jsonl_path: str | Path) -> dict[str, Any]:
