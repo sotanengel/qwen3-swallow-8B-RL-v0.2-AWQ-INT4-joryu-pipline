@@ -85,6 +85,33 @@ def test_open_dashboard_when_ready_skips_if_not_ready(capsys: pytest.CaptureFixt
     assert "skipped opening browser" in err
 
 
+def test_open_dashboard_when_ready_runs_pre_open_fn_before_open() -> None:
+    order: list[str] = []
+
+    open_dashboard_when_ready(
+        wait_fn=lambda _url: True,
+        pre_open_fn=lambda: order.append("cleanup"),
+        open_fn=lambda _url, **_kw: order.append("open"),
+    )
+    assert order == ["cleanup", "open"]
+
+
+def test_schedule_open_dashboard_runs_pre_open_fn_before_open() -> None:
+    order: list[str] = []
+
+    schedule_open_dashboard(
+        wait_fn=lambda _url: True,
+        pre_open_fn=lambda: order.append("cleanup"),
+        open_fn=lambda _url, **_kw: order.append("open"),
+    )
+    import time
+
+    deadline = time.monotonic() + 2
+    while len(order) < 2 and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert order == ["cleanup", "open"]
+
+
 def test_schedule_open_dashboard_starts_thread() -> None:
     opened: list[str] = []
 

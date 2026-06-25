@@ -120,7 +120,7 @@ def test_up_joryu_diff_triggers_build_then_up(monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: {"api"})
     rc = cli_up.main([])
     assert rc == 0
-    assert len(calls) == 6
+    assert len(calls) == 5
     assert calls[0] == _STARTUP_IMAGE_PRUNE
     assert calls[1] == ["docker", "compose", "build", "api"]
     assert calls[2] == ["docker", "image", "prune", "-f"]
@@ -134,7 +134,6 @@ def test_up_joryu_diff_triggers_build_then_up(monkeypatch: pytest.MonkeyPatch) -
         "api",
         "joryu",
     ]
-    assert calls[5] == ["docker", "image", "prune", "-f"]
 
 
 def test_up_full_brings_up_all_builds_only_changed(
@@ -158,7 +157,6 @@ def test_up_full_brings_up_all_builds_only_changed(
         "api",
         "joryu",
     ]
-    assert calls[5] == ["docker", "image", "prune", "-f"]
 
 
 def test_up_frontend_only_alias(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -288,7 +286,6 @@ def test_up_build_flag_forces_rebuild(monkeypatch: pytest.MonkeyPatch) -> None:
         "api",
         "joryu",
     ]
-    assert calls[5] == ["docker", "image", "prune", "-f"]
 
 
 def test_up_first_run_builds_up_targets(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -301,7 +298,15 @@ def test_up_first_run_builds_up_targets(monkeypatch: pytest.MonkeyPatch) -> None
     assert calls[1] == ["docker", "compose", "build", "dashboard", "api", "joryu"]
     assert calls[2] == ["docker", "image", "prune", "-f"]
     assert calls[3] == ["docker", "builder", "prune", "-a", "-f"]
-    assert calls[-1] == ["docker", "image", "prune", "-f"]
+    assert calls[-1] == [
+        "docker",
+        "compose",
+        "up",
+        "--force-recreate",
+        "dashboard",
+        "api",
+        "joryu",
+    ]
 
 
 def test_up_builds_joryu_when_image_missing(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -323,15 +328,21 @@ def test_up_builds_joryu_when_image_missing(monkeypatch: pytest.MonkeyPatch) -> 
         "api",
         "joryu",
     ]
-    assert calls[5] == ["docker", "image", "prune", "-f"]
 
 
 def test_up_prunes_dangling_images_after_successful_up_with_build(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """build 後 up 成功時に `<none>` dangling image を回収する。"""
+    """build 後 --detach では ready 待ちの後・ブラウザ起動直前に `<none>` を回収する。"""
     calls = _patch_runner(monkeypatch)
     monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: {"api"})
+
+    def _open_when_ready(**kwargs: object) -> None:
+        pre_open_fn = kwargs.get("pre_open_fn")
+        if callable(pre_open_fn):
+            pre_open_fn()
+
+    monkeypatch.setattr("joryu.cli.up.open_dashboard_when_ready", _open_when_ready)
     rc = cli_up.main(["--detach"])
     assert rc == 0
     assert calls[-1] == ["docker", "image", "prune", "-f"]
@@ -396,7 +407,6 @@ def test_up_auto_prunes_and_continues_when_disk_recovered(
     assert calls[3] == ["docker", "image", "prune", "-f"]
     assert calls[4] == ["docker", "builder", "prune", "-a", "-f"]
     assert calls[5][:3] == ["docker", "compose", "up"]
-    assert calls[6] == ["docker", "image", "prune", "-f"]
 
 
 def test_up_force_bypasses_disk_check(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -424,7 +434,6 @@ def test_up_force_bypasses_disk_check(monkeypatch: pytest.MonkeyPatch) -> None:
         "api",
         "joryu",
     ]
-    assert calls[5] == ["docker", "image", "prune", "-f"]
 
 
 def test_up_detach_waits_for_services(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -460,6 +469,34 @@ def test_up_detach_opens_browser_after_dashboard_up(monkeypatch: pytest.MonkeyPa
     assert rc == 0
     assert calls[-1] == ["docker", "compose", "up", "-d", "dashboard", "api", "joryu"]
     assert opened == [True]
+
+
+def test_up_detach_prunes_dangling_images_before_browser_after_build(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """build 後 --detach では ready 待ちの後・ブラウザ起動直前に dangling image を回収する。"""
+    calls = _patch_runner(monkeypatch)
+    monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: {"api"})
+    browser_kwargs: list[dict[str, object]] = []
+
+    def _open_when_ready(**kwargs: object) -> None:
+        browser_kwargs.append(dict(kwargs))
+
+    monkeypatch.setattr("joryu.cli.up.open_dashboard_when_ready", _open_when_ready)
+    rc = cli_up.main(["--detach"])
+    assert rc == 0
+    assert calls[4] == [
+        "docker",
+        "compose",
+        "up",
+        "--force-recreate",
+        "-d",
+        "dashboard",
+        "api",
+        "joryu",
+    ]
+    assert len(calls) == 5
+    assert browser_kwargs == [{"pre_open_fn": cli_up.run_pre_browser_image_cleanup}]
 
 
 def test_up_backend_only_does_not_open_browser(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -510,6 +547,22 @@ def test_up_foreground_schedules_browser_before_compose(monkeypatch: pytest.Monk
     monkeypatch.setattr("joryu.compose.subprocess.run", _fake_run)
     cli_up.main([])
     assert order == ["compose", "schedule", "compose"]
+
+
+def test_up_foreground_passes_pre_browser_cleanup_after_build(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_runner(monkeypatch)
+    monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: {"api"})
+    browser_kwargs: list[dict[str, object]] = []
+
+    def _schedule(**kwargs: object) -> None:
+        browser_kwargs.append(dict(kwargs))
+
+    monkeypatch.setattr("joryu.cli.up.schedule_open_dashboard", _schedule)
+    rc = cli_up.main([])
+    assert rc == 0
+    assert browser_kwargs == [{"pre_open_fn": cli_up.run_pre_browser_image_cleanup}]
 
 
 def test_up_aborts_when_prompt_bank_missing(monkeypatch: pytest.MonkeyPatch) -> None:

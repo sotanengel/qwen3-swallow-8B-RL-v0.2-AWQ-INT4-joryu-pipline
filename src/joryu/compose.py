@@ -88,6 +88,15 @@ def run_up_startup_cleanup() -> None:
     run(image_prune_command())
 
 
+def run_pre_browser_image_cleanup() -> None:
+    """build 完了後・ブラウザ起動直前: dangling (<none>) image を回収する。"""
+    print(
+        "[joryu-up] removing dangling images (<none>) before opening browser",
+        file=sys.stderr,
+    )
+    run(image_prune_command())
+
+
 def run_builder_cache_cleanup() -> None:
     """disk 不足リトライ時: 未参照 build cache のみ回収 (image prune は起動時済み)。"""
     run(builder_prune_command())

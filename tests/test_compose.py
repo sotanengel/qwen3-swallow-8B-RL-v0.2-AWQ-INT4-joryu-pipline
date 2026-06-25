@@ -12,6 +12,7 @@ from joryu.compose import (
     compose_stop_command,
     compose_up_command,
     image_prune_command,
+    run_pre_browser_image_cleanup,
     run_up_startup_cleanup,
 )
 
@@ -115,6 +116,27 @@ def test_run_up_startup_cleanup_prunes_dangling_only(
     monkeypatch.setattr("joryu.compose.subprocess.run", _fake_run)
     run_up_startup_cleanup()
     assert calls == [image_prune_command()]
+
+
+def test_run_pre_browser_image_cleanup_prunes_dangling_only(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """ブラウザ起動直前 cleanup は dangling image のみ削除する。"""
+    calls: list[list[str]] = []
+
+    def _fake_run(cmd: list[str], **_kwargs: object) -> object:
+        calls.append(cmd)
+
+        class _Done:
+            returncode = 0
+
+        return _Done()
+
+    monkeypatch.setattr("joryu.compose.subprocess.run", _fake_run)
+    run_pre_browser_image_cleanup()
+    assert calls == [image_prune_command()]
+    assert "before opening browser" in capsys.readouterr().err
 
 
 def test_up_force_recreate_after_build() -> None:
