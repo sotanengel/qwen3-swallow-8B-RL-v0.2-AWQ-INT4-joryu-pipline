@@ -52,6 +52,9 @@ export default function HomePage() {
   const modeRows = sortByCount(stats.modes);
   const modelRows = sortByCount(stats.models);
   const topCategories = sortByCount(stats.categories, 10);
+  const toolNameRows = sortByCount(stats.tool_name_counts ?? {}, 10);
+  const toolCallRatePct = ((stats.tool_call_rate ?? 0) * 100).toFixed(1);
+  const plannedMissPct = ((stats.tool_planned_but_not_called_rate ?? 0) * 100).toFixed(1);
 
   return (
     <>
@@ -64,6 +67,22 @@ export default function HomePage() {
           value={(stats.modes.thinking ?? 0).toLocaleString()}
         />
       </section>
+
+      {(stats.tool_records ?? 0) > 0 && (
+        <section className="section">
+          <h2>ツール呼び出し</h2>
+          <section className="grid">
+            <StatCard label="ツール付きレコード" value={(stats.tool_records ?? 0).toLocaleString()} />
+            <StatCard label="tool_call 実行率" value={`${toolCallRatePct}%`} />
+            <StatCard
+              label="レコードあたり tool_calls"
+              value={(stats.tool_calls_per_record ?? 0).toFixed(2)}
+            />
+            <StatCard label="思考のみ (未実行) 率" value={`${plannedMissPct}%`} />
+          </section>
+          <HistogramTable rows={toolNameRows} keyLabel="tool" />
+        </section>
+      )}
 
       <section className="section">
         <h2>モデル別</h2>

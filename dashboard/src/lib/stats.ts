@@ -40,6 +40,14 @@ export interface JoryuStats {
     top_p: Record<string, number>;
   };
   timeline_daily: Record<string, number>;
+  tool_records?: number;
+  tool_call_records?: number;
+  total_tool_calls?: number;
+  tool_call_rate?: number;
+  tool_calls_per_record?: number;
+  tool_name_counts?: Record<string, number>;
+  tool_planned_not_called_count?: number;
+  tool_planned_but_not_called_rate?: number;
   distill_live?: DistillLiveState;
   _meta?: {
     source_path?: string;
@@ -57,6 +65,14 @@ export const EMPTY_STATS: JoryuStats = {
   thinking_length: { count: 0, mean: 0, max: 0, min: 0, bins: [] },
   sampling: { temperature: {}, top_p: {} },
   timeline_daily: {},
+  tool_records: 0,
+  tool_call_records: 0,
+  total_tool_calls: 0,
+  tool_call_rate: 0,
+  tool_calls_per_record: 0,
+  tool_name_counts: {},
+  tool_planned_not_called_count: 0,
+  tool_planned_but_not_called_rate: 0,
 };
 
 export function sortByCount(
@@ -98,6 +114,19 @@ export function mergeStats(data: Partial<JoryuStats>): JoryuStats {
       ...EMPTY_STATS.timeline_daily,
       ...data.timeline_daily,
     },
+    tool_records: data.tool_records ?? EMPTY_STATS.tool_records,
+    tool_call_records: data.tool_call_records ?? EMPTY_STATS.tool_call_records,
+    total_tool_calls: data.total_tool_calls ?? EMPTY_STATS.total_tool_calls,
+    tool_call_rate: data.tool_call_rate ?? EMPTY_STATS.tool_call_rate,
+    tool_calls_per_record: data.tool_calls_per_record ?? EMPTY_STATS.tool_calls_per_record,
+    tool_name_counts: {
+      ...EMPTY_STATS.tool_name_counts,
+      ...data.tool_name_counts,
+    },
+    tool_planned_not_called_count:
+      data.tool_planned_not_called_count ?? EMPTY_STATS.tool_planned_not_called_count,
+    tool_planned_but_not_called_rate:
+      data.tool_planned_but_not_called_rate ?? EMPTY_STATS.tool_planned_but_not_called_rate,
     distill_live: data.distill_live,
   };
 }
@@ -133,5 +162,8 @@ export function statsDataChanged(prev: JoryuStats, next: JoryuStats): boolean {
   const nextRetries = next.distill_live?.truncation_retries?.length ?? 0;
   if (prevRetries !== nextRetries) return true;
   if (prev.distill_live?.active !== next.distill_live?.active) return true;
+  if ((prev.tool_call_rate ?? 0) !== (next.tool_call_rate ?? 0)) return true;
+  if ((prev.tool_planned_but_not_called_rate ?? 0) !== (next.tool_planned_but_not_called_rate ?? 0))
+    return true;
   return false;
 }
