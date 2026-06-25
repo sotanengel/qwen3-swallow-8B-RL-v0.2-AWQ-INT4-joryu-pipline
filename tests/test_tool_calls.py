@@ -100,3 +100,35 @@ def test_json_fence_without_name_arguments_treated_as_code_block() -> None:
     # コード例として丸ごと残る
     assert "```json" in cleaned
     assert "type" in cleaned
+
+
+def test_extract_pretty_printed_multiline_json_fence() -> None:
+    """改行・インデント入り整形 JSON をフェンスから抽出。"""
+    text = (
+        "まず検索します。\n\n"
+        "```json\n"
+        "{\n"
+        '  "name": "search",\n'
+        '  "arguments": {\n'
+        '    "query": "日本の再犯率",\n'
+        '    "top_k": 5\n'
+        "  }\n"
+        "}\n"
+        "```"
+    )
+    calls, cleaned = extract_tool_calls(text)
+    assert len(calls) == 1
+    assert calls[0].name == "search"
+    assert calls[0].arguments == {"query": "日本の再犯率", "top_k": 5}
+    assert cleaned == "まず検索します。"
+
+
+def test_extract_nested_arguments_in_tool_call_tag() -> None:
+    """`<tool_call>` 内のネスト JSON arguments を balanced brace で抽出。"""
+    text = (
+        '<tool_call>{"name":"search","arguments":{"query":"x","filters":{"year":2024}}}</tool_call>'
+    )
+    calls, cleaned = extract_tool_calls(text)
+    assert len(calls) == 1
+    assert calls[0].arguments == {"query": "x", "filters": {"year": 2024}}
+    assert cleaned == ""
