@@ -10,7 +10,10 @@ from typing import Any, Literal
 
 import yaml
 
-Mode = Literal["thinking", "nothinking", "auto"]
+# Mode は curate.judge_mode で使うため残す。蒸留パイプライン側では thinking 固定。
+# Qwen3 の公式 hard switch は True/False のみで、本リポジトリの旧 mode=auto は
+# 実態なく常に thinking に解決されていたため #94 で削除済み。
+Mode = Literal["thinking", "nothinking"]
 
 
 @dataclass
@@ -26,13 +29,6 @@ class ModelConfig:
     top_k: int = 20
     repetition_penalty: float = 1.05
     seed: int = 42
-    mode: Mode = "thinking"
-
-    def __post_init__(self) -> None:
-        if self.mode not in ("thinking", "nothinking", "auto"):
-            raise ValueError(
-                f"model.mode must be 'thinking', 'nothinking', or 'auto', got {self.mode!r}"
-            )
 
 
 @dataclass

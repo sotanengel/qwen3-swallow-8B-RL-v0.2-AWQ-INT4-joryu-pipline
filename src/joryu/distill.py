@@ -1,4 +1,7 @@
-"""コア蒸留ループ。prompt bank → JSONL レコード (per-row sampling/mode 記録)。"""
+"""コア蒸留ループ。prompt bank → JSONL レコード。
+
+mode 概念は #94 で削除し、Qwen3 の thinking モードで固定運用する。
+"""
 
 from __future__ import annotations
 
@@ -14,7 +17,7 @@ from functools import partial
 from pathlib import Path
 from typing import Any
 
-from joryu.config import Config, Mode
+from joryu.config import Config
 from joryu.dashboard_json import write_dashboard_json
 from joryu.distill_live import DistillLiveState
 from joryu.distill_retry import generate_until_complete
@@ -71,8 +74,6 @@ def _build_record(
         "prompt": row.prompt,
         "category": row.category,
         "style_id": eff.style_id,
-        "mode": eff.mode,
-        "effective_mode": "thinking" if thinking else "nothinking",
         "system_prompt": eff.system_prompt,
         "sampling": sampling,
         "thinking_trace": thinking,
@@ -100,16 +101,6 @@ def _record_from_chat(
     config_hash: str,
     turns: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    if eff.mode == "nothinking":
-        chat = ChatResult(
-            thinking=None,
-            answer=chat.answer,
-            finish_reason=chat.finish_reason,
-            prompt_tokens=chat.prompt_tokens,
-            completion_tokens=chat.completion_tokens,
-            effective_max_tokens=chat.effective_max_tokens,
-            tool_calls=chat.tool_calls,
-        )
     thinking = chat.thinking
     final_answer = (chat.answer or "").strip()
     return _build_record(
@@ -129,7 +120,6 @@ def _run_chat_loop(
     messages: list[dict[str, str]],
     *,
     tools: list[dict[str, Any]] | None,
-    enable_thinking: bool | None,
     executor: ToolExecutor | None,
     max_turns: int,
     sampling: dict[str, Any],
@@ -143,7 +133,7 @@ def _run_chat_loop(
     for _turn in range(max_turns):
         chat = client.chat_via_template(
             working_messages,
-            enable_thinking=enable_thinking,
+            enable_thinking=True,
             tools=tools,
             **sampling,
         )
@@ -201,7 +191,6 @@ def _make_tool_loop_chat_fn(
     def _chat_with_loop(
         loop_messages: list[dict[str, str]],
         *,
-        enable_thinking: bool | None,
         tools: list[dict[str, Any]] | None,
         **sampling_kwargs: Any,
     ) -> ChatResult:
@@ -209,7 +198,6 @@ def _make_tool_loop_chat_fn(
             client,
             loop_messages,
             tools=tools,
-            enable_thinking=enable_thinking,
             executor=executor,
             max_turns=max_turns,
             sampling=sampling_kwargs,
@@ -269,7 +257,6 @@ def variant_run_key(variant: DistillVariant) -> str:
     return run_key_from_parts(
         prompt=variant.row.prompt,
         style_id=variant.eff.style_id,
-        mode=variant.eff.mode,
         temperature=variant.eff.sampling.get("temperature"),
         top_p=variant.eff.sampling.get("top_p"),
         tools_hash=tools_hash,
@@ -325,7 +312,6 @@ def run_distill(
     style_presets: list[StylePreset] | None = None,
     temperatures: list[float] | None = None,
     top_ps: list[float] | None = None,
-    modes: list[Mode] | None = None,
     executor: ToolExecutor | None = None,
     tool_loop: bool | None = None,
     tool_loop_max_turns: int | None = None,
@@ -357,7 +343,6 @@ def run_distill(
         style_presets=style_presets,
         temperatures=temperatures,
         top_ps=top_ps,
-        modes=modes,
         tools_registry=tools_registry,
     )
     done = load_done_keys(out_p)
@@ -426,12 +411,6 @@ def run_distill(
                     {"role": "user", "content": row.prompt},
                 ]
 
-                if eff.mode == "thinking":
-                    enable_thinking: bool | None = True
-                elif eff.mode == "nothinking":
-                    enable_thinking = False
-                else:
-                    enable_thinking = None
                 build_record = partial(
                     _record_from_chat,
                     row=row,
@@ -468,7 +447,6 @@ def run_distill(
                     record, _attempts = generate_until_complete(
                         client=client,
                         messages=messages,
-                        enable_thinking=enable_thinking,
                         tools=eff.tools or None,
                         sampling=eff.sampling,
                         build_record=build_with_turns,

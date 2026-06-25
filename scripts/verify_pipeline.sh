@@ -25,7 +25,7 @@ cfg="$work/c.yaml"
 
 cat > "$bank" <<'EOF'
 {"prompt":"桜の特徴を3行で説明してください","category":"国語"}
-{"prompt":"1+1はいくつですか？","category":"数学","mode":"nothinking"}
+{"prompt":"1+1はいくつですか？","category":"数学"}
 {"prompt":"日本の首都はどこ？","category":"地理","sampling":{"temperature":0.2,"max_tokens":256}}
 EOF
 

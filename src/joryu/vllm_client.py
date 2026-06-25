@@ -88,10 +88,12 @@ def compute_effective_max_tokens(
     return effective
 
 
-def build_chat_template_kwargs(enable_thinking: bool | None) -> dict[str, Any]:
-    """Qwen3 chat_template 用 kwargs。auto (None) 時は enable_thinking キーを渡さない。"""
-    if enable_thinking is None:
-        return {}
+def build_chat_template_kwargs(enable_thinking: bool) -> dict[str, Any]:
+    """Qwen3 chat_template 用 kwargs。
+
+    #94 で mode=auto 削除に伴い `None` を許容しなくなった。
+    呼び出し側 (distill は常に True / curate.judge_mode は True|False) で明示する。
+    """
     return {"enable_thinking": enable_thinking}
 
 
@@ -102,7 +104,7 @@ class SupportsChat(Protocol):
         self,
         messages: list[dict[str, str]],
         *,
-        enable_thinking: bool | None = True,
+        enable_thinking: bool = True,
         tools: list[dict[str, Any]] | None = None,
         **sampling_overrides: Any,
     ) -> ChatResult: ...
@@ -227,7 +229,7 @@ class VllmClient:
         self,
         messages: list[dict[str, str]],
         *,
-        enable_thinking: bool | None = True,
+        enable_thinking: bool = True,
         tools: list[dict[str, Any]] | None = None,
         **sampling_overrides: Any,
     ) -> ChatResult:
@@ -358,7 +360,7 @@ class VllmHttpClient:
         self,
         messages: list[dict[str, str]],
         *,
-        enable_thinking: bool | None = True,
+        enable_thinking: bool = True,
         tools: list[dict[str, Any]] | None = None,
         **sampling_overrides: Any,
     ) -> ChatResult:

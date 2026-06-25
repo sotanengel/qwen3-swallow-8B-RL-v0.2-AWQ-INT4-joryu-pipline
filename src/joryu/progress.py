@@ -20,16 +20,19 @@ def run_key_from_parts(
     *,
     prompt: str,
     style_id: str | None,
-    mode: str | None,
     temperature: Any,
     top_p: Any,
     tools_hash: str | None = None,
 ) -> str:
-    """蒸留 run の安定キー（prompt + style + mode + sampling 主要軸 + tools）。"""
+    """蒸留 run の安定キー（prompt + style + sampling 主要軸 + tools）。
+
+    mode 軸は #94 で削除した（蒸留は thinking 固定で運用）。
+    過去 JSONL レコードの `mode` フィールドはキー生成では無視され、
+    `style_id` と `temperature/top_p` の組み合わせで dedup される。
+    """
     payload = {
         "prompt": prompt,
         "style_id": style_id,
-        "mode": mode,
         "temperature": _round_float(temperature),
         "top_p": _round_float(top_p),
     }
@@ -49,13 +52,9 @@ def run_key_from_record(record: dict[str, Any]) -> str | None:
     style_id = record.get("style_id")
     if style_id is not None and not isinstance(style_id, str):
         style_id = None
-    mode = record.get("mode")
-    if mode is not None and not isinstance(mode, str):
-        mode = None
     return run_key_from_parts(
         prompt=prompt,
         style_id=style_id,
-        mode=mode,
         temperature=sampling.get("temperature"),
         top_p=sampling.get("top_p"),
     )

@@ -69,14 +69,12 @@ def job_options(request: Request) -> dict[str, Any]:
     tools_path = repo_root / cfg.distill.tools_file
     tools = load_tools(tools_path)
     return {
-        "modes": ["thinking", "nothinking", "auto"],
         "styles": [{"id": sid, "label": preset.label} for sid, preset in sorted(styles.items())],
         "tools": [
             {"id": name, "description": tool.description} for name, tool in sorted(tools.items())
         ],
         "defaults": {
             "config": DEFAULT_CONFIG,
-            "mode": cfg.model.mode,
         },
     }
 

@@ -4,7 +4,6 @@ export type JobStatus = "queued" | "running" | "succeeded" | "failed" | "cancell
 export type DistillJobSpec = {
   count: number;
   duration: string;
-  mode: string | null;
   style: string[];
   temperature: string;
   top_p: string;
@@ -27,19 +26,16 @@ export type JobRecord = {
 };
 
 export type JobOptions = {
-  modes: string[];
   styles: Array<{ id: string; label: string }>;
   tools: Array<{ id: string; description: string }>;
   defaults: {
     config: string;
-    mode: string;
   };
 };
 
 export type CreateJobRequest = {
   count?: number;
   duration?: string;
-  mode?: string | null;
   style?: string[];
   temperature?: string;
   top_p?: string;
@@ -87,7 +83,6 @@ export function parseJobRecord(data: unknown): JobRecord {
     spec: {
       count: Number(row.spec?.count ?? 0),
       duration: String(row.spec?.duration ?? ""),
-      mode: row.spec?.mode ?? null,
       style: Array.isArray(row.spec?.style) ? row.spec.style.map(String) : [],
       temperature: String(row.spec?.temperature ?? ""),
       top_p: String(row.spec?.top_p ?? ""),

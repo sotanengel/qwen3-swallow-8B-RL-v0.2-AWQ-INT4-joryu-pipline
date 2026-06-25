@@ -6,11 +6,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from joryu.config import Config, Mode
+from joryu.config import Config
 from joryu.io.jsonl import iter_jsonl
 from joryu.tools import ToolDefinition, merge_tools, resolve_tool_ids
 
-_VALID_MODES = ("thinking", "nothinking", "auto")
 _SAMPLING_KEYS = ("temperature", "top_p", "top_k", "max_tokens", "repetition_penalty")
 
 
@@ -21,7 +20,6 @@ class PromptRow:
     prompt: str
     category: str | None = None
     style_id: str | None = None
-    mode: Mode | None = None
     system_prompt: str | None = None
     sampling: dict[str, Any] = field(default_factory=dict)
     tool_ids: list[str] = field(default_factory=list)
@@ -32,7 +30,6 @@ class PromptRow:
 class EffectiveSampling:
     """行 + Config を解決した「実際にサンプラーへ渡される」値。"""
 
-    mode: Mode
     system_prompt: str
     sampling: dict[str, Any]
     category: str | None = None
@@ -43,9 +40,7 @@ class EffectiveSampling:
 def _parse_row(obj: dict[str, Any]) -> PromptRow:
     if "prompt" not in obj or not isinstance(obj["prompt"], str) or not obj["prompt"].strip():
         raise ValueError("prompt bank row missing required 'prompt' string")
-    mode = obj.get("mode")
-    if mode is not None and mode not in _VALID_MODES:
-        raise ValueError(f"unknown mode {mode!r}; expected one of {_VALID_MODES}")
+    # mode フィールドは #94 で蒸留側から削除。レガシー JSONL に含まれていても無視する。
     sampling_raw = obj.get("sampling") or {}
     if not isinstance(sampling_raw, dict):
         raise ValueError("sampling must be a JSON object")
@@ -60,7 +55,6 @@ def _parse_row(obj: dict[str, Any]) -> PromptRow:
         prompt=obj["prompt"],
         category=obj.get("category"),
         style_id=obj.get("style_id"),
-        mode=mode,
         system_prompt=obj.get("system_prompt"),
         sampling=sampling,
         tool_ids=list(tool_ids_raw),
@@ -108,7 +102,6 @@ def merge_with_defaults(
     if row.tools:
         resolved_tools = merge_tools(resolved_tools, row.tools)
     return EffectiveSampling(
-        mode=row.mode or cfg.model.mode,
         system_prompt=system_prompt,
         sampling=sampling,
         category=row.category,

@@ -12,7 +12,7 @@ from joryu.jobs.store import JobStore
 
 def test_save_load_roundtrip(tmp_path: Path) -> None:
     store = JobStore(tmp_path)
-    spec = DistillJobSpec(count=5, duration="30m", mode="thinking", style=["prose"])
+    spec = DistillJobSpec(count=5, duration="30m", style=["prose"])
     record = JobRecord.create(spec)
     store.save(record)
 

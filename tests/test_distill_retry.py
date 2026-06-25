@@ -38,7 +38,6 @@ def _build_record(chat: ChatResult) -> dict[str, Any]:
         "prompt": "P",
         "answer": (chat.answer or "").strip(),
         "finish_reason": chat.finish_reason,
-        "mode": "thinking",
         "sampling": {},
     }
 
@@ -53,7 +52,6 @@ def test_generate_until_complete_retries_on_truncation() -> None:
     record, attempts = generate_until_complete(
         client=client,
         messages=[{"role": "user", "content": "P"}],
-        enable_thinking=False,
         tools=None,
         sampling={},
         build_record=_build_record,
@@ -78,7 +76,6 @@ def test_generate_until_complete_returns_none_when_deadline_exceeded() -> None:
     record, attempts = generate_until_complete(
         client=client,
         messages=[{"role": "user", "content": "P"}],
-        enable_thinking=False,
         tools=None,
         sampling={},
         build_record=_build_record,
@@ -106,7 +103,6 @@ def test_generate_until_complete_calls_on_retry_at_threshold() -> None:
     record, attempts = generate_until_complete(
         client=client,
         messages=[{"role": "user", "content": "P"}],
-        enable_thinking=False,
         tools=None,
         sampling={},
         build_record=_build_record,
@@ -123,7 +119,6 @@ def test_generate_until_complete_skips_when_deadline_already_past() -> None:
     record, attempts = generate_until_complete(
         client=client,
         messages=[{"role": "user", "content": "P"}],
-        enable_thinking=False,
         tools=None,
         sampling={},
         build_record=_build_record,

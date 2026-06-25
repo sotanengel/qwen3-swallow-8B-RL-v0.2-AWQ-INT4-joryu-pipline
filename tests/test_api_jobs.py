@@ -83,8 +83,9 @@ def test_job_options(client: TestClient) -> None:
     assert resp.status_code == 200
     body = resp.json()
     assert "prose" in {s["id"] for s in body["styles"]}
-    assert body["defaults"]["mode"] == "thinking"
-    assert "auto" in body["modes"]
+    # #94 で modes / defaults.mode は削除済み
+    assert "modes" not in body
+    assert "mode" not in body["defaults"]
     tool_ids = {t["id"] for t in body["tools"]}
     assert "search" in tool_ids
     assert "calc" in tool_ids

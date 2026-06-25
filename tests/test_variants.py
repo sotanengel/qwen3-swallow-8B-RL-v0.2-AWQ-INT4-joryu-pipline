@@ -10,7 +10,6 @@ from joryu.variants import (
     expand_variants,
     parse_comma_list,
     parse_float_list,
-    parse_modes,
 )
 
 
@@ -91,24 +90,6 @@ def test_expand_variants_applies_style_to_system_prompt() -> None:
     variants = expand_variants(rows, cfg, style_presets=[preset])
     assert "散文で。" in variants[0].eff.system_prompt
     assert variants[0].eff.style_id == "prose"
-
-
-def test_parse_modes_comma_list() -> None:
-    assert parse_modes("thinking,auto") == ["thinking", "auto"]
-    assert parse_modes("") is None
-
-
-def test_parse_modes_invalid_raises() -> None:
-    with pytest.raises(ValueError, match="unknown mode"):
-        parse_modes("invalid")
-
-
-def test_expand_variants_mode_sweep() -> None:
-    cfg = Config()
-    rows = [PromptRow(prompt="P1")]
-    variants = expand_variants(rows, cfg, modes=["thinking", "nothinking", "auto"])
-    assert len(variants) == 3
-    assert {v.eff.mode for v in variants} == {"thinking", "nothinking", "auto"}
 
 
 def test_expand_variants_resolves_tools_registry() -> None:

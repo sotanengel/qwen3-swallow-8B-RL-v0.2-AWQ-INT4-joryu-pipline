@@ -31,7 +31,6 @@ class DistillJobSpec:
 
     count: int = 0
     duration: str = ""
-    mode: str | None = None
     style: list[str] = field(default_factory=list)
     temperature: str = ""
     top_p: str = ""
@@ -56,7 +55,6 @@ class DistillJobSpec:
         return cls(
             count=int(getattr(args, "count", 0)),
             duration=str(getattr(args, "duration", "") or ""),
-            mode=getattr(args, "mode", None),
             style=style,
             temperature=str(getattr(args, "temperature", "") or ""),
             top_p=str(getattr(args, "top_p", "") or ""),
@@ -78,7 +76,6 @@ class DistillJobSpec:
         return cls(
             count=int(data.get("count", 0)),
             duration=str(data.get("duration") or ""),
-            mode=data.get("mode"),
             style=list(style),
             temperature=str(data.get("temperature") or ""),
             top_p=str(data.get("top_p") or ""),
@@ -97,8 +94,6 @@ class DistillJobSpec:
             argv.extend(["--bank", bank])
         if out:
             argv.extend(["--out", out])
-        if self.mode:
-            argv.extend(["--mode", self.mode])
         if self.style:
             argv.extend(["--style", ",".join(self.style)])
         if self.temperature:

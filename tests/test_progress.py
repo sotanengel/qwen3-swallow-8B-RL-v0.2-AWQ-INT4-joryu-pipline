@@ -23,14 +23,12 @@ def test_collects_run_keys(tmp_path: Path) -> None:
     key_a = run_key_from_parts(
         prompt="a",
         style_id=None,
-        mode=cfg.model.mode,
         temperature=cfg.model.temperature,
         top_p=cfg.model.top_p,
     )
     key_b = run_key_from_parts(
         prompt="b",
         style_id="prose",
-        mode=cfg.model.mode,
         temperature=0.7,
         top_p=0.9,
     )
@@ -42,7 +40,6 @@ def test_collects_run_keys(tmp_path: Path) -> None:
                         "prompt": "a",
                         "answer": "完了。",
                         "finish_reason": "stop",
-                        "mode": cfg.model.mode,
                         "sampling": {
                             "temperature": cfg.model.temperature,
                             "top_p": cfg.model.top_p,
@@ -56,7 +53,6 @@ def test_collects_run_keys(tmp_path: Path) -> None:
                         "answer": "完了。",
                         "finish_reason": "stop",
                         "style_id": "prose",
-                        "mode": cfg.model.mode,
                         "sampling": {"temperature": 0.7, "top_p": 0.9},
                     },
                     ensure_ascii=False,
@@ -74,14 +70,12 @@ def test_same_prompt_different_style_is_distinct_key() -> None:
     key_default = run_key_from_parts(
         prompt="p",
         style_id=None,
-        mode=cfg.model.mode,
         temperature=cfg.model.temperature,
         top_p=cfg.model.top_p,
     )
     key_prose = run_key_from_parts(
         prompt="p",
         style_id="prose",
-        mode=cfg.model.mode,
         temperature=cfg.model.temperature,
         top_p=cfg.model.top_p,
     )
@@ -99,7 +93,6 @@ def test_skips_malformed_lines(tmp_path: Path) -> None:
                         "prompt": "a",
                         "answer": "完了。",
                         "finish_reason": "stop",
-                        "mode": cfg.model.mode,
                         "sampling": {
                             "temperature": cfg.model.temperature,
                             "top_p": cfg.model.top_p,
@@ -115,7 +108,6 @@ def test_skips_malformed_lines(tmp_path: Path) -> None:
                         "prompt": "b",
                         "answer": "完了。",
                         "finish_reason": "stop",
-                        "mode": cfg.model.mode,
                         "sampling": {
                             "temperature": cfg.model.temperature,
                             "top_p": cfg.model.top_p,
@@ -131,6 +123,7 @@ def test_skips_malformed_lines(tmp_path: Path) -> None:
 
 
 def test_run_key_from_record_round_trip() -> None:
+    # 過去レコードに `mode` フィールドが含まれていても #94 で無視される。
     rec = {
         "prompt": "x",
         "style_id": "dialog",
@@ -141,6 +134,7 @@ def test_run_key_from_record_round_trip() -> None:
     assert key is not None
     assert '"prompt": "x"' in key
     assert '"style_id": "dialog"' in key
+    assert '"mode"' not in key
 
 
 def test_load_done_keys_excludes_latest_truncated_record(tmp_path: Path) -> None:
@@ -149,7 +143,6 @@ def test_load_done_keys_excludes_latest_truncated_record(tmp_path: Path) -> None
     key = run_key_from_parts(
         prompt="a",
         style_id=None,
-        mode=cfg.model.mode,
         temperature=cfg.model.temperature,
         top_p=cfg.model.top_p,
     )
@@ -161,7 +154,6 @@ def test_load_done_keys_excludes_latest_truncated_record(tmp_path: Path) -> None
                         "prompt": "a",
                         "answer": "完了。",
                         "finish_reason": "stop",
-                        "mode": cfg.model.mode,
                         "sampling": {
                             "temperature": cfg.model.temperature,
                             "top_p": cfg.model.top_p,
@@ -174,7 +166,6 @@ def test_load_done_keys_excludes_latest_truncated_record(tmp_path: Path) -> None
                         "prompt": "a",
                         "answer": "途中\n\n## 1. 章",
                         "finish_reason": "length",
-                        "mode": cfg.model.mode,
                         "sampling": {
                             "temperature": cfg.model.temperature,
                             "top_p": cfg.model.top_p,
@@ -196,7 +187,6 @@ def test_load_done_keys_includes_key_when_latest_is_complete(tmp_path: Path) -> 
     key = run_key_from_parts(
         prompt="a",
         style_id=None,
-        mode=cfg.model.mode,
         temperature=cfg.model.temperature,
         top_p=cfg.model.top_p,
     )
@@ -208,7 +198,6 @@ def test_load_done_keys_includes_key_when_latest_is_complete(tmp_path: Path) -> 
                         "prompt": "a",
                         "answer": "途中\n\n## 1. 章",
                         "finish_reason": "length",
-                        "mode": cfg.model.mode,
                         "sampling": {
                             "temperature": cfg.model.temperature,
                             "top_p": cfg.model.top_p,
@@ -221,7 +210,6 @@ def test_load_done_keys_includes_key_when_latest_is_complete(tmp_path: Path) -> 
                         "prompt": "a",
                         "answer": "完了。",
                         "finish_reason": "stop",
-                        "mode": cfg.model.mode,
                         "sampling": {
                             "temperature": cfg.model.temperature,
                             "top_p": cfg.model.top_p,

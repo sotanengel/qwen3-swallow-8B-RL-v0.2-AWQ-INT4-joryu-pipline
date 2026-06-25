@@ -59,7 +59,7 @@ def test_build_job_command_api_delegate(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr("joryu.jobs.runner.resolve_host_repo_root", lambda _root: host_root)
     (tmp_path / "config.yaml").write_text("x: 1\n", encoding="utf-8")
     (tmp_path / "docker-compose.yml").write_text("services: {}\n", encoding="utf-8")
-    spec = DistillJobSpec(count=3, mode="nothinking")
+    spec = DistillJobSpec(count=3)
     record = JobRecord.create(spec)
     cmd = build_job_command(tmp_path, record)
     assert cmd[0:3] == ["/usr/bin/docker", "run", "--rm"]
@@ -67,7 +67,8 @@ def test_build_job_command_api_delegate(tmp_path: Path, monkeypatch) -> None:
     assert "hf-cache:/root/.cache/huggingface" in cmd
     assert "joryu.cli.distill" in cmd
     assert "--count" in cmd and "3" in cmd
-    assert "--mode" in cmd and "nothinking" in cmd
+    # #94 で --mode は削除済み
+    assert "--mode" not in cmd
 
 
 def test_build_curate_command_api_delegate(tmp_path: Path, monkeypatch) -> None:

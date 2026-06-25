@@ -37,8 +37,8 @@ def test_run_distill_writes_records(tmp_path: Path) -> None:
     assert records[0]["category"] == "国語"
     assert records[0]["answer"] == "A"
     assert records[0]["thinking_trace"] == "T"
-    assert records[0]["mode"] == "thinking"
-    assert records[0]["effective_mode"] == "thinking"
+    assert "mode" not in records[0]
+    assert "effective_mode" not in records[0]
     assert records[0]["model"] == cfg.model.name
     assert records[0]["sampling"]["temperature"] == cfg.model.temperature
     assert records[0]["sampling"]["top_p"] == cfg.model.top_p
@@ -58,7 +58,6 @@ def _done_record(prompt: str, cfg: Config, **extra: object) -> dict:
     rec = {
         "prompt": prompt,
         "answer": "x",
-        "mode": cfg.model.mode,
         "style_id": None,
         "sampling": {
             "temperature": cfg.model.temperature,
@@ -102,93 +101,32 @@ def test_count_cap_limits_new_records(tmp_path: Path) -> None:
     assert len(_load_jsonl(out)) == 2
 
 
-def test_row_mode_nothinking_disables_thinking_for_that_row(tmp_path: Path) -> None:
+def test_distill_always_uses_thinking_mode(tmp_path: Path) -> None:
+    """#94 で nothinking/auto を削除し thinking 固定で運用する。"""
     bank = tmp_path / "bank.jsonl"
     _write_bank(
         bank,
         [
             {"prompt": "P1"},
+            # 過去 JSONL の "mode": "nothinking" 上書きは #94 で無視される
             {"prompt": "P2", "mode": "nothinking"},
         ],
     )
     out = tmp_path / "out.jsonl"
-    cfg = Config()  # defaults thinking
+    cfg = Config()
     client = FakeVllmClient(answer="A", thinking="T")
     run_distill(cfg, bank_path=bank, out_path=out, client=client)
 
+    # どちらの行も enable_thinking=True で呼ばれる
     assert client.calls[0]["enable_thinking"] is True
-    assert client.calls[1]["enable_thinking"] is False
+    assert client.calls[1]["enable_thinking"] is True
 
     records = _load_jsonl(out)
-    assert records[0]["mode"] == "thinking"
+    # 出力レコードに mode / effective_mode は含まれない
+    assert "mode" not in records[0]
+    assert "effective_mode" not in records[0]
     assert records[0]["thinking_trace"] == "T"
-    assert records[1]["mode"] == "nothinking"
-    assert records[1]["thinking_trace"] is None
-    assert records[1]["effective_mode"] == "nothinking"
-
-
-def test_mode_auto_passes_none_enable_thinking(tmp_path: Path) -> None:
-    bank = tmp_path / "bank.jsonl"
-    _write_bank(bank, [{"prompt": "P1", "mode": "auto"}])
-    out = tmp_path / "out.jsonl"
-    cfg = Config()
-    client = FakeVllmClient(answer="A", thinking="T")
-    run_distill(cfg, bank_path=bank, out_path=out, client=client)
-
-    assert client.calls[0]["enable_thinking"] is None
-    rec = _load_jsonl(out)[0]
-    assert rec["mode"] == "auto"
-    assert rec["effective_mode"] == "thinking"
-    assert rec["thinking_trace"] == "T"
-
-
-def test_mode_auto_without_thinking_records_nothinking_effective(tmp_path: Path) -> None:
-    bank = tmp_path / "bank.jsonl"
-    _write_bank(bank, [{"prompt": "P1", "mode": "auto"}])
-    out = tmp_path / "out.jsonl"
-    cfg = Config()
-    client = FakeVllmClient(answer="A", thinking=None)
-    run_distill(cfg, bank_path=bank, out_path=out, client=client)
-
-    rec = _load_jsonl(out)[0]
-    assert rec["mode"] == "auto"
-    assert rec["effective_mode"] == "nothinking"
-    assert rec["thinking_trace"] is None
-
-
-def test_mode_sweep_expands_variants(tmp_path: Path) -> None:
-    bank = tmp_path / "bank.jsonl"
-    _write_bank(bank, [{"prompt": "P1"}])
-    out = tmp_path / "out.jsonl"
-    cfg = Config()
-    client = FakeVllmClient(answer="A", thinking="T")
-    n = run_distill(
-        cfg,
-        bank_path=bank,
-        out_path=out,
-        client=client,
-        modes=["thinking", "nothinking", "auto"],
-    )
-    assert n == 3
-    records = _load_jsonl(out)
-    assert {r["mode"] for r in records} == {"thinking", "nothinking", "auto"}
-    enable_flags = [c["enable_thinking"] for c in client.calls]
-    assert enable_flags == [True, False, None]
-
-
-def test_global_mode_override_applies_when_row_missing(tmp_path: Path) -> None:
-    bank = tmp_path / "bank.jsonl"
-    _write_bank(bank, [{"prompt": "P1"}])
-    out = tmp_path / "out.jsonl"
-    cfg = Config()
-    cfg.model.mode = "nothinking"
-    client = FakeVllmClient(answer="A", thinking="T")
-    run_distill(cfg, bank_path=bank, out_path=out, client=client)
-
-    assert client.calls[0]["enable_thinking"] is False
-    rec = _load_jsonl(out)[0]
-    assert rec["mode"] == "nothinking"
-    assert rec["thinking_trace"] is None
+    assert records[1]["thinking_trace"] == "T"
 
 
 def test_per_row_sampling_overrides_passed_and_recorded(tmp_path: Path) -> None:
@@ -291,7 +229,6 @@ def test_run_distill_redo_truncated_reprocesses_matching_keys(tmp_path: Path) ->
     truncated = {
         "prompt": "P1",
         "answer": "途中で切れた見出し\n\n## 1. 章",
-        "mode": cfg.model.mode,
         "style_id": None,
         "sampling": {"temperature": cfg.model.temperature, "top_p": cfg.model.top_p},
     }
@@ -563,13 +500,11 @@ def test_variant_run_key_differs_by_tools(tmp_path: Path) -> None:
         "function": {"name": "calc", "description": "d", "parameters": {}},
     }
     eff_a = EffectiveSampling(
-        mode="thinking",
         system_prompt="sys",
         sampling={"temperature": 0.6, "top_p": 0.95},
         tools=[search_tool],
     )
     eff_b = EffectiveSampling(
-        mode="thinking",
         system_prompt="sys",
         sampling={"temperature": 0.6, "top_p": 0.95},
         tools=[calc_tool],
