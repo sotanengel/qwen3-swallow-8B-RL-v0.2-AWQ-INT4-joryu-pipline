@@ -14,6 +14,7 @@ class ToolDefinition:
     name: str
     description: str
     parameters: dict[str, Any]
+    invocation_rule: str | None = None
 
     def to_openai_schema(self) -> dict[str, Any]:
         return {
@@ -45,10 +46,14 @@ def load_tools(path: str | Path) -> dict[str, ToolDefinition]:
             raise ValueError(f"tools.yaml: tool {tool_id!r} missing 'description'")
         if not isinstance(parameters, dict):
             raise ValueError(f"tools.yaml: tool {tool_id!r} missing 'parameters'")
+        invocation_rule = body.get("invocation_rule")
+        if invocation_rule is not None and not isinstance(invocation_rule, str):
+            raise ValueError(f"tools.yaml: tool {tool_id!r} 'invocation_rule' must be a string")
         out[str(tool_id)] = ToolDefinition(
             name=str(tool_id),
             description=description.strip(),
             parameters=parameters,
+            invocation_rule=invocation_rule.strip() if isinstance(invocation_rule, str) else None,
         )
     return out
 

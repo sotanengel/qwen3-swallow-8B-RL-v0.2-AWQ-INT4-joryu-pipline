@@ -122,7 +122,42 @@ def test_merge_with_defaults_appends_tool_hint_when_tools_resolved() -> None:
     assert len(eff.tools) == 1
 
 
+def test_merge_with_defaults_uses_invocation_rules_in_hint() -> None:
+    from joryu.prompt_bank import format_tool_usage_hint
+    from joryu.tools import load_tools
+
+    cfg = Config()
+    row = PromptRow(prompt="p", tool_ids=["search"])
+    reg = load_tools("tools.yaml")
+    eff = merge_with_defaults(row, cfg, tools_registry=reg)
+    assert "利用可能なツール:" in eff.system_prompt
+    assert "- search:" in eff.system_prompt
+    assert reg["search"].invocation_rule in eff.system_prompt
+    hint = format_tool_usage_hint([reg["search"]])
+    assert "事実・最新情報" in hint
+
+
+def test_merge_with_defaults_legacy_hint_without_invocation_rules(tmp_path: Path) -> None:
+    from joryu.tools import load_tools
+
+    p = tmp_path / "tools.yaml"
+    p.write_text(
+        "tools:\n  search:\n    description: d\n"
+        "    parameters:\n      type: object\n      properties: {}\n",
+        encoding="utf-8",
+    )
+    cfg = Config()
+    row = PromptRow(prompt="p", tool_ids=["search"])
+    eff = merge_with_defaults(row, cfg, tools_registry=load_tools(p))
+    assert "利用可能なツールが提供されています。" in eff.system_prompt
+    assert "利用可能なツール:" not in eff.system_prompt
+
+
 def test_merge_with_defaults_no_tool_hint_without_tools() -> None:
+    cfg = Config()
+    row = PromptRow(prompt="p")
+    eff = merge_with_defaults(row, cfg)
+    assert "架空" not in eff.system_prompt
     cfg = Config()
     row = PromptRow(prompt="p")
     eff = merge_with_defaults(row, cfg)
