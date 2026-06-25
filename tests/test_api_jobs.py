@@ -51,9 +51,9 @@ export:
     (tmp_path / "styles.yaml").write_text(
         """
 styles:
-  polite:
-    label: 丁寧語
-    instruction: 丁寧に。
+  prose:
+    label: 散文
+    instruction: 散文で。
 """.strip(),
         encoding="utf-8",
     )
@@ -82,7 +82,7 @@ def test_job_options(client: TestClient) -> None:
     resp = client.get("/api/jobs/options")
     assert resp.status_code == 200
     body = resp.json()
-    assert "polite" in {s["id"] for s in body["styles"]}
+    assert "prose" in {s["id"] for s in body["styles"]}
     assert body["defaults"]["mode"] == "thinking"
     assert "auto" in body["modes"]
     tool_ids = {t["id"] for t in body["tools"]}
@@ -108,7 +108,7 @@ def test_create_job_with_tool_ids(client: TestClient) -> None:
 
 
 def test_create_and_list_jobs(client: TestClient, repo_root: Path) -> None:
-    resp = client.post("/api/jobs", json={"count": 2, "style": ["polite"]})
+    resp = client.post("/api/jobs", json={"count": 2, "style": ["prose"]})
     assert resp.status_code == 201
     job = resp.json()
     assert job["status"] == "queued"

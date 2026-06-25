@@ -340,7 +340,7 @@ def test_run_distill_style_temperature_cartesian(tmp_path: Path) -> None:
         bank_path=bank,
         out_path=out,
         client=client,
-        style_presets=[styles["polite"], styles["casual"]],
+        style_presets=[styles["prose"], styles["dialog"]],
         temperatures=[0.5, 0.8],
     )
     assert n == 4
@@ -348,7 +348,7 @@ def test_run_distill_style_temperature_cartesian(tmp_path: Path) -> None:
     assert len(records) == 4
     style_ids = {r["style_id"] for r in records}
     temps = {r["sampling"]["temperature"] for r in records}
-    assert style_ids == {"polite", "casual"}
+    assert style_ids == {"prose", "dialog"}
     assert temps == {0.5, 0.8}
 
 
@@ -363,7 +363,7 @@ def test_run_distill_same_prompt_different_style_not_skipped(tmp_path: Path) -> 
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(
         json.dumps(
-            _done_record("P1", cfg, style_id="polite"),
+            _done_record("P1", cfg, style_id="prose"),
             ensure_ascii=False,
         )
         + "\n",
@@ -375,11 +375,11 @@ def test_run_distill_same_prompt_different_style_not_skipped(tmp_path: Path) -> 
         bank_path=bank,
         out_path=out,
         client=client,
-        style_presets=[styles["casual"]],
+        style_presets=[styles["dialog"]],
     )
     assert n == 1
     rec = _load_jsonl(out)[-1]
-    assert rec["style_id"] == "casual"
+    assert rec["style_id"] == "dialog"
 
 
 def test_logs_progress_messages(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

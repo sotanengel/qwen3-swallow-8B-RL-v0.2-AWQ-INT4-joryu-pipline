@@ -24,7 +24,7 @@ def test_default_stats_refresher_includes_distill_live(tmp_path: Path, monkeypat
         DistillLiveState.report_retry(
             run_key='{"prompt": "P"}',
             prompt="長いプロンプト",
-            style_id="polite",
+            style_id="prose",
             attempts=3,
         )
         default_stats_refresher(out)

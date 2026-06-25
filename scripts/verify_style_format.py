@@ -37,7 +37,7 @@ VERIFY_PROMPTS = [
     {"prompt": "週末の過ごし方を一つ教えて", "category": "生活"},
 ]
 
-STYLES = ("dialog", "prose", "polite", "casual", "expert", "report")
+STYLES = ("dialog", "prose", "qa_short", "report")
 
 
 def load_jsonl(path: Path) -> list[dict]:

@@ -82,9 +82,7 @@ def test_check_style_format_criteria_passes_ideal_sample() -> None:
     aggregates = {
         "dialog": {"md_marker_rate": 0.0, "mean_sentence_count": 3.0},
         "prose": {"md_marker_rate": 0.05, "mean_sentence_count": 4.0},
-        "polite": {"md_marker_rate": 0.2, "mean_sentence_count": 5.0},
-        "casual": {"md_marker_rate": 0.1, "mean_sentence_count": 4.0},
-        "expert": {"md_marker_rate": 0.15, "mean_sentence_count": 6.0},
+        "qa_short": {"md_marker_rate": 0.0, "mean_sentence_count": 2.0},
         "report": {"md_marker_rate": 0.9, "mean_sentence_count": 8.0},
     }
     assert check_style_format_criteria(aggregates) == []
