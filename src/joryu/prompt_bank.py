@@ -12,6 +12,12 @@ from joryu.tools import ToolDefinition, merge_tools, resolve_tool_ids
 
 _SAMPLING_KEYS = ("temperature", "top_p", "top_k", "max_tokens", "repetition_penalty")
 
+_TOOL_USAGE_HINT = (
+    "利用可能なツールが提供されています。"
+    "不明な事実・数値・最新情報はツールで確認し、その結果を踏まえて回答してください。"
+    "ツールを使わずに架空のデータ・出典・URL を作らないでください。"
+)
+
 
 @dataclass
 class PromptRow:
@@ -101,6 +107,9 @@ def merge_with_defaults(
         resolved_tools = [t.to_openai_schema() for t in resolved]
     if row.tools:
         resolved_tools = merge_tools(resolved_tools, row.tools)
+    if resolved_tools:
+        base = system_prompt.rstrip()
+        system_prompt = f"{base}\n\n{_TOOL_USAGE_HINT}" if base else _TOOL_USAGE_HINT
     return EffectiveSampling(
         system_prompt=system_prompt,
         sampling=sampling,
