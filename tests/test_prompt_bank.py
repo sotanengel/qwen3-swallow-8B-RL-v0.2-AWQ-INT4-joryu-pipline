@@ -158,6 +158,32 @@ def test_merge_with_defaults_no_tool_hint_without_tools() -> None:
     row = PromptRow(prompt="p")
     eff = merge_with_defaults(row, cfg)
     assert "架空" not in eff.system_prompt
+
+
+def test_merge_with_defaults_lowers_repetition_penalty_for_tools() -> None:
+    from joryu.tools import load_tools
+
+    cfg = Config()
+    cfg.distill.tools_repetition_penalty = 1.0
+    row = PromptRow(prompt="p", tool_ids=["search"])
+    eff = merge_with_defaults(row, cfg, tools_registry=load_tools("tools.yaml"))
+    assert eff.sampling["repetition_penalty"] == pytest.approx(1.0)
+
+
+def test_merge_with_defaults_keeps_model_penalty_without_tools() -> None:
+    cfg = Config()
+    row = PromptRow(prompt="p")
+    eff = merge_with_defaults(row, cfg)
+    assert eff.sampling["repetition_penalty"] == pytest.approx(cfg.model.repetition_penalty)
+
+
+def test_merge_row_repetition_penalty_overrides_tools_default() -> None:
+    from joryu.tools import load_tools
+
+    cfg = Config()
+    row = PromptRow(prompt="p", tool_ids=["search"], sampling={"repetition_penalty": 1.2})
+    eff = merge_with_defaults(row, cfg, tools_registry=load_tools("tools.yaml"))
+    assert eff.sampling["repetition_penalty"] == pytest.approx(1.2)
     cfg = Config()
     row = PromptRow(prompt="p")
     eff = merge_with_defaults(row, cfg)

@@ -123,3 +123,8 @@ def test_dataclass_types() -> None:
 def test_distill_no_think_fallback_defaults_false() -> None:
     cfg = Config()
     assert cfg.distill.no_think_fallback is False
+
+
+def test_distill_tools_repetition_penalty_defaults() -> None:
+    cfg = Config()
+    assert cfg.distill.tools_repetition_penalty == pytest.approx(1.0)

@@ -72,6 +72,8 @@ class DistillConfig:
     tool_loop_max_turns: int = 4
     # named function リトライ後も tool_calls 空のとき enable_thinking=False で再生成 (#111)
     no_think_fallback: bool = False
+    # tools 付き variant の repetition_penalty (構造化出力保護, #113)
+    tools_repetition_penalty: float = 1.0
 
 
 @dataclass
