@@ -180,6 +180,8 @@ def test_build_default_stat_signals_returns_all_codes():
         "RATIO-TA",
         "TRUNC",
         "THINK-TAG",
+        "TOOL-PLAN",
+        "TOOL-CLAIM",
         "LANG-JA",
         "REPEAT-NG",
         "REPEAT-CHAR",
