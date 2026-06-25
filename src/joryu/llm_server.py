@@ -12,7 +12,7 @@ from joryu.vllm_client import ChatResult, SupportsChat
 
 
 class ChatRequest(BaseModel):
-    messages: list[dict[str, str]]
+    messages: list[dict[str, Any]]
     enable_thinking: bool | None = True
     tools: list[dict[str, Any]] | None = None
     tool_choice: dict[str, Any] | str | None = None
