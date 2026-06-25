@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
@@ -25,6 +26,14 @@ __all__ = [
 
 # 文字数ベースのビン (token 換算はモデル依存なので char で近似する)。
 _LENGTH_BIN_EDGES: tuple[int, ...] = (0, 50, 100, 200, 500, 1000, 2000, 5000)
+
+_TOOL_INTENT_RE = re.compile(
+    r"(?i)(use\s+(?:search|calc|fetch_url|the)\s+function|"
+    r"call\s+(?:search|calc|fetch_url)\b|"
+    r"(?:we|let's|should)\s+(?:use|call)\s+(?:search|calc|fetch_url|a\s+search)|"
+    r"search\s+function|fetch_url|tool\s+(?:usage|function)|"
+    r"検索ツール|ツールで)",
+)
 
 
 def length_bins(values: list[int], edges: tuple[int, ...] = _LENGTH_BIN_EDGES) -> list[dict]:
@@ -64,6 +73,29 @@ def _round_str(value: Any) -> str | None:
     return None
 
 
+def _record_has_tools(rec: dict[str, Any]) -> bool:
+    tools = rec.get("tools")
+    return isinstance(tools, list) and len(tools) > 0
+
+
+def _record_tool_call_names(rec: dict[str, Any]) -> list[str]:
+    tool_calls = rec.get("tool_calls")
+    if not isinstance(tool_calls, list):
+        return []
+    names: list[str] = []
+    for call in tool_calls:
+        if isinstance(call, dict) and isinstance(call.get("name"), str):
+            names.append(call["name"])
+    return names
+
+
+def _thinking_plans_tool_use(rec: dict[str, Any]) -> bool:
+    trace = rec.get("thinking_trace") or rec.get("reasoning") or ""
+    if not isinstance(trace, str) or not trace.strip():
+        return False
+    return _TOOL_INTENT_RE.search(trace) is not None
+
+
 def compute_stats(jsonl_path: str | Path) -> dict[str, Any]:
     """JSONL を 1 パスで走査し、ダッシュボード描画に十分な統計を返す。"""
     p = Path(jsonl_path)
@@ -81,6 +113,11 @@ def compute_stats(jsonl_path: str | Path) -> dict[str, Any]:
     sampling_top_ps: Counter[str] = Counter()
     timeline_daily: Counter[str] = Counter()
     truncated_count = 0
+    tool_records = 0
+    tool_call_records = 0
+    total_tool_calls = 0
+    tool_name_counts: Counter[str] = Counter()
+    planned_not_called = 0
 
     for rec in iter_jsonl(p):
         prompt = rec.get("prompt")
@@ -118,11 +155,34 @@ def compute_stats(jsonl_path: str | Path) -> dict[str, Any]:
         if record_looks_truncated(rec):
             truncated_count += 1
 
+        has_tools = _record_has_tools(rec)
+        if has_tools:
+            tool_records += 1
+        call_names = _record_tool_call_names(rec)
+        if call_names:
+            tool_call_records += 1
+            total_tool_calls += len(call_names)
+            for name in call_names:
+                tool_name_counts[name] += 1
+        elif has_tools and _thinking_plans_tool_use(rec):
+            planned_not_called += 1
+
     truncated_rate = (truncated_count / total) if total else 0.0
+    tool_call_rate = (tool_call_records / tool_records) if tool_records else 0.0
+    tool_calls_per_record = (total_tool_calls / total) if total else 0.0
+    tool_planned_but_not_called_rate = (planned_not_called / tool_records) if tool_records else 0.0
     return {
         "total": total,
         "truncated_count": truncated_count,
         "truncated_rate": truncated_rate,
+        "tool_records": tool_records,
+        "tool_call_records": tool_call_records,
+        "total_tool_calls": total_tool_calls,
+        "tool_call_rate": tool_call_rate,
+        "tool_calls_per_record": tool_calls_per_record,
+        "tool_name_counts": dict(tool_name_counts),
+        "tool_planned_not_called_count": planned_not_called,
+        "tool_planned_but_not_called_rate": tool_planned_but_not_called_rate,
         "models": dict(models),
         "modes": dict(modes),
         "categories": dict(categories),
@@ -150,6 +210,14 @@ def _empty_stats() -> dict[str, Any]:
         "timeline_daily": {},
         "truncated_count": 0,
         "truncated_rate": 0.0,
+        "tool_records": 0,
+        "tool_call_records": 0,
+        "total_tool_calls": 0,
+        "tool_call_rate": 0.0,
+        "tool_calls_per_record": 0.0,
+        "tool_name_counts": {},
+        "tool_planned_not_called_count": 0,
+        "tool_planned_but_not_called_rate": 0.0,
     }
 
 

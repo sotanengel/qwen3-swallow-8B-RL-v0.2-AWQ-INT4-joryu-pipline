@@ -158,3 +158,35 @@ def test_skips_malformed_lines(tmp_path: Path) -> None:
     )
     stats = compute_stats(p)
     assert stats["total"] == 1  # only the valid one with a prompt
+
+
+def test_tool_call_metrics(tmp_path: Path) -> None:
+    p = tmp_path / "r.jsonl"
+    _write(
+        p,
+        [
+            {
+                "prompt": "P1",
+                "answer": "a",
+                "tools": [{"type": "function", "function": {"name": "search"}}],
+                "tool_calls": [{"name": "search", "arguments": {"query": "x"}}],
+            },
+            {
+                "prompt": "P2",
+                "answer": "b",
+                "tools": [{"type": "function", "function": {"name": "calc"}}],
+                "tool_calls": [],
+                "thinking_trace": "We should use search function to get data.",
+            },
+            {"prompt": "P3", "answer": "c"},
+        ],
+    )
+    stats = compute_stats(p)
+    assert stats["tool_records"] == 2
+    assert stats["tool_call_records"] == 1
+    assert stats["total_tool_calls"] == 1
+    assert stats["tool_call_rate"] == pytest.approx(0.5)
+    assert stats["tool_calls_per_record"] == pytest.approx(1 / 3)
+    assert stats["tool_name_counts"] == {"search": 1}
+    assert stats["tool_planned_not_called_count"] == 1
+    assert stats["tool_planned_but_not_called_rate"] == pytest.approx(0.5)

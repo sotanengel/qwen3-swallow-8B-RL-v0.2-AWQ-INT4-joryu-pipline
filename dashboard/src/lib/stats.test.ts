@@ -104,6 +104,12 @@ describe("statsDataChanged", () => {
     expect(statsDataChanged(prev, next)).toBe(false);
   });
 
+  it("returns true when tool_call_rate changes", () => {
+    const prev = mergeStats({ total: 1, tool_call_rate: 0 });
+    const next = mergeStats({ total: 1, tool_call_rate: 0.5 });
+    expect(statsDataChanged(prev, next)).toBe(true);
+  });
+
   it("returns true when distill_live retries change", () => {
     const prev = mergeStats({
       total: 1,
