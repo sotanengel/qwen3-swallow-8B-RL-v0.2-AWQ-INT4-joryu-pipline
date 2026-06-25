@@ -248,3 +248,36 @@ def test_empty_stats_contains_new_keys() -> None:
     s = _empty_stats()
     assert s["bare_json_tool_call_records"] == 0
     assert s["suspected_unparsed_tool_call_records"] == 0
+    assert s["no_think_fallback_used_records"] == 0
+    assert s["no_think_fallback_rescued_count"] == 0
+
+
+def test_no_think_fallback_rescued_metrics(tmp_path: Path) -> None:
+    p = tmp_path / "r.jsonl"
+    _write(
+        p,
+        [
+            {
+                "prompt": "P1",
+                "answer": "a",
+                "tools": [{"type": "function", "function": {"name": "search"}}],
+                "tool_calls": [{"name": "search", "arguments": {"query": "x"}}],
+                "no_think_fallback_used": True,
+                "tool_call_recovery": {
+                    "no_think_fallback_succeeded": True,
+                    "succeeded": True,
+                },
+            },
+            {
+                "prompt": "P2",
+                "answer": "b",
+                "tools": [{"type": "function", "function": {"name": "search"}}],
+                "tool_calls": [],
+                "no_think_fallback_used": True,
+                "tool_call_recovery": {"no_think_fallback_succeeded": False},
+            },
+        ],
+    )
+    stats = compute_stats(p)
+    assert stats["no_think_fallback_used_records"] == 2
+    assert stats["no_think_fallback_rescued_count"] == 1

@@ -28,6 +28,7 @@ def recover_tool_call(
     sampling: dict[str, Any],
     max_attempts: int = DEFAULT_MAX_RECOVERY_ATTEMPTS,
     enable_thinking: bool = True,
+    no_think_fallback: bool = False,
 ) -> tuple[ChatResult, dict[str, Any]]:
     """intent あり & tool_calls 空のとき named function で再送し救済を試みる。
 
@@ -39,6 +40,8 @@ def recover_tool_call(
         "method": None,
         "succeeded": False,
         "tool_name": None,
+        "no_think_fallback_used": False,
+        "no_think_fallback_succeeded": False,
     }
     if not needs_tool_call_recovery(chat, tools=tools):
         return chat, metadata
@@ -71,6 +74,22 @@ def recover_tool_call(
         if chat_has_tool_calls(retry_chat):
             metadata["succeeded"] = True
             return retry_chat, metadata
+
+    if no_think_fallback and not chat_has_tool_calls(final_chat):
+        metadata["no_think_fallback_used"] = True
+        metadata["method"] = "no_think_fallback"
+        metadata["attempts"] += 1
+        no_think_chat = client.chat_via_template(
+            messages,
+            enable_thinking=False,
+            tools=tools,
+            tool_choice=tool_choice,
+            **sampling,
+        )
+        final_chat = no_think_chat
+        if chat_has_tool_calls(no_think_chat):
+            metadata["succeeded"] = True
+            metadata["no_think_fallback_succeeded"] = True
 
     return final_chat, metadata
 
