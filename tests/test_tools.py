@@ -54,6 +54,15 @@ def test_merge_tools_adhoc_wins_on_name_collision() -> None:
     assert merged[0]["function"]["description"] == "override"
 
 
-def test_load_tools_missing_file(tmp_path: Path) -> None:
+def test_load_tools_reads_invocation_rule(tmp_path: Path) -> None:
+    p = tmp_path / "tools.yaml"
+    p.write_text(
+        "tools:\n  search:\n    description: d\n"
+        "    invocation_rule: 事実確認時は必ず呼ぶ\n"
+        "    parameters:\n      type: object\n      properties: {}\n",
+        encoding="utf-8",
+    )
+    reg = load_tools(p)
+    assert reg["search"].invocation_rule == "事実確認時は必ず呼ぶ"
     with pytest.raises(FileNotFoundError):
         load_tools(tmp_path / "missing.yaml")

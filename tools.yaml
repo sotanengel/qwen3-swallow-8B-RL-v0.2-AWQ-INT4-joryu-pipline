@@ -3,6 +3,7 @@
 tools:
   search:
     description: "Web を検索して関連スニペットを返す。"
+    invocation_rule: "ユーザーが事実・最新情報・統計を尋ねたら必ず呼ぶ。"
     parameters:
       type: object
       properties:
@@ -17,6 +18,7 @@ tools:
 
   calc:
     description: "数式を評価して結果を返す。"
+    invocation_rule: "数値計算が必要なら必ず呼ぶ。"
     parameters:
       type: object
       properties:
@@ -27,6 +29,7 @@ tools:
 
   fetch_url:
     description: "URL からテキスト本文を取得する。"
+    invocation_rule: "特定 URL の内容確認が必要なら必ず呼ぶ。"
     parameters:
       type: object
       properties:

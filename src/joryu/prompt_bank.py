@@ -79,6 +79,23 @@ def load_prompt_bank(path: str | Path) -> list[PromptRow]:
     return rows
 
 
+def format_tool_usage_hint(tool_defs: list[ToolDefinition]) -> str:
+    """tools 解決後の system_prompt 追記文を組み立てる (#112)。"""
+    if not tool_defs:
+        return _TOOL_USAGE_HINT
+    if not any(t.invocation_rule for t in tool_defs):
+        return _TOOL_USAGE_HINT
+    lines = ["利用可能なツール:"]
+    for tool in tool_defs:
+        rule = tool.invocation_rule or tool.description
+        lines.append(f"- {tool.name}: {rule}")
+    lines.append(
+        "ツールを使わずに架空のデータ・出典・URL を作らないでください。"
+        "推測でツールを使ったかのように装ってはいけません。"
+    )
+    return "\n".join(lines)
+
+
 def merge_with_defaults(
     row: PromptRow,
     cfg: Config,
@@ -100,16 +117,18 @@ def merge_with_defaults(
         row.system_prompt if row.system_prompt is not None else cfg.distill.system_prompt
     )
     resolved_tools: list[dict[str, Any]] = []
+    resolved_tool_defs: list[ToolDefinition] = []
     if row.tool_ids:
         if tools_registry is None:
             raise ValueError("tool_ids 参照には tools_registry が必須")
-        resolved = resolve_tool_ids(row.tool_ids, tools_registry)
-        resolved_tools = [t.to_openai_schema() for t in resolved]
+        resolved_tool_defs = resolve_tool_ids(row.tool_ids, tools_registry)
+        resolved_tools = [t.to_openai_schema() for t in resolved_tool_defs]
     if row.tools:
         resolved_tools = merge_tools(resolved_tools, row.tools)
     if resolved_tools:
         base = system_prompt.rstrip()
-        system_prompt = f"{base}\n\n{_TOOL_USAGE_HINT}" if base else _TOOL_USAGE_HINT
+        hint = format_tool_usage_hint(resolved_tool_defs)
+        system_prompt = f"{base}\n\n{hint}" if base else hint
     return EffectiveSampling(
         system_prompt=system_prompt,
         sampling=sampling,
