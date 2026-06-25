@@ -41,6 +41,13 @@ def compose_down_command(*, volumes: bool) -> list[str]:
     return cmd
 
 
+def compose_stop_command(*, services: list[str]) -> list[str]:
+    """`docker compose stop [services...]` を構築。"""
+    cmd: list[str] = ["docker", "compose", "stop"]
+    cmd.extend(services)
+    return cmd
+
+
 def builder_prune_command() -> list[str]:
     """`docker builder prune -af`。現行 image から参照されない全 cache を回収する。
 

@@ -12,7 +12,8 @@ from joryu.jobs.runner import JobRunner
 from joryu.jobs.store import JobStore
 from joryu.jobs.validate import validate_curate_job_spec
 from joryu.paths import DEFAULT_CONFIG
-from joryu.preflight import joryu_container_running, jsonl_has_content, resolve_distill_jsonl
+from joryu.preflight import jsonl_has_content, resolve_distill_jsonl
+from joryu.readiness import is_vllm_daemon_ready
 
 router = APIRouter()
 
@@ -69,7 +70,7 @@ def curate_options(request: Request) -> dict[str, Any]:
     return {
         "defaults": {"config": DEFAULT_CONFIG, "skip_llm": False},
         "input_ready": jsonl_has_content(jsonl),
-        "vllm_available": joryu_container_running(),
+        "vllm_available": is_vllm_daemon_ready(),
     }
 
 
@@ -85,12 +86,12 @@ def create_curate_job(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    if not spec.skip_llm and not joryu_container_running():
+    if not spec.skip_llm and not is_vllm_daemon_ready():
         raise HTTPException(
             status_code=400,
             detail=(
-                "vLLM (joryu コンテナ) が起動していません。"
-                " `uv run joryu-up --full` で joryu を起動するか、"
+                "vLLM デーモンが ready ではありません。"
+                " `uv run joryu-up --detach` で joryu を起動し ready 待ちが完了するまで待つか、"
                 "skip_llm=true を指定してください。"
             ),
         )

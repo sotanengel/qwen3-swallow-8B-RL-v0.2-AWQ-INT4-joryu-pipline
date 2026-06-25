@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from joryu.paths import resolve_config_relative
+import pytest
+
+from joryu.paths import resolve_cli_config_path, resolve_config_relative
 
 
 def test_resolve_config_relative_from_config_parent(tmp_path: Path) -> None:
@@ -27,3 +29,12 @@ def test_resolve_config_relative_absolute_passthrough(tmp_path: Path) -> None:
 
     resolved = resolve_config_relative(config_path, str(abs_tools.resolve()))
     assert resolved == abs_tools.resolve()
+
+
+def test_resolve_cli_config_path_uses_cwd_when_repo_root_unset(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("JORYU_REPO_ROOT", raising=False)
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text("x: 1\n", encoding="utf-8")
+    assert resolve_cli_config_path("config.yaml", cwd=tmp_path) == cfg.resolve()

@@ -15,7 +15,7 @@ COPY config.yaml ./config.yaml
 COPY styles.yaml ./styles.yaml
 COPY tools.yaml ./tools.yaml
 COPY README.md ./README.md
-RUN uv sync --frozen --no-dev
+RUN uv sync --frozen --no-dev --extra api
 
 # cu130 + vLLM ランタイム。
 # devel イメージ (nvcc 同梱) を使うのは FlashInfer が FP8 KV キャッシュ用の
@@ -28,6 +28,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     ninja-build \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /usr/local /usr/local
@@ -45,4 +46,4 @@ ENV PATH="/app/.venv/bin:/usr/local/bin:$PATH" \
     VLLM_DEEP_GEMM_WARMUP=skip \
     VLLM_USE_FLASHINFER_SAMPLER=0
 
-CMD ["python", "-c", "import joryu; print('joryu', joryu.__version__)"]
+CMD ["joryu-llm-serve", "--host", "0.0.0.0", "--port", "8100"]

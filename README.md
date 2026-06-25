@@ -49,21 +49,22 @@ uv run joryu-distill --count 50 --mode nothinking
 # 5. zstd 圧縮 + meta.json でエクスポート
 uv run joryu-export --bundle-tar
 
-# 6. ダッシュボード + API 起動
+# 6. ダッシュボード + API + vLLM 常駐デーモン起動
 uv run joryu-up --detach
 
 # 6b. ブラウザで http://localhost:3000/jobs から蒸留ジョブを投入
 #     API: http://localhost:8000  (ローカル専用・認証なし)
-#     ジョブ実行用 joryu:latest は joryu-up が自動 build する
-#     vLLM 常駐コンテナとして up する場合は `uv run joryu-up --full`
+#     vLLM デーモン: http://localhost:8100/health (モデルロード完了まで joryu-up が待機)
+#     `--no-wait` で ready 待ちをスキップ可能
 ```
 
 ## フロント + バックエンドの起動 / 停止
 
 ```powershell
-uv run joryu-up                  # dashboard + api (git 差分に応じて build+up)
-uv run joryu-up --full           # joryu + dashboard + api を up (差分がある方だけ build)
-uv run joryu-up --detach         # バックグラウンド起動
+uv run joryu-up                  # dashboard + api + joryu (vLLM 常駐, git 差分に応じて build+up)
+uv run joryu-up --full           # 上記と同義 (後方互換)
+uv run joryu-up --detach         # バックグラウンド起動 + API/vLLM/dashboard ready 待ち
+uv run joryu-up --no-wait        # ready 待ちをスキップ
 uv run joryu-up --no-open        # ブラウザ自動起動を無効化
 uv run joryu-up --force          # ディスク容量 preflight をスキップ
 uv run joryu-up --frontend-only  # dashboard のみ (= joryu-serve と等価)
@@ -75,20 +76,17 @@ uv run joryu-down                # 停止 (volume は残す)
 uv run joryu-down --volumes      # HF キャッシュ含めて完全に削除
 ```
 
-`joryu-up` は git 作業ツリーの差分と、前回起動時の HEAD からのコミット差分（`git pull` 後など）から rebuild 対象を自動判定する。初回起動時は up 対象をすべて build し、API ジョブ用の `joryu:latest` も未作成なら build する。**api / joryu を up する場合**、`data/vllm_limits.json` が無い・設定変更・joryu イメージ rebuild 時は起動前に `joryu-probe-vllm` を自動実行する。ジョブランナー (api) や蒸留ランタイム (joryu) に差分があるときは `docker compose up --force-recreate` で api コンテナを再起動し、マウント済み `src/`（`PYTHONPATH=/workspace/src`）の最新コードを読み込む（**`joryu-down` による手動再起動は不要**）。dashboard を起動した場合は http://localhost:3000 が ready になったらブラウザを自動で開く (`--no-open` で無効化)。joryu ビルド時はホスト空き **25 GB** 以上を要求し、不足時は中止する (`--force` で続行可)。
+`joryu-up` は git 作業ツリーの差分と、前回起動時の HEAD からのコミット差分（`git pull` 後など）から rebuild 対象を自動判定する。初回起動時は up 対象をすべて build する。**api / joryu を up する場合**、`data/vllm_limits.json` が無い・設定変更・joryu イメージ rebuild 時は起動前に `joryu-probe-vllm` を自動実行する。`--detach` 時は compose up 後に API (`/api/health`)、vLLM デーモン (`:8100/health`)、dashboard が ready になるまで待機する（`--no-wait` でスキップ）。ジョブは常駐 vLLM へ HTTP 接続し、GPU `docker run` を毎回起動しない。**デーモン稼働中に `joryu-distill --docker` を手動実行すると GPU OOM の恐れあり。**
 
 ## ジョブ API とダッシュボード
 
 `joryu-api` (FastAPI, port 8000) が蒸留ジョブの投入・状態照会を担当する。ダッシュボードの `/jobs` 画面から `joryu-distill` 相当のパラメータで実行できる。
 
 ```powershell
-# 既定起動 (dashboard + api)
+# 既定起動 (dashboard + api + vLLM 常駐 joryu)
 uv run joryu-up --detach
 
-# GPU 蒸留も Compose 内で完結させる場合
-uv run joryu-up --full --detach
-
-# ローカル開発 (GPU ジョブはホストの Docker 経由)
+# ローカル開発 (GPU ジョブは常駐デーモンまたはホスト Docker 経由)
 uv run joryu-api
 cd dashboard && npm run dev
 ```
