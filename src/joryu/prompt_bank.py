@@ -129,6 +129,8 @@ def merge_with_defaults(
         base = system_prompt.rstrip()
         hint = format_tool_usage_hint(resolved_tool_defs)
         system_prompt = f"{base}\n\n{hint}" if base else hint
+        if "repetition_penalty" not in row.sampling:
+            sampling["repetition_penalty"] = cfg.distill.tools_repetition_penalty
     return EffectiveSampling(
         system_prompt=system_prompt,
         sampling=sampling,
