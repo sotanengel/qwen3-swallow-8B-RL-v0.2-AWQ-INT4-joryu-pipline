@@ -146,6 +146,61 @@ def test_tool_loop_second_call_uses_qwen3_message_format(tmp_path: Path) -> None
     assert tool_msgs[0]["content"] == "5"
 
 
+def test_tool_loop_runs_bare_json_tool_call(tmp_path: Path) -> None:
+    """#103: bare JSON 形式の tool_call でも tool_loop が executor を呼んで2 turn 目に進む。"""
+    bank = tmp_path / "bank.jsonl"
+    _write_bank(bank, [{"prompt": "計算して", "tool_ids": ["calc"]}])
+    out = tmp_path / "out.jsonl"
+    cfg = Config()
+    cfg.distill.tool_loop = True
+    bare = '{"name":"calc","arguments":{"expression":"2+3"}}'
+    client = FakeVllmClient(answers=[bare, "答えは 5 です。"], thinking=None)
+    executor = StubToolExecutor({"calc": "5"})
+    run_distill(
+        cfg,
+        bank_path=bank,
+        out_path=out,
+        client=client,
+        executor=executor,
+        tool_loop=True,
+    )
+    assert len(client.calls) == 2
+    rec = read_jsonl(out)[0]
+    assert len(rec["tool_calls"]) == 1
+    assert rec["tool_calls"][0]["name"] == "calc"
+    # turns: assistant(bare JSON tool_call) -> tool result -> assistant final
+    assert len(rec["turns"]) >= 2
+    assert rec["turns"][0]["tool_calls"][0]["name"] == "calc"
+    assert rec["turns"][1]["role"] == "tool"
+    assert rec["turns"][1]["content"] == "5"
+    assert rec["answer"] == "答えは 5 です。"
+
+
+def test_tool_loop_turn_persists_raw_completion(tmp_path: Path) -> None:
+    """#103: tool_loop 中の各 assistant turn にも raw_completion が残る。"""
+    bank = tmp_path / "bank.jsonl"
+    _write_bank(bank, [{"prompt": "計算", "tool_ids": ["calc"]}])
+    out = tmp_path / "out.jsonl"
+    cfg = Config()
+    cfg.distill.tool_loop = True
+    bare = '{"name":"calc","arguments":{"expression":"2+3"}}'
+    client = FakeVllmClient(answers=[bare, "答えは 5 です。"], thinking=None)
+    executor = StubToolExecutor({"calc": "5"})
+    run_distill(
+        cfg,
+        bank_path=bank,
+        out_path=out,
+        client=client,
+        executor=executor,
+        tool_loop=True,
+    )
+    rec = read_jsonl(out)[0]
+    assistant_turns = [t for t in rec["turns"] if t["role"] == "assistant"]
+    assert len(assistant_turns) >= 2
+    for turn in assistant_turns:
+        assert "raw_completion" in turn
+
+
 def test_tool_loop_multiple_tool_calls_one_assistant_message(tmp_path: Path) -> None:
     bank = tmp_path / "bank.jsonl"
     _write_bank(bank, [{"prompt": "調べて計算", "tool_ids": ["search", "calc"]}])

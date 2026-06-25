@@ -485,6 +485,62 @@ def test_run_distill_records_tool_calls(tmp_path: Path) -> None:
     assert rec["turns"] == []
 
 
+def test_run_distill_record_includes_raw_completion(tmp_path: Path) -> None:
+    """#103: record に raw_completion が含まれること。"""
+    bank = tmp_path / "bank.jsonl"
+    _write_bank(bank, [{"prompt": "P1"}])
+    out = tmp_path / "out.jsonl"
+    cfg = Config()
+    client = FakeVllmClient(answer="生 completion テキスト", thinking="T")
+    run_distill(cfg, bank_path=bank, out_path=out, client=client)
+    rec = _load_jsonl(out)[0]
+    assert "raw_completion" in rec
+    assert rec["raw_completion"] == "生 completion テキスト"
+    assert rec["suspected_unparsed_tool_calls"] == []
+
+
+def test_run_distill_extracts_bare_json_tool_call(tmp_path: Path) -> None:
+    """#103: bare JSON `{"name":...,"arguments":...}` も tool_calls に抽出される。"""
+    bank = tmp_path / "bank.jsonl"
+    _write_bank(
+        bank,
+        [{"prompt": "音楽と思考", "tool_ids": ["search"]}],
+    )
+    out = tmp_path / "out.jsonl"
+    cfg = Config()
+    bare = (
+        "We'll call search.\n\n"
+        '{"name": "search", "arguments": {"query": "背景音楽 認知", "top_k": 5}}'
+    )
+    client = FakeVllmClient(answer=bare, thinking=None)
+    run_distill(cfg, bank_path=bank, out_path=out, client=client)
+    rec = _load_jsonl(out)[0]
+    assert len(rec["tool_calls"]) == 1
+    assert rec["tool_calls"][0]["name"] == "search"
+    assert rec["tool_calls"][0]["arguments"] == {
+        "query": "背景音楽 認知",
+        "top_k": 5,
+    }
+
+
+def test_run_distill_records_suspected_unparsed_when_unknown_tool(tmp_path: Path) -> None:
+    """#103: 未登録ツール名の bare JSON は抽出されず suspected hints に出る。"""
+    bank = tmp_path / "bank.jsonl"
+    _write_bank(
+        bank,
+        [{"prompt": "P", "tool_ids": ["search"]}],
+    )
+    out = tmp_path / "out.jsonl"
+    cfg = Config()
+    bare = '{"name": "rm_rf", "arguments": {"path": "/"}}'
+    client = FakeVllmClient(answer=bare, thinking=None)
+    run_distill(cfg, bank_path=bank, out_path=out, client=client)
+    rec = _load_jsonl(out)[0]
+    assert rec["tool_calls"] == []
+    assert rec["suspected_unparsed_tool_calls"]
+    assert any("rm_rf" in h for h in rec["suspected_unparsed_tool_calls"])
+
+
 def test_variant_run_key_differs_by_tools(tmp_path: Path) -> None:
     from joryu.distill import variant_run_key
     from joryu.prompt_bank import EffectiveSampling, PromptRow

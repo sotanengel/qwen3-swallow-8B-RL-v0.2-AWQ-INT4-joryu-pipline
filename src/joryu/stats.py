@@ -89,6 +89,31 @@ def _record_tool_call_names(rec: dict[str, Any]) -> list[str]:
     return names
 
 
+def _record_has_bare_json_tool_call(rec: dict[str, Any]) -> bool:
+    """tool_calls[*].raw が `<tool_call>` も ```` ``` ```` も含まない → bare JSON 由来。
+
+    旧データの raw が空文字 ("" or 欠落) のケースは bare 扱いしない (旧 record 互換)。
+    """
+    tool_calls = rec.get("tool_calls")
+    if not isinstance(tool_calls, list) or not tool_calls:
+        return False
+    for call in tool_calls:
+        if not isinstance(call, dict):
+            continue
+        raw = call.get("raw")
+        if not isinstance(raw, str) or not raw.strip():
+            continue
+        if "<tool_call" in raw or "```" in raw:
+            continue
+        return True
+    return False
+
+
+def _record_has_suspected_unparsed_tool_call(rec: dict[str, Any]) -> bool:
+    hints = rec.get("suspected_unparsed_tool_calls")
+    return isinstance(hints, list) and len(hints) > 0
+
+
 def _thinking_plans_tool_use(rec: dict[str, Any]) -> bool:
     trace = rec.get("thinking_trace") or rec.get("reasoning") or ""
     if not isinstance(trace, str) or not trace.strip():
@@ -118,6 +143,8 @@ def compute_stats(jsonl_path: str | Path) -> dict[str, Any]:
     total_tool_calls = 0
     tool_name_counts: Counter[str] = Counter()
     planned_not_called = 0
+    bare_json_tool_call_records = 0
+    suspected_unparsed_tool_call_records = 0
 
     for rec in iter_jsonl(p):
         prompt = rec.get("prompt")
@@ -164,8 +191,13 @@ def compute_stats(jsonl_path: str | Path) -> dict[str, Any]:
             total_tool_calls += len(call_names)
             for name in call_names:
                 tool_name_counts[name] += 1
+            if _record_has_bare_json_tool_call(rec):
+                bare_json_tool_call_records += 1
         elif has_tools and _thinking_plans_tool_use(rec):
             planned_not_called += 1
+
+        if _record_has_suspected_unparsed_tool_call(rec):
+            suspected_unparsed_tool_call_records += 1
 
     truncated_rate = (truncated_count / total) if total else 0.0
     tool_call_rate = (tool_call_records / tool_records) if tool_records else 0.0
@@ -183,6 +215,8 @@ def compute_stats(jsonl_path: str | Path) -> dict[str, Any]:
         "tool_name_counts": dict(tool_name_counts),
         "tool_planned_not_called_count": planned_not_called,
         "tool_planned_but_not_called_rate": tool_planned_but_not_called_rate,
+        "bare_json_tool_call_records": bare_json_tool_call_records,
+        "suspected_unparsed_tool_call_records": suspected_unparsed_tool_call_records,
         "models": dict(models),
         "modes": dict(modes),
         "categories": dict(categories),
@@ -218,6 +252,8 @@ def _empty_stats() -> dict[str, Any]:
         "tool_name_counts": {},
         "tool_planned_not_called_count": 0,
         "tool_planned_but_not_called_rate": 0.0,
+        "bare_json_tool_call_records": 0,
+        "suspected_unparsed_tool_call_records": 0,
     }
 
 
