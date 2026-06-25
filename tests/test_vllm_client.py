@@ -118,11 +118,7 @@ def test_supports_chat_protocol_signature() -> None:
     assert result.answer == "ok"
 
 
-def test_build_chat_template_kwargs_auto_omits_key() -> None:
-    assert build_chat_template_kwargs(None) == {}
-    assert "enable_thinking" not in build_chat_template_kwargs(None)
-
-
 def test_build_chat_template_kwargs_false_and_true() -> None:
+    """#94 で None (旧 mode=auto) は廃止された。bool のみ受け付ける。"""
     assert build_chat_template_kwargs(False) == {"enable_thinking": False}
     assert build_chat_template_kwargs(True) == {"enable_thinking": True}

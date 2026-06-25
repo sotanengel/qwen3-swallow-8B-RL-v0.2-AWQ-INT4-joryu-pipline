@@ -18,7 +18,7 @@ from joryu.docker_delegate import (
     should_use_docker,
 )
 from joryu.jobs.models import DistillJobSpec
-from joryu.variants import parse_comma_list, parse_float_list, parse_modes
+from joryu.variants import parse_comma_list, parse_float_list
 from joryu.vllm_client import SupportsChat
 
 
@@ -41,14 +41,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--count", type=int, default=0, help="新規生成件数 (0 = 全件)")
     p.add_argument("--duration", default="", help="実行時間上限 (例: 2h, 30m, 1h30m)")
     p.add_argument(
-        "--mode",
-        default=None,
-        help="推論モード (thinking / nothinking / auto)。カンマ区切りで直積スイープ可",
-    )
-    p.add_argument(
         "--style",
         default="",
-        help="文体プリセット ID (カンマ区切り。styles.yaml 参照。例: polite,casual,expert)",
+        help="文体プリセット ID (カンマ区切り。styles.yaml 参照。例: prose,qa_short,dialog)",
     )
     p.add_argument(
         "--temperature",
@@ -130,14 +125,6 @@ def main(argv: list[str] | None = None, *, _client: SupportsChat | None = None) 
 
     try:
         cfg = load_config(spec.config)
-        mode_sweep: list[str] | None = None
-        if spec.mode is not None:
-            parsed_modes = parse_modes(spec.mode)
-            if parsed_modes is not None and len(parsed_modes) == 1:
-                cfg.model.mode = parsed_modes[0]
-            elif parsed_modes is not None and len(parsed_modes) > 1:
-                mode_sweep = list(parsed_modes)
-
         style_presets = load_style_presets_from_config(cfg, spec.style)
         temperatures = parse_float_list(
             spec.temperature, min_val=0.5, max_val=1.0, name="temperature"
@@ -167,7 +154,6 @@ def main(argv: list[str] | None = None, *, _client: SupportsChat | None = None) 
         style_presets=style_presets or None,
         temperatures=temperatures,
         top_ps=top_ps,
-        modes=mode_sweep,
         tool_loop=bool(getattr(args, "tool_loop", False)),
         tool_loop_max_turns=getattr(args, "max_turns", None),
         override_tool_ids=parse_comma_list(getattr(args, "tool_ids", "")) or None,

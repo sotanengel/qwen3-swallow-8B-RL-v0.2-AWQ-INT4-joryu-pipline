@@ -15,10 +15,10 @@ from joryu.jobs.models import DistillJobSpec
 
 def test_distill_job_spec_field_names_match_dashboard_contract() -> None:
     names = {f.name for f in fields(DistillJobSpec)}
+    # mode フィールドは #94 で削除済み。
     assert names == {
         "count",
         "duration",
-        "mode",
         "style",
         "temperature",
         "top_p",
@@ -37,10 +37,8 @@ def test_from_cli_namespace_round_trips_to_distill_argv() -> None:
             "5",
             "--duration",
             "30m",
-            "--mode",
-            "nothinking",
             "--style",
-            "polite,casual",
+            "prose,dialog",
             "--temperature",
             "0.7,1.0",
             "--top-p",
@@ -62,10 +60,8 @@ def test_from_cli_namespace_round_trips_to_distill_argv() -> None:
         "data/prompts/x.jsonl",
         "--out",
         "data/out.jsonl",
-        "--mode",
-        "nothinking",
         "--style",
-        "polite,casual",
+        "prose,dialog",
         "--temperature",
         "0.7,1.0",
         "--top-p",
@@ -77,24 +73,24 @@ def test_from_dict_accepts_api_body_shape() -> None:
     body: dict[str, Any] = {
         "count": 2,
         "duration": "1h",
+        # mode は #94 で削除済み。レガシー API body に含まれていても無視する。
         "mode": "thinking",
-        "style": ["polite"],
+        "style": ["prose"],
         "temperature": "0.6",
         "top_p": "0.95",
         "config": "config.yaml",
     }
     spec = DistillJobSpec.from_dict(body)
     assert spec.count == 2
-    assert spec.style == ["polite"]
+    assert spec.style == ["prose"]
+    assert not hasattr(spec, "mode")
     assert spec.to_distill_argv() == [
         "--count",
         "2",
         "--duration",
         "1h",
-        "--mode",
-        "thinking",
         "--style",
-        "polite",
+        "prose",
         "--temperature",
         "0.6",
         "--top-p",
@@ -108,7 +104,6 @@ def api_client(tmp_path):
         """
 model:
   name: test-model
-  mode: thinking
 distill:
   prompt_bank: data/prompts/training_prompts.jsonl
   out_dir: data/distilled
@@ -123,9 +118,9 @@ export:
     (tmp_path / "styles.yaml").write_text(
         """
 styles:
-  polite:
-    label: 丁寧語
-    instruction: 丁寧に。
+  prose:
+    label: 散文
+    instruction: 散文で。
 """.strip(),
         encoding="utf-8",
     )
@@ -157,7 +152,6 @@ def test_api_create_job_accepts_distill_job_spec_fields(api_client: TestClient) 
         json={
             "count": 1,
             "duration": "",
-            "mode": None,
             "style": [],
             "temperature": "",
             "top_p": "",
@@ -169,7 +163,6 @@ def test_api_create_job_accepts_distill_job_spec_fields(api_client: TestClient) 
     for key in (
         "count",
         "duration",
-        "mode",
         "style",
         "temperature",
         "top_p",
@@ -179,3 +172,4 @@ def test_api_create_job_accepts_distill_job_spec_fields(api_client: TestClient) 
         "max_turns",
     ):
         assert key in spec
+    assert "mode" not in spec

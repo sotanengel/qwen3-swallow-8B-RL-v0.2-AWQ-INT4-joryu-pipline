@@ -10,7 +10,7 @@ SFT 教師データとして再利用可能な形で配布する。
 1. **オフライン蒸留**: 4,000+ 個の日本語プロンプトに対する高品質な回答を生成する。
 2. **文体・サンプリング掃き出し**: 同一プロンプトを文体 / temperature / top_p で
    直積展開して多様なバリアントを生成する。
-3. **推論/非推論/自動モード切替**: thinking / nothinking / auto (`enable_thinking` 未指定で Qwen3 既定に委ねる) で得られるデータを使い分ける。
+3. **Qwen3 思考モード固定**: 公式 `enable_thinking=True` でのみ運用する (#94 で旧 `mode=auto`/`nothinking` を撤去)。
 4. **データ配布**: zstd 圧縮 + SHA256 + meta.json で別リポジトリへ持ち運ぶ。
 5. **品質確認**: 検索 + 分布のダッシュボードで蒸留データの偏りを目視する。
 
@@ -54,5 +54,4 @@ SFT 教師データとして再利用可能な形で配布する。
 ## 既定値とプリセット
 
 - 既定設定: [config.yaml](../config.yaml)
-- 非推論プリセット: [config.nothinking.yaml](../config.nothinking.yaml)
 - 文体プリセット: [styles.yaml](../styles.yaml)

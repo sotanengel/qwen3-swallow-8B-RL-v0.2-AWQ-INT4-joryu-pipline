@@ -110,8 +110,6 @@ tools.yaml ───┤
 出力レコードに含めるのは:
 
 - `model` (= モデル名)
-- `mode` (`thinking` / `nothinking` / `auto` — 要求値)
-- `effective_mode` (`thinking` / `nothinking` — 実際の出力に基づく実測値)
 - `sampling` (実際に使われた値)
 - `system_prompt`
 - `config_hash` (`config.yaml` 全体の SHA256)

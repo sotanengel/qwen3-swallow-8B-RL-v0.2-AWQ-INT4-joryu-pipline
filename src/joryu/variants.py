@@ -1,18 +1,14 @@
-"""バリアント直積展開: style × temperature × top_p × mode。"""
+"""バリアント直積展開: style × temperature × top_p。"""
 
 from __future__ import annotations
 
 import copy
 from dataclasses import dataclass
-from itertools import product
-from typing import cast
 
-from joryu.config import Config, Mode
+from joryu.config import Config
 from joryu.prompt_bank import EffectiveSampling, PromptRow, merge_with_defaults
 from joryu.styles import StylePreset, apply_style
 from joryu.tools import ToolDefinition
-
-_VALID_MODES: tuple[Mode, ...] = ("thinking", "nothinking", "auto")
 
 
 @dataclass
@@ -55,22 +51,6 @@ def parse_float_list(
     return values
 
 
-def parse_modes(text: str | None) -> list[Mode] | None:
-    """カンマ区切り mode リスト。空/None は None（スイープなし）。"""
-    if not text:
-        return None
-    parts = parse_comma_list(text)
-    if not parts:
-        return None
-    modes: list[Mode] = []
-    for part in parts:
-        if part not in _VALID_MODES:
-            known = ", ".join(_VALID_MODES)
-            raise ValueError(f"unknown mode {part!r}; expected one of {known}")
-        modes.append(cast(Mode, part))
-    return modes
-
-
 def expand_variants(
     rows: list[PromptRow],
     cfg: Config,
@@ -78,15 +58,14 @@ def expand_variants(
     style_presets: list[StylePreset] | None = None,
     temperatures: list[float] | None = None,
     top_ps: list[float] | None = None,
-    modes: list[Mode] | None = None,
     tools_registry: dict[str, ToolDefinition] | None = None,
 ) -> list[DistillVariant]:
-    """prompt bank 行を style × temperature × top_p × mode の直積で展開する。
+    """prompt bank 行を style × temperature × top_p の直積で展開する。
 
     CLI 未指定の軸は merge 後の単一値を使用（style 未指定時は style_id=None）。
+    mode 軸は #94 で削除済み (常に thinking 固定で運用)。
     """
     style_list: list[StylePreset | None] = list(style_presets) if style_presets else [None]
-    mode_axis: list[Mode | None] = list(modes) if modes is not None else [None]
     variants: list[DistillVariant] = []
 
     for row in rows:
@@ -94,22 +73,21 @@ def expand_variants(
         temp_axis = temperatures if temperatures is not None else [base_eff.sampling["temperature"]]
         top_p_axis = top_ps if top_ps is not None else [base_eff.sampling["top_p"]]
 
-        for preset, temp, top_p, mode in product(style_list, temp_axis, top_p_axis, mode_axis):
-            eff = copy.deepcopy(base_eff)
-            eff.sampling = dict(eff.sampling)
-            eff.sampling["temperature"] = temp
-            eff.sampling["top_p"] = top_p
+        for preset in style_list:
+            for temp in temp_axis:
+                for top_p in top_p_axis:
+                    eff = copy.deepcopy(base_eff)
+                    eff.sampling = dict(eff.sampling)
+                    eff.sampling["temperature"] = temp
+                    eff.sampling["top_p"] = top_p
 
-            if mode is not None:
-                eff.mode = mode
+                    if preset is not None:
+                        style_id, merged = apply_style(eff.system_prompt, preset)
+                        eff.style_id = style_id
+                        eff.system_prompt = merged
+                    elif row.style_id is not None:
+                        eff.style_id = row.style_id
 
-            if preset is not None:
-                style_id, merged = apply_style(eff.system_prompt, preset)
-                eff.style_id = style_id
-                eff.system_prompt = merged
-            elif row.style_id is not None:
-                eff.style_id = row.style_id
-
-            variants.append(DistillVariant(row=row, eff=eff))
+                    variants.append(DistillVariant(row=row, eff=eff))
 
     return variants

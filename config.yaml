@@ -15,7 +15,6 @@ model:
   top_k: 20
   repetition_penalty: 1.05
   seed: 42
-  mode: "thinking"            # "thinking" | "nothinking"
 
 vllm:
   model_path: "tokyotech-llm/Qwen3-Swallow-8B-RL-v0.2-AWQ-INT4"

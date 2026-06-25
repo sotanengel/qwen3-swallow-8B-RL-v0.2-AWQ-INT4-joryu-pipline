@@ -10,7 +10,6 @@ from joryu.variants import (
     expand_variants,
     parse_comma_list,
     parse_float_list,
-    parse_modes,
 )
 
 
@@ -33,7 +32,7 @@ def test_parse_float_list_out_of_range_raises() -> None:
 
 
 def test_parse_comma_list() -> None:
-    assert parse_comma_list("polite,casual") == ["polite", "casual"]
+    assert parse_comma_list("prose,dialog") == ["prose", "dialog"]
     assert parse_comma_list("") == []
 
 
@@ -41,12 +40,12 @@ def test_expand_variants_cartesian_product() -> None:
     cfg = Config()
     rows = [PromptRow(prompt="P1")]
     styles = load_styles("styles.yaml")
-    polite = styles["polite"]
-    casual = styles["casual"]
+    prose = styles["prose"]
+    dialog = styles["dialog"]
     variants = expand_variants(
         rows,
         cfg,
-        style_presets=[polite, casual],
+        style_presets=[prose, dialog],
         temperatures=[0.5, 0.8],
         top_ps=[0.8, 0.9],
     )
@@ -57,7 +56,7 @@ def test_expand_variants_cartesian_product() -> None:
     style_ids = {v.eff.style_id for v in variants}
     assert temps == {0.5, 0.8}
     assert top_ps == {0.8, 0.9}
-    assert style_ids == {"polite", "casual"}
+    assert style_ids == {"prose", "dialog"}
 
 
 def test_expand_variants_no_cli_uses_single_defaults() -> None:
@@ -87,28 +86,10 @@ def test_expand_variants_cli_temperature_overrides_row() -> None:
 def test_expand_variants_applies_style_to_system_prompt() -> None:
     cfg = Config()
     rows = [PromptRow(prompt="P1")]
-    preset = StylePreset(style_id="polite", label="丁寧語", instruction="丁寧に。")
+    preset = StylePreset(style_id="prose", label="散文", instruction="散文で。")
     variants = expand_variants(rows, cfg, style_presets=[preset])
-    assert "丁寧に。" in variants[0].eff.system_prompt
-    assert variants[0].eff.style_id == "polite"
-
-
-def test_parse_modes_comma_list() -> None:
-    assert parse_modes("thinking,auto") == ["thinking", "auto"]
-    assert parse_modes("") is None
-
-
-def test_parse_modes_invalid_raises() -> None:
-    with pytest.raises(ValueError, match="unknown mode"):
-        parse_modes("invalid")
-
-
-def test_expand_variants_mode_sweep() -> None:
-    cfg = Config()
-    rows = [PromptRow(prompt="P1")]
-    variants = expand_variants(rows, cfg, modes=["thinking", "nothinking", "auto"])
-    assert len(variants) == 3
-    assert {v.eff.mode for v in variants} == {"thinking", "nothinking", "auto"}
+    assert "散文で。" in variants[0].eff.system_prompt
+    assert variants[0].eff.style_id == "prose"
 
 
 def test_expand_variants_resolves_tools_registry() -> None:

@@ -17,7 +17,6 @@ def generate_until_complete(
     *,
     client: SupportsChat,
     messages: list[dict[str, str]],
-    enable_thinking: bool | None,
     tools: list[dict[str, Any]] | None,
     sampling: dict[str, Any],
     build_record: Callable[[ChatResult], dict[str, Any]],
@@ -31,6 +30,7 @@ def generate_until_complete(
 ) -> tuple[dict[str, Any] | None, int]:
     """打ち切りでないレコードが得られるまで同一条件で再生成する。
 
+    Qwen3 thinking モード固定で動作する (#94 で nothinking/auto 削除済み)。
     deadline 到達時にまだ打ち切りの場合は (None, attempts) を返す。
     """
     now_fn = time_fn or time.time
@@ -46,14 +46,13 @@ def generate_until_complete(
         if chat_fn is None:
             chat = client.chat_via_template(
                 messages,
-                enable_thinking=enable_thinking,
+                enable_thinking=True,
                 tools=tools,
                 **sampling,
             )
         else:
             chat = chat_fn(
                 messages,
-                enable_thinking=enable_thinking,
                 tools=tools,
                 **sampling,
             )

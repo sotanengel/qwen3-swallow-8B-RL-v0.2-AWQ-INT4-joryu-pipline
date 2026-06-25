@@ -26,7 +26,7 @@ from joryu.style_format import aggregate_by_style, check_style_format_criteria  
 
 VERIFY_PROMPTS = [
     {"prompt": "桜の特徴を教えてください", "category": "国語"},
-    {"prompt": "1+1はいくつですか？", "category": "数学", "mode": "nothinking"},
+    {"prompt": "1+1はいくつですか？", "category": "数学"},
     {"prompt": "日本の首都はどこですか？", "category": "地理"},
     {"prompt": "水はなぜ空に昇るのですか？", "category": "理科"},
     {"prompt": "敬語と丁寧語の違いは？", "category": "国語"},
@@ -37,7 +37,7 @@ VERIFY_PROMPTS = [
     {"prompt": "週末の過ごし方を一つ教えて", "category": "生活"},
 ]
 
-STYLES = ("dialog", "prose", "polite", "casual", "expert", "report")
+STYLES = ("dialog", "prose", "qa_short", "report")
 
 
 def load_jsonl(path: Path) -> list[dict]:
@@ -73,8 +73,6 @@ def run_distill(*, work: Path, config: Path, bank: Path, out: Path) -> int:
         str(out),
         "--style",
         styles_arg,
-        "--mode",
-        "nothinking",
         "--count",
         str(count),
     ]

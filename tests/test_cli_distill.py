@@ -43,7 +43,6 @@ def test_parser_defaults() -> None:
     assert args.duration == ""
     assert args.docker is False
     assert args.no_docker is False
-    assert args.mode is None
     assert args.bank == ""
     assert args.out == ""
     assert args.style == ""
@@ -60,32 +59,10 @@ def test_parser_style_and_sampling() -> None:
     assert args.top_p == "0.8,0.9"
 
 
-def test_parser_mode_override() -> None:
-    args = build_parser().parse_args(["--mode", "nothinking", "--count", "5"])
-    assert args.mode == "nothinking"
-    assert args.count == 5
-
-
-def test_parser_mode_comma_list() -> None:
-    args = build_parser().parse_args(["--mode", "thinking,auto"])
-    assert args.mode == "thinking,auto"
-
-
-def test_main_invalid_mode_returns_error(tmp_path: Path) -> None:
-    bank = tmp_path / "bank.jsonl"
-    bank.write_text(json.dumps({"prompt": "Q"}) + "\n", encoding="utf-8")
-    cfg_yaml = tmp_path / "c.yaml"
-    cfg_yaml.write_text(
-        "distill:\n"
-        f'  prompt_bank: "{bank.as_posix()}"\n'
-        f'  out_dir: "{tmp_path.as_posix()}"\n'
-        '  out_file: "out.jsonl"\n',
-        encoding="utf-8",
-    )
-    from joryu.cli import distill as cli
-
-    rc = cli.main(["--no-docker", "--config", str(cfg_yaml), "--mode", "invalid"])
-    assert rc == 2
+def test_parser_no_longer_has_mode_arg() -> None:
+    """`--mode` フラグは #94 で削除済み。指定すると argparse がエラー。"""
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(["--mode", "thinking"])
 
 
 def test_main_runs_native_with_fake_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -133,7 +110,7 @@ def test_distill_job_spec_to_distill_argv_includes_style_and_sampling() -> None:
     args = build_parser().parse_args(
         [
             "--style",
-            "polite",
+            "prose",
             "--temperature",
             "0.5,0.8",
             "--top-p",
@@ -145,8 +122,9 @@ def test_distill_job_spec_to_distill_argv_includes_style_and_sampling() -> None:
     spec = DistillJobSpec.from_cli_namespace(args)
     extra = spec.to_distill_argv()
     assert "--style" in extra
-    assert "polite" in extra
+    assert "prose" in extra
     assert "--temperature" in extra
     assert "0.5,0.8" in extra
     assert "--top-p" in extra
     assert "0.9" in extra
+    assert "--mode" not in extra

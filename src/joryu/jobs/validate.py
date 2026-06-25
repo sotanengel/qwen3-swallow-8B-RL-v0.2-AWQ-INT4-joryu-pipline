@@ -10,7 +10,7 @@ from joryu.jobs.models import CurateJobSpec, DistillJobSpec
 from joryu.preflight import jsonl_has_content, resolve_distill_jsonl
 from joryu.styles import load_styles, resolve_style_ids
 from joryu.tools import load_tools
-from joryu.variants import parse_comma_list, parse_float_list, parse_modes
+from joryu.variants import parse_comma_list, parse_float_list
 
 
 def validate_job_spec(spec: DistillJobSpec, *, repo_root: Path | None = None) -> None:
@@ -21,12 +21,6 @@ def validate_job_spec(spec: DistillJobSpec, *, repo_root: Path | None = None) ->
     if spec.duration:
         try:
             parse_duration(spec.duration)
-        except ValueError as exc:
-            raise ValueError(str(exc)) from exc
-
-    if spec.mode is not None:
-        try:
-            parse_modes(spec.mode)
         except ValueError as exc:
             raise ValueError(str(exc)) from exc
 

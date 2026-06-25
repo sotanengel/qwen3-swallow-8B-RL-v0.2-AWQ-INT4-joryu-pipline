@@ -31,7 +31,6 @@ export default function JobsPage() {
 
   const [count, setCount] = useState(0);
   const [duration, setDuration] = useState("");
-  const [mode, setMode] = useState<string>("");
   const [styles, setStyles] = useState<string[]>([]);
   const [temperature, setTemperature] = useState("");
   const [topP, setTopP] = useState("");
@@ -53,7 +52,6 @@ export default function JobsPage() {
     loadJobOptions()
       .then((opts) => {
         setOptions(opts);
-        setMode(opts.defaults.mode);
       })
       .catch((exc) => setError(exc instanceof Error ? exc.message : String(exc)));
     refreshJobs();
@@ -129,7 +127,6 @@ export default function JobsPage() {
     const body: CreateJobRequest = {
       count,
       duration: duration.trim(),
-      mode: mode || null,
       style: styles,
       temperature: temperature.trim(),
       top_p: topP.trim(),
@@ -176,17 +173,6 @@ export default function JobsPage() {
               value={duration}
               onChange={(e) => setDuration(e.target.value)}
             />
-          </label>
-          <label>
-            モード
-            <select value={mode} onChange={(e) => setMode(e.target.value)}>
-              <option value="">既定</option>
-              {(options?.modes ?? ["thinking", "nothinking"]).map((m) => (
-                <option key={m} value={m}>
-                  {m}
-                </option>
-              ))}
-            </select>
           </label>
           <label>
             temperature (カンマ区切り)

@@ -22,7 +22,6 @@ def test_minimal_row_uses_defaults(tmp_path: Path) -> None:
     assert row.prompt == "桜の特徴は？"
     assert row.category is None
     assert row.style_id is None
-    assert row.mode is None
     assert row.sampling == {}
     assert row.system_prompt is None
 
@@ -34,7 +33,7 @@ def test_full_row_carries_overrides(tmp_path: Path) -> None:
         [
             (
                 '{"prompt":"p","category":"国語","style_id":"essay",'
-                '"mode":"nothinking","system_prompt":"sys",'
+                '"system_prompt":"sys",'
                 '"sampling":{"temperature":0.2,"top_p":0.8,"max_tokens":1024}}'
             )
         ],
@@ -42,11 +41,19 @@ def test_full_row_carries_overrides(tmp_path: Path) -> None:
     row = load_prompt_bank(p)[0]
     assert row.category == "国語"
     assert row.style_id == "essay"
-    assert row.mode == "nothinking"
     assert row.system_prompt == "sys"
     assert row.sampling["temperature"] == pytest.approx(0.2)
     assert row.sampling["top_p"] == pytest.approx(0.8)
     assert row.sampling["max_tokens"] == 1024
+
+
+def test_legacy_mode_field_is_ignored(tmp_path: Path) -> None:
+    """過去 prompt_bank.jsonl に残る `mode` 上書きフィールドは #94 で無視される。"""
+    p = tmp_path / "b.jsonl"
+    _write_jsonl(p, ['{"prompt":"p","mode":"nothinking"}'])
+    rows = load_prompt_bank(p)
+    assert len(rows) == 1
+    assert not hasattr(rows[0], "mode")
 
 
 def test_blank_and_garbage_lines_skipped(tmp_path: Path) -> None:
@@ -72,19 +79,11 @@ def test_missing_prompt_raises(tmp_path: Path) -> None:
         load_prompt_bank(p)
 
 
-def test_unknown_mode_raises(tmp_path: Path) -> None:
-    p = tmp_path / "b.jsonl"
-    _write_jsonl(p, ['{"prompt":"p","mode":"random"}'])
-    with pytest.raises(ValueError, match="mode"):
-        load_prompt_bank(p)
-
-
 def test_merge_with_defaults_fills_missing_fields() -> None:
     cfg = Config()
     row = PromptRow(prompt="p", sampling={"temperature": 0.2})
     eff = merge_with_defaults(row, cfg)
     assert isinstance(eff, EffectiveSampling)
-    assert eff.mode == cfg.model.mode
     assert eff.system_prompt.strip().startswith("あなたは丁寧")
     assert eff.sampling["temperature"] == pytest.approx(0.2)
     assert eff.sampling["top_p"] == pytest.approx(cfg.model.top_p)
@@ -93,12 +92,10 @@ def test_merge_with_defaults_fills_missing_fields() -> None:
     assert eff.sampling["repetition_penalty"] == pytest.approx(cfg.model.repetition_penalty)
 
 
-def test_merge_row_mode_wins() -> None:
+def test_merge_row_system_prompt_wins() -> None:
     cfg = Config()
-    cfg.model.mode = "thinking"
-    row = PromptRow(prompt="p", mode="nothinking", system_prompt="行内")
+    row = PromptRow(prompt="p", system_prompt="行内")
     eff = merge_with_defaults(row, cfg)
-    assert eff.mode == "nothinking"
     assert eff.system_prompt == "行内"
 
 
