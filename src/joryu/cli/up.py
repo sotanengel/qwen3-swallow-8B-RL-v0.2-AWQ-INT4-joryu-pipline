@@ -34,6 +34,7 @@ from joryu.compose import (
     run,
     run_build_artifact_cleanup,
     run_builder_cache_cleanup,
+    run_pre_browser_image_cleanup,
     run_up_startup_cleanup,
 )
 from joryu.docker_delegate import stop_orphan_joryu_containers
@@ -210,8 +211,9 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     open_browser = _should_open_browser(args, up_services)
+    pre_browser_cleanup = run_pre_browser_image_cleanup if build_services else None
     if open_browser and not args.detach:
-        schedule_open_dashboard()
+        schedule_open_dashboard(pre_open_fn=pre_browser_cleanup)
     # フォアグラウンドのまま compose up に入ると docker がログをストリームし続け、
     # Ctrl-C するまで joryu-up が返らない。これは docker compose 仕様だが、
     # 「joryu-up が帰ってこない」と誤解されやすいので意図を明示する。
@@ -225,7 +227,7 @@ def main(argv: list[str] | None = None) -> int:
         )
     rc = run(cmd)
     if rc == 0:
-        if build_services:
+        if build_services and not open_browser:
             # compose up --force-recreate 後、旧コンテナ参照が外れた dangling image を回収。
             run(image_prune_command())
         head = git_head_at(repo_root)
@@ -243,7 +245,7 @@ def main(argv: list[str] | None = None) -> int:
             return 1
 
     if open_browser and args.detach:
-        open_dashboard_when_ready()
+        open_dashboard_when_ready(pre_open_fn=pre_browser_cleanup)
     return 0
 
 

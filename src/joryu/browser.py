@@ -5,6 +5,7 @@ from __future__ import annotations
 import sys
 import threading
 import webbrowser
+from collections.abc import Callable
 from typing import Protocol
 
 from joryu.readiness import DASHBOARD_URL, wait_for_dashboard
@@ -39,11 +40,14 @@ def schedule_open_dashboard(
     *,
     wait_fn=wait_for_dashboard,
     open_fn=open_dashboard,
+    pre_open_fn: Callable[[], None] | None = None,
 ) -> None:
     """バックグラウンドで ready 待ち → ブラウザ起動 (foreground compose 用)。"""
 
     def _worker() -> None:
         if wait_fn(url):
+            if pre_open_fn is not None:
+                pre_open_fn()
             open_fn(url)
         else:
             print(
@@ -60,9 +64,12 @@ def open_dashboard_when_ready(
     *,
     wait_fn=wait_for_dashboard,
     open_fn=open_dashboard,
+    pre_open_fn: Callable[[], None] | None = None,
 ) -> None:
     """ready 待ち → ブラウザ起動 (detach 後の同期版)。"""
     if wait_fn(url):
+        if pre_open_fn is not None:
+            pre_open_fn()
         open_fn(url)
     else:
         print(
