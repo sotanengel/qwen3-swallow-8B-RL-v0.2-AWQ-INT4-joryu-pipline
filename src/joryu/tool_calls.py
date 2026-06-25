@@ -13,14 +13,9 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-_TOOL_CALL_RE = re.compile(r"<tool_call>\s*(\{.*?\})\s*</tool_call>", re.DOTALL)
-
-# ```json {...} ``` フェンスを検出するための正規表現。
-# 誤検出を避けるため "name" と "arguments" 両キーが含まれる JSON のみマッチ。
-_TOOL_CALL_FENCE_RE = re.compile(
-    r"```(?:json)?\s*(\{[^`]*?\"name\"\s*:[^`]*?\"arguments\"\s*:[^`]*?\})\s*```",
-    re.DOTALL,
-)
+_TOOL_CALL_OPEN_RE = re.compile(r"<tool_call>\s*", re.DOTALL)
+_TOOL_CALL_CLOSE = "</tool_call>"
+_FENCE_OPEN_RE = re.compile(r"```(?:json)?\s*", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
@@ -28,6 +23,40 @@ class ParsedToolCall:
     name: str
     arguments: dict[str, Any]
     raw: str
+
+
+def _extract_balanced_object(text: str, start: int) -> tuple[str, int] | None:
+    """`start` 位置の `{` から対応する `}` までの JSON オブジェクト文字列を返す。"""
+    if start >= len(text) or text[start] != "{":
+        return None
+    depth = 0
+    in_string = False
+    escape = False
+    for i in range(start, len(text)):
+        ch = text[i]
+        if in_string:
+            if escape:
+                escape = False
+            elif ch == "\\":
+                escape = True
+            elif ch == '"':
+                in_string = False
+            continue
+        if ch == '"':
+            in_string = True
+        elif ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start : i + 1], i + 1
+    return None
+
+
+def _looks_like_tool_call_payload(payload: Any) -> bool:
+    if not isinstance(payload, dict):
+        return False
+    return isinstance(payload.get("name"), str) and "arguments" in payload
 
 
 def _parse_payload(raw: str) -> ParsedToolCall:
@@ -48,16 +77,80 @@ def _parse_payload(raw: str) -> ParsedToolCall:
     return ParsedToolCall(name=name, arguments=arguments, raw=raw)
 
 
+def _span_overlaps(existing: list[tuple[int, int]], start: int, end: int) -> bool:
+    return any(not (end <= s or start >= e) for s, e in existing)
+
+
+def _collect_tool_call_tag_spans(text: str) -> list[tuple[int, int, ParsedToolCall]]:
+    spans: list[tuple[int, int, ParsedToolCall]] = []
+    for match in _TOOL_CALL_OPEN_RE.finditer(text):
+        brace = text.find("{", match.end())
+        if brace < 0:
+            continue
+        extracted = _extract_balanced_object(text, brace)
+        if extracted is None:
+            continue
+        raw, json_end = extracted
+        close = text.find(_TOOL_CALL_CLOSE, json_end)
+        if close < 0:
+            continue
+        span_end = close + len(_TOOL_CALL_CLOSE)
+        spans.append((match.start(), span_end, _parse_payload(raw)))
+    return spans
+
+
+def _collect_json_fence_spans(text: str) -> list[tuple[int, int, ParsedToolCall]]:
+    spans: list[tuple[int, int, ParsedToolCall]] = []
+    occupied: list[tuple[int, int]] = []
+    for match in _FENCE_OPEN_RE.finditer(text):
+        if _span_overlaps(occupied, match.start(), match.end()):
+            continue
+        brace = text.find("{", match.end())
+        if brace < 0:
+            continue
+        extracted = _extract_balanced_object(text, brace)
+        if extracted is None:
+            continue
+        raw, json_end = extracted
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        if not _looks_like_tool_call_payload(payload):
+            continue
+        close = text.find("```", json_end)
+        if close < 0:
+            continue
+        span_end = close + 3
+        if _span_overlaps(occupied, match.start(), span_end):
+            continue
+        spans.append((match.start(), span_end, _parse_payload(raw)))
+        occupied.append((match.start(), span_end))
+    return spans
+
+
 def extract_tool_calls(text: str) -> tuple[list[ParsedToolCall], str]:
     """answer から `<tool_call>` と ```json``` フェンス両形式を抜き、
     (calls, cleaned_text) を返す。
     """
-    calls: list[ParsedToolCall] = []
+    tag_spans = _collect_tool_call_tag_spans(text)
+    occupied = [(s, e) for s, e, _ in tag_spans]
+    fence_spans = [
+        (s, e, call)
+        for s, e, call in _collect_json_fence_spans(text)
+        if not _span_overlaps(occupied, s, e)
+    ]
+    all_spans = sorted([*tag_spans, *fence_spans], key=lambda item: item[0])
+    calls = [call for _, _, call in all_spans]
 
-    def _replace(match: re.Match[str]) -> str:
-        calls.append(_parse_payload(match.group(1)))
-        return ""
+    if not all_spans:
+        return calls, text.strip()
 
-    cleaned = _TOOL_CALL_RE.sub(_replace, text)
-    cleaned = _TOOL_CALL_FENCE_RE.sub(_replace, cleaned)
+    cleaned_parts: list[str] = []
+    cursor = 0
+    for start, end, _call in all_spans:
+        cleaned_parts.append(text[cursor:start])
+        cursor = end
+    cleaned_parts.append(text[cursor:])
+    cleaned = "".join(cleaned_parts)
     return calls, cleaned.strip()
