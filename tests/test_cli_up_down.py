@@ -47,6 +47,7 @@ def _patch_runner(
     monkeypatch.setattr("joryu.cli.up.ensure_stats_json", lambda *_args, **_kwargs: None)
     monkeypatch.setattr("joryu.cli.up.ensure_curation", lambda *_args, **_kwargs: None)
     monkeypatch.setattr("joryu.cli.up.ensure_vllm_limits", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("joryu.cli.up.stop_orphan_joryu_containers", lambda **_kwargs: None)
     monkeypatch.setattr("joryu.cli.up.stop_joryu_for_up", lambda **_kwargs: None)
     monkeypatch.setattr("joryu.preflight.services_missing_build_at_head", lambda *_a, **_k: set())
     monkeypatch.setattr("joryu.preflight.git_head_at", lambda *_a, **_k: "test-head")

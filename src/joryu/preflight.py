@@ -636,8 +636,11 @@ def ensure_vllm_limits(
             " VRAM プローブの前に joryu イメージを build してください。"
         )
 
+    from joryu.docker_delegate import stop_orphan_joryu_containers
     from joryu.paths import DEFAULT_CONFIG
     from joryu.vllm_probe import run_vllm_probe
+
+    stop_orphan_joryu_containers()
 
     _emit_preflight_log("[joryu-up] joryu-probe-vllm (GPU VRAM 上限)", log)
     rc = run_vllm_probe(config=DEFAULT_CONFIG)
