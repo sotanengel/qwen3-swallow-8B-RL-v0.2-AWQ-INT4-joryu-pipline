@@ -11,7 +11,12 @@ from pathlib import Path
 from joryu.cli.common import add_config_argument
 from joryu.config import load_config
 from joryu.distill import default_stats_refresher, load_style_presets_from_config, run_distill
-from joryu.docker_delegate import DEFAULT_IMAGE, run_in_docker, should_use_docker
+from joryu.docker_delegate import (
+    DEFAULT_IMAGE,
+    JORYU_DISTILL_HOST_CONTAINER,
+    run_in_docker,
+    should_use_docker,
+)
 from joryu.jobs.models import DistillJobSpec
 from joryu.variants import parse_comma_list, parse_float_list, parse_modes
 from joryu.vllm_client import SupportsChat
@@ -120,6 +125,7 @@ def main(argv: list[str] | None = None, *, _client: SupportsChat | None = None) 
             image=args.image,
             config=spec.config,
             extra_args=spec.to_distill_argv(bank=args.bank, out=args.out),
+            container_name=JORYU_DISTILL_HOST_CONTAINER,
         )
 
     try:

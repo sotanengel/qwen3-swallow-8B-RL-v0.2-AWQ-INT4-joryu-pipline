@@ -175,7 +175,12 @@ def run_vllm_probe(
     force_native: bool = False,
 ) -> int:
     """ホストまたは Docker delegate 経由で VRAM プローブを実行する。"""
-    from joryu.docker_delegate import DEFAULT_IMAGE, run_in_docker, should_use_docker
+    from joryu.docker_delegate import (
+        DEFAULT_IMAGE,
+        JORYU_PROBE_CONTAINER,
+        run_in_docker,
+        should_use_docker,
+    )
 
     config_str = str(config)
     extra: list[str] = []
@@ -190,5 +195,6 @@ def run_vllm_probe(
             extra_args=extra,
             cli_module="joryu.cli.probe_vllm",
             native_flag="--no-docker",
+            container_name=JORYU_PROBE_CONTAINER,
         )
     return run_probe(config=config, out=out)

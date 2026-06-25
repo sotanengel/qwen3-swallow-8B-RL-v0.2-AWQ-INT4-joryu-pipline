@@ -6,9 +6,85 @@ import os
 import platform
 import subprocess
 import sys
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 DEFAULT_IMAGE = "joryu:latest"
+JORYU_PROBE_CONTAINER = "joryu-probe-vllm"
+JORYU_DISTILL_HOST_CONTAINER = "joryu-distill-host"
+JORYU_COMPOSE_CONTAINER_NAMES = frozenset({"joryu", "joryu-api", "joryu-dashboard"})
+JORYU_MANAGED_PREFIXES = ("joryu-job-", "joryu-probe-", "joryu-distill-")
+
+
+def is_managed_joryu_container(name: str) -> bool:
+    """compose 常駐・ジョブ・名前付き一時コンテナなら True (Docker 自動命名は False)。"""
+    if name in JORYU_COMPOSE_CONTAINER_NAMES:
+        return True
+    return any(name.startswith(prefix) for prefix in JORYU_MANAGED_PREFIXES)
+
+
+def stop_docker_container(name: str, *, docker_run: Callable[..., Any] | None = None) -> None:
+    """同名コンテナが残っていれば停止 (再 run 前の GPU 占有防止)。"""
+    runner = docker_run or subprocess.run
+    try:
+        proc = runner(
+            ["docker", "inspect", "-f", "{{.State.Running}}", name],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError:
+        return
+    if proc.returncode != 0 or proc.stdout.strip() != "true":
+        return
+    runner(
+        ["docker", "stop", "--time", "30", name],
+        capture_output=False,
+        text=True,
+        check=False,
+    )
+
+
+def stop_orphan_joryu_containers(
+    *,
+    image: str = DEFAULT_IMAGE,
+    docker_run: Callable[..., Any] | None = None,
+) -> None:
+    """Docker 自動命名 (intelligent_jemison 等) の joryu:latest 一時コンテナを停止。"""
+    runner = docker_run or subprocess.run
+    try:
+        proc = runner(
+            ["docker", "ps", "-q", "--filter", f"ancestor={image}"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError:
+        return
+    if proc.returncode != 0:
+        return
+    for container_id in filter(None, proc.stdout.strip().splitlines()):
+        try:
+            insp = runner(
+                ["docker", "inspect", "-f", "{{.Name}}", container_id],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        except OSError:
+            continue
+        if insp.returncode != 0:
+            continue
+        name = insp.stdout.strip().removeprefix("/")
+        if is_managed_joryu_container(name):
+            continue
+        runner(
+            ["docker", "stop", "--time", "10", container_id],
+            capture_output=False,
+            text=True,
+            check=False,
+        )
 
 
 def should_use_docker(
@@ -60,6 +136,7 @@ def build_docker_command(
     extra_args: list[str],
     cli_module: str = "joryu.cli.distill",
     native_flag: str | None = "--no-docker",
+    container_name: str | None = None,
 ) -> list[str]:
     """`docker run --gpus all ... python -m <cli_module> --config <c> <extra>` を構築。"""
     cmd: list[str] = [
@@ -67,6 +144,8 @@ def build_docker_command(
         "run",
         "--rm",
     ]
+    if container_name:
+        cmd.extend(["--name", container_name])
     if allocate_tty:
         cmd.append("-t")
     cmd.extend(
@@ -122,6 +201,7 @@ def run_in_docker(
     extra_args: list[str],
     cli_module: str = "joryu.cli.distill",
     native_flag: str | None = "--no-docker",
+    container_name: str | None = None,
 ) -> int:
     cwd = Path.cwd()
     config_path = (cwd / config).resolve()
@@ -146,6 +226,9 @@ def run_in_docker(
             print(f"[joryu] styles file not found: {candidate}", file=sys.stderr)
             return 2
 
+    if container_name:
+        stop_docker_container(container_name)
+
     cmd = build_docker_command(
         image=image,
         cwd=cwd,
@@ -163,6 +246,7 @@ def run_in_docker(
         extra_args=extra_args,
         cli_module=cli_module,
         native_flag=native_flag,
+        container_name=container_name,
     )
     print(f"[joryu] docker delegate: {' '.join(cmd)}", file=sys.stderr)
     return subprocess.run(cmd, check=False).returncode

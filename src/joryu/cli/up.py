@@ -34,6 +34,7 @@ from joryu.compose import (
     run,
     run_build_artifact_cleanup,
 )
+from joryu.docker_delegate import stop_orphan_joryu_containers
 from joryu.preflight import (
     PreflightError,
     changed_services_from_git,
@@ -167,6 +168,7 @@ def main(argv: list[str] | None = None) -> int:
         run_build_artifact_cleanup()
 
     if "api" in up_services or "joryu" in up_services:
+        stop_orphan_joryu_containers()
         try:
             ensure_vllm_limits(
                 repo_root,
