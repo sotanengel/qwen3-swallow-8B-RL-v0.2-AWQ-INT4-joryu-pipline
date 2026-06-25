@@ -23,6 +23,8 @@ def chat_result_to_dict(result: ChatResult) -> dict[str, Any]:
     payload["tool_calls"] = [
         {"name": tc.name, "arguments": tc.arguments} for tc in result.tool_calls
     ]
+    payload["suspected_unparsed_tool_calls"] = list(result.suspected_unparsed_tool_calls)
+    payload["raw_completion"] = result.raw_completion
     return payload
 
 

@@ -21,7 +21,10 @@ from typing import Any, Protocol
 
 from joryu.config import ModelConfig, VllmConfig
 from joryu.paths import resolve_limits_probe_path
-from joryu.tool_calls import ParsedToolCall, extract_tool_calls
+from joryu.tool_calls import (
+    ParsedToolCall,
+    extract_tool_calls_with_diagnostics,
+)
 from joryu.vllm_limits import clamp_model_limits, load_probe_limits
 
 __all__ = [
@@ -32,6 +35,7 @@ __all__ = [
     "VllmHttpClient",
     "build_chat_template_kwargs",
     "compute_effective_max_tokens",
+    "extract_known_tool_names",
     "resolve_chat_client",
     "resolve_vllm_serve_url",
 ]
@@ -58,6 +62,11 @@ class ChatResult:
     completion_tokens: int | None
     effective_max_tokens: int | None = None
     tool_calls: tuple[ParsedToolCall, ...] = ()
+    # `<think>` / tool_call ブロック除去前の生 completion テキスト。
+    # novel format 出現時の事後解析用 (#103)。
+    raw_completion: str | None = None
+    # parser が拾えなかった tool_call らしき残骸 (snippets)。
+    suspected_unparsed_tool_calls: tuple[str, ...] = ()
 
 
 def extract_thinking(text: str) -> tuple[str | None, str]:
@@ -108,6 +117,23 @@ class SupportsChat(Protocol):
         tools: list[dict[str, Any]] | None = None,
         **sampling_overrides: Any,
     ) -> ChatResult: ...
+
+
+def extract_known_tool_names(tools: list[dict[str, Any]] | None) -> set[str]:
+    """OpenAI function schema 配列から既知ツール名集合を抽出。
+
+    bare JSON 形式 tool_call の保守的検出用 (#103)。
+    """
+    if not tools:
+        return set()
+    names: set[str] = set()
+    for t in tools:
+        fn = t.get("function") if isinstance(t, dict) else None
+        if isinstance(fn, dict):
+            name = fn.get("name")
+            if isinstance(name, str):
+                names.add(name)
+    return names
 
 
 class VllmClient:
@@ -259,7 +285,11 @@ class VllmClient:
         completion = request_output.outputs[0]
         content: str = completion.text or ""
         thinking, answer = extract_thinking(content)
-        tool_calls, answer = extract_tool_calls(answer)
+        known = extract_known_tool_names(tools)
+        tool_calls, answer, diagnostics = extract_tool_calls_with_diagnostics(
+            answer,
+            known_tool_names=known or None,
+        )
         out_prompt_tokens = (
             len(request_output.prompt_token_ids)
             if getattr(request_output, "prompt_token_ids", None) is not None
@@ -275,6 +305,10 @@ class VllmClient:
             completion_tokens=out_completion_tokens,
             effective_max_tokens=effective_max,
             tool_calls=tuple(tool_calls),
+            raw_completion=content,
+            suspected_unparsed_tool_calls=tuple(
+                diagnostics.get("suspected_unparsed_tool_calls", [])
+            ),
         )
 
     @classmethod
@@ -390,6 +424,7 @@ class VllmHttpClient:
             ParsedToolCall(name=tc["name"], arguments=tc.get("arguments", {}), raw="")
             for tc in data.get("tool_calls", [])
         )
+        suspected = data.get("suspected_unparsed_tool_calls") or []
         return ChatResult(
             thinking=data.get("thinking"),
             answer=data.get("answer", ""),
@@ -398,6 +433,8 @@ class VllmHttpClient:
             completion_tokens=data.get("completion_tokens"),
             effective_max_tokens=data.get("effective_max_tokens"),
             tool_calls=tool_calls,
+            raw_completion=data.get("raw_completion"),
+            suspected_unparsed_tool_calls=tuple(s for s in suspected if isinstance(s, str)),
         )
 
     def close(self) -> None:

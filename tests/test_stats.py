@@ -190,3 +190,61 @@ def test_tool_call_metrics(tmp_path: Path) -> None:
     assert stats["tool_name_counts"] == {"search": 1}
     assert stats["tool_planned_not_called_count"] == 1
     assert stats["tool_planned_but_not_called_rate"] == pytest.approx(0.5)
+
+
+def test_bare_json_and_suspected_metrics(tmp_path: Path) -> None:
+    """#103: bare JSON 由来 tool_call と suspected_unparsed_tool_calls の集計。"""
+    p = tmp_path / "r.jsonl"
+    _write(
+        p,
+        [
+            {
+                # bare JSON 由来: raw に <tool_call> も ``` も含まない
+                "prompt": "P1",
+                "answer": "a",
+                "tools": [{"type": "function", "function": {"name": "search"}}],
+                "tool_calls": [
+                    {
+                        "name": "search",
+                        "arguments": {"query": "x"},
+                        "raw": '{"name": "search", "arguments": {"query": "x"}}',
+                    }
+                ],
+            },
+            {
+                # 旧形式 <tool_call> タグ由来: bare 扱いしない
+                "prompt": "P2",
+                "answer": "b",
+                "tools": [{"type": "function", "function": {"name": "search"}}],
+                "tool_calls": [
+                    {
+                        "name": "search",
+                        "arguments": {"query": "y"},
+                        "raw": '<tool_call>{"name":"search","arguments":{"query":"y"}}</tool_call>',
+                    }
+                ],
+            },
+            {
+                # tool_call 抽出失敗 → suspected hints だけ残る
+                "prompt": "P3",
+                "answer": "c",
+                "tools": [{"type": "function", "function": {"name": "search"}}],
+                "tool_calls": [],
+                "suspected_unparsed_tool_calls": ['前置き {"name": "rm_rf", "arguments": {}}'],
+            },
+            # 旧データ (新 key 無し) は無視され壊さない
+            {"prompt": "P4", "answer": "d"},
+        ],
+    )
+    stats = compute_stats(p)
+    assert stats["bare_json_tool_call_records"] == 1
+    assert stats["suspected_unparsed_tool_call_records"] == 1
+
+
+def test_empty_stats_contains_new_keys() -> None:
+    """空 JSONL でも新キーが含まれる (dashboard 後方互換)。"""
+    from joryu.stats import _empty_stats
+
+    s = _empty_stats()
+    assert s["bare_json_tool_call_records"] == 0
+    assert s["suspected_unparsed_tool_call_records"] == 0

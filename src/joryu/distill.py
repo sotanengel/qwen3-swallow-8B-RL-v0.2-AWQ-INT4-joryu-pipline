@@ -71,6 +71,13 @@ def _build_record(
     sampling = dict(eff.sampling)
     if chat.effective_max_tokens is not None:
         sampling["effective_max_tokens"] = chat.effective_max_tokens
+    suspected = list(chat.suspected_unparsed_tool_calls)
+    if suspected:
+        logger.warning(
+            "[distill] suspected unparsed tool_call patterns in answer: prompt=%r hints=%s",
+            row.prompt[:80],
+            suspected,
+        )
     return {
         "prompt": row.prompt,
         "category": row.category,
@@ -89,6 +96,8 @@ def _build_record(
         "tool_ids_requested": row.tool_ids,
         "tool_calls": [asdict(c) for c in chat.tool_calls],
         "turns": turns or [],
+        "raw_completion": chat.raw_completion,
+        "suspected_unparsed_tool_calls": suspected,
         "created_at": datetime.now(UTC).isoformat(),
     }
 
@@ -173,13 +182,18 @@ def _run_chat_loop(
             **sampling,
         )
         final_chat = chat
-        turns.append(
-            {
-                "role": "assistant",
-                "content": chat.answer,
-                "tool_calls": [asdict(c) for c in chat.tool_calls],
-            }
-        )
+        assistant_turn: dict[str, Any] = {
+            "role": "assistant",
+            "content": chat.answer,
+            "tool_calls": [asdict(c) for c in chat.tool_calls],
+        }
+        if chat.raw_completion is not None:
+            assistant_turn["raw_completion"] = chat.raw_completion
+        if chat.suspected_unparsed_tool_calls:
+            assistant_turn["suspected_unparsed_tool_calls"] = list(
+                chat.suspected_unparsed_tool_calls
+            )
+        turns.append(assistant_turn)
         if not chat.tool_calls or executor is None:
             break
 

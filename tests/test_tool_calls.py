@@ -1,6 +1,10 @@
 """tool_calls.py: `<tool_call>` および ```json``` フェンスのパース。"""
 
-from joryu.tool_calls import ParsedToolCall, extract_tool_calls
+from joryu.tool_calls import (
+    ParsedToolCall,
+    extract_tool_calls,
+    extract_tool_calls_with_diagnostics,
+)
 
 
 def test_extract_single_tool_call() -> None:
@@ -132,3 +136,125 @@ def test_extract_nested_arguments_in_tool_call_tag() -> None:
     assert len(calls) == 1
     assert calls[0].arguments == {"query": "x", "filters": {"year": 2024}}
     assert cleaned == ""
+
+
+# ---- #103 bare JSON (タグ・フェンス無し) 形式の検出 ----
+
+
+def test_bare_json_without_known_tool_names_not_extracted() -> None:
+    """known_tool_names を指定しない場合、bare JSON は抽出しない (旧互換)。"""
+    text = '{"name": "search", "arguments": {"query": "x"}}'
+    calls, cleaned = extract_tool_calls(text)
+    assert calls == []
+    # bare JSON は cleaned に残る
+    assert '"name"' in cleaned
+
+
+def test_bare_json_with_matching_known_tool_extracted() -> None:
+    """known_tool_names に一致する bare JSON を抽出。"""
+    text = '{"name": "search", "arguments": {"query": "背景音楽 認知"}}'
+    calls, cleaned = extract_tool_calls(text, known_tool_names={"search", "calc"})
+    assert len(calls) == 1
+    assert calls[0].name == "search"
+    assert calls[0].arguments == {"query": "背景音楽 認知"}
+    assert cleaned == ""
+
+
+def test_bare_json_with_unknown_tool_not_extracted() -> None:
+    """known_tool_names に無いツール名の bare JSON は抽出しない (false positive 防止)。"""
+    text = '{"name": "rm_rf", "arguments": {"path": "/"}}'
+    calls, cleaned = extract_tool_calls(text, known_tool_names={"search"})
+    assert calls == []
+    assert '"name"' in cleaned
+
+
+def test_bare_json_with_planning_preamble_extracted() -> None:
+    """data/distilled/responses.jsonl idx=5 系実例: planning 文 + bare JSON。"""
+    text = (
+        "So we should call search with a query about background music.\n\n"
+        "We'll call search.\n\n"
+        "{\n"
+        '  "name": "search",\n'
+        '  "arguments": {"query": "背景音楽 思考 生産性", "top_k": 5}\n'
+        "}"
+    )
+    calls, cleaned = extract_tool_calls(text, known_tool_names={"search"})
+    assert len(calls) == 1
+    assert calls[0].name == "search"
+    assert calls[0].arguments == {
+        "query": "背景音楽 思考 生産性",
+        "top_k": 5,
+    }
+    assert "We'll call search." in cleaned
+    assert '"name"' not in cleaned
+
+
+def test_bare_json_multiple_objects_in_text_only_first_tool_payload_extracted() -> None:
+    """偶然 JSON が複数ある場合、tool_call 形 (name+arguments+known) のみ拾う。"""
+    text = (
+        '前段: {"score": 0.7}\n{"name": "search", "arguments": {"query": "x"}}\n後段: {"id": "abc"}'
+    )
+    calls, cleaned = extract_tool_calls(text, known_tool_names={"search"})
+    assert len(calls) == 1
+    assert calls[0].name == "search"
+    # tool_call 形以外の JSON はそのまま残る
+    assert '"score"' in cleaned
+    assert '"id"' in cleaned
+
+
+def test_bare_json_inside_tool_call_tag_not_double_extracted() -> None:
+    """既に <tool_call> タグで囲われている場合、bare JSON 検出が二重抽出しない。"""
+    text = '<tool_call>{"name":"search","arguments":{"query":"x"}}</tool_call>'
+    calls, cleaned = extract_tool_calls(text, known_tool_names={"search"})
+    assert len(calls) == 1
+    assert calls[0].name == "search"
+    assert cleaned == ""
+
+
+def test_bare_json_inside_json_fence_not_double_extracted() -> None:
+    """既に ```json``` フェンスで囲われている場合、bare JSON 検出が二重抽出しない。"""
+    text = '```json\n{"name": "search", "arguments": {"query": "x"}}\n```'
+    calls, cleaned = extract_tool_calls(text, known_tool_names={"search"})
+    assert len(calls) == 1
+    assert calls[0].name == "search"
+    assert cleaned == ""
+
+
+# ---- #103 extract_tool_calls_with_diagnostics ----
+
+
+def test_diagnostics_returns_no_hints_when_no_residual() -> None:
+    """tool_call をきれいに抽出した後、残骸が無ければ hints は空。"""
+    text = '<tool_call>{"name":"search","arguments":{"query":"x"}}</tool_call>'
+    calls, cleaned, diagnostics = extract_tool_calls_with_diagnostics(text)
+    assert len(calls) == 1
+    assert cleaned == ""
+    assert diagnostics["suspected_unparsed_tool_calls"] == []
+
+
+def test_diagnostics_detects_bare_json_when_no_known_tool_names() -> None:
+    """known_tool_names を指定しない bare JSON は parser を通らないが、診断で検出される。"""
+    text = '前置きの文章。\n\n{"name": "search", "arguments": {"query": "x"}}\nあとがき。'
+    calls, cleaned, diagnostics = extract_tool_calls_with_diagnostics(text)
+    assert calls == []
+    hints = diagnostics["suspected_unparsed_tool_calls"]
+    assert len(hints) == 1
+    assert '"name"' in hints[0]
+    assert "search" in hints[0]
+
+
+def test_diagnostics_detects_orphan_tool_call_open_tag() -> None:
+    """`<tool_call>` で始まるが閉じ忘れた残骸も hints に出る (打ち切り検出補助)。"""
+    text = '回答中に <tool_call>{"name":"search","arguments":{"query":"x"}'
+    _calls, _cleaned, diagnostics = extract_tool_calls_with_diagnostics(text)
+    hints = diagnostics["suspected_unparsed_tool_calls"]
+    assert hints, "orphan <tool_call> 残骸を検出すること"
+    assert any("<tool_call>" in h or '"name"' in h for h in hints)
+
+
+def test_diagnostics_empty_when_clean_text() -> None:
+    """tool_call らしき痕跡が一切ない通常テキストでは hints は空。"""
+    text = "これは普通の日本語の回答文です。検索しなくても答えられます。"
+    calls, _cleaned, diagnostics = extract_tool_calls_with_diagnostics(text)
+    assert calls == []
+    assert diagnostics["suspected_unparsed_tool_calls"] == []

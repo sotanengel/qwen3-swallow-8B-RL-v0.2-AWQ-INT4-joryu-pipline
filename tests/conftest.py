@@ -6,8 +6,8 @@ from typing import Any
 
 import pytest
 
-from joryu.tool_calls import extract_tool_calls
-from joryu.vllm_client import ChatResult
+from joryu.tool_calls import extract_tool_calls_with_diagnostics
+from joryu.vllm_client import ChatResult, extract_known_tool_names
 
 
 class FakeVllmClient:
@@ -58,7 +58,11 @@ class FakeVllmClient:
             thinking_out: str | None = None
         else:
             thinking_out = self.thinking
-        tool_calls, cleaned_answer = extract_tool_calls(answer)
+        known = extract_known_tool_names(tools)
+        tool_calls, cleaned_answer, diagnostics = extract_tool_calls_with_diagnostics(
+            answer,
+            known_tool_names=known or None,
+        )
         return ChatResult(
             thinking=thinking_out,
             answer=cleaned_answer,
@@ -67,6 +71,10 @@ class FakeVllmClient:
             completion_tokens=5,
             effective_max_tokens=sampling_overrides.get("max_tokens"),
             tool_calls=tuple(tool_calls),
+            raw_completion=answer,
+            suspected_unparsed_tool_calls=tuple(
+                diagnostics.get("suspected_unparsed_tool_calls", [])
+            ),
         )
 
 
