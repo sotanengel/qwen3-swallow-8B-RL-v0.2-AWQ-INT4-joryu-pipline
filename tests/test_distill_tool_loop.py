@@ -55,6 +55,28 @@ def test_tool_loop_two_turns_with_stub(tmp_path: Path) -> None:
     assert rec["answer"] == "答えは 5 です。"
 
 
+def test_tool_loop_aggregates_tool_calls_on_record(tmp_path: Path) -> None:
+    bank = tmp_path / "bank.jsonl"
+    _write_bank(bank, [{"prompt": "計算して", "tool_ids": ["calc"]}])
+    out = tmp_path / "out.jsonl"
+    cfg = Config()
+    cfg.distill.tool_loop = True
+    turn1 = '<tool_call>{"name":"calc","arguments":{"expression":"2+3"}}</tool_call>'
+    client = FakeVllmClient(answers=[turn1, "答えは 5 です。"], thinking=None)
+    executor = StubToolExecutor({"calc": "5"})
+    run_distill(
+        cfg,
+        bank_path=bank,
+        out_path=out,
+        client=client,
+        executor=executor,
+        tool_loop=True,
+    )
+    rec = read_jsonl(out)[0]
+    assert len(rec["tool_calls"]) == 1
+    assert rec["tool_calls"][0]["name"] == "calc"
+
+
 def test_tool_loop_exhausted_finish_reason(tmp_path: Path) -> None:
     bank = tmp_path / "bank.jsonl"
     _write_bank(bank, [{"prompt": "P", "tool_ids": ["search"]}])

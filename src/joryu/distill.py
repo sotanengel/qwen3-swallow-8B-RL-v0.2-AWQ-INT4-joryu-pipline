@@ -246,6 +246,18 @@ def _make_tool_loop_chat_fn(
     return _chat_with_loop
 
 
+def _aggregate_tool_calls_from_turns(turns: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """tool_loop の各 assistant turn から tool_calls を集約する。"""
+    aggregated: list[dict[str, Any]] = []
+    for turn in turns:
+        if turn.get("role") != "assistant":
+            continue
+        for call in turn.get("tool_calls") or []:
+            if isinstance(call, dict) and isinstance(call.get("name"), str):
+                aggregated.append(call)
+    return aggregated
+
+
 def _make_build_with_turns(
     build_record: Callable[[ChatResult], dict[str, Any]],
     *,
@@ -256,6 +268,9 @@ def _make_build_with_turns(
         record = build_record(chat)
         if use_tool_loop:
             record["turns"] = turns_holder["turns"]
+            aggregated = _aggregate_tool_calls_from_turns(turns_holder["turns"])
+            if aggregated:
+                record["tool_calls"] = aggregated
         return record
 
     return _build_with_turns
