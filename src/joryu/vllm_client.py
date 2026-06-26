@@ -106,6 +106,38 @@ def build_chat_template_kwargs(enable_thinking: bool) -> dict[str, Any]:
     return {"enable_thinking": enable_thinking}
 
 
+def build_offline_chat_kwargs(
+    *,
+    enable_thinking: bool,
+    tools: list[dict[str, Any]] | None,
+    tool_choice: dict[str, Any] | str | None,
+) -> dict[str, Any]:
+    """vLLM offline ``LLM.chat()`` に渡す chat_kwargs を構築する。
+
+    重要 (#109 / fix vLLM HTTP 500):
+        vLLM offline ``LLM.chat()`` のシグネチャ
+        (`vllm/entrypoints/llm.py` L959-973) には ``tool_choice`` 引数が存在しない。
+        ここに ``tool_choice`` を含めると ``LLM.chat()`` 側で
+        ``TypeError: got an unexpected keyword argument 'tool_choice'`` が発生し、
+        ``joryu-llm-serve`` 経由では **HTTP 500 Internal Server Error** として返る。
+
+        named function 強制は OpenAI 互換 HTTP サーバ (``vllm serve``) でのみ動作する機能で、
+        offline では ``SamplingParams.guided_decoding`` 経由で代替する必要がある。
+        ここでは安全側に倒して ``tool_choice`` を黙って捨て、上位レイヤ
+        (#110 ``tool_call_recovery``) は将来 guided_decoding に置き換える。
+    """
+    chat_kwargs: dict[str, Any] = {"use_tqdm": False}
+    chat_kwargs["chat_template_kwargs"] = build_chat_template_kwargs(enable_thinking)
+    if tools:
+        chat_kwargs["tools"] = tools
+    if tool_choice is not None:
+        logger.debug(
+            "[vllm] tool_choice=%s ignored: LLM.chat() does not accept it offline (#109)",
+            tool_choice,
+        )
+    return chat_kwargs
+
+
 class SupportsChat(Protocol):
     """テスト用 fake と本物クライアントが満たすプロトコル。"""
 
@@ -263,12 +295,11 @@ class VllmClient:
     ) -> ChatResult:
         """トークナイザの chat_template を使って生成。`ChatResult` を返す。"""
         self._load()
-        chat_kwargs: dict[str, Any] = {"use_tqdm": False}
-        chat_kwargs["chat_template_kwargs"] = build_chat_template_kwargs(enable_thinking)
-        if tools:
-            chat_kwargs["tools"] = tools
-        if tool_choice is not None:
-            chat_kwargs["tool_choice"] = tool_choice
+        chat_kwargs = build_offline_chat_kwargs(
+            enable_thinking=enable_thinking,
+            tools=tools,
+            tool_choice=tool_choice,
+        )
 
         requested_max = int(sampling_overrides.get("max_tokens", self._max_tokens))
         prompt_tokens = self._estimate_prompt_tokens(

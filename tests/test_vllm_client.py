@@ -15,6 +15,7 @@ from joryu.vllm_client import (
     SupportsChat,
     VllmClient,
     build_chat_template_kwargs,
+    build_offline_chat_kwargs,
     compute_effective_max_tokens,
     extract_thinking,
 )
@@ -122,3 +123,108 @@ def test_build_chat_template_kwargs_false_and_true() -> None:
     """#94 で None (旧 mode=auto) は廃止された。bool のみ受け付ける。"""
     assert build_chat_template_kwargs(False) == {"enable_thinking": False}
     assert build_chat_template_kwargs(True) == {"enable_thinking": True}
+
+
+def test_build_offline_chat_kwargs_omits_tool_choice() -> None:
+    """vLLM offline ``LLM.chat()`` は tool_choice を受け付けないので chat_kwargs に含めない。
+
+    回帰テスト (#109): tool_choice を ``LLM.chat()`` に渡すと
+    ``TypeError: got an unexpected keyword argument 'tool_choice'`` となり、
+    ``joryu-llm-serve`` 経由では HTTP 500 として観測される。
+    """
+    tools = [
+        {
+            "type": "function",
+            "function": {"name": "search", "description": "", "parameters": {}},
+        }
+    ]
+    kwargs = build_offline_chat_kwargs(
+        enable_thinking=True,
+        tools=tools,
+        tool_choice={"type": "function", "function": {"name": "search"}},
+    )
+    assert "tool_choice" not in kwargs
+    assert kwargs["tools"] == tools
+    assert kwargs["chat_template_kwargs"] == {"enable_thinking": True}
+    assert kwargs["use_tqdm"] is False
+
+
+def test_build_offline_chat_kwargs_string_tool_choice_also_omitted() -> None:
+    """文字列形式 (``"required"`` / ``"auto"``) でも同様に渡してはいけない。"""
+    kwargs = build_offline_chat_kwargs(
+        enable_thinking=False,
+        tools=None,
+        tool_choice="required",
+    )
+    assert "tool_choice" not in kwargs
+    assert "tools" not in kwargs
+
+
+def test_build_offline_chat_kwargs_no_tool_choice_passes_through() -> None:
+    """tool_choice 未指定時の通常パスは従来通り。"""
+    tools = [{"type": "function", "function": {"name": "calc", "parameters": {}}}]
+    kwargs = build_offline_chat_kwargs(
+        enable_thinking=True,
+        tools=tools,
+        tool_choice=None,
+    )
+    assert kwargs == {
+        "use_tqdm": False,
+        "chat_template_kwargs": {"enable_thinking": True},
+        "tools": tools,
+    }
+
+
+def test_chat_via_template_does_not_forward_tool_choice_to_llm_chat() -> None:
+    """End-to-end 回帰テスト: ``self._llm.chat()`` に tool_choice キーワードを
+    含めないことを保証する。実 vLLM の ``LLM.chat`` シグネチャ
+    (`vllm/entrypoints/llm.py` L959-973) には ``tool_choice`` が無いため、
+    渡すと HTTP 500 を発生させる。
+    """
+    from types import SimpleNamespace
+
+    class _StrictMockLLM:
+        """``tool_choice`` を kwargs で受け取ったら実機と同じ TypeError を投げる。"""
+
+        def __init__(self) -> None:
+            self.received_kwargs: dict[str, object] | None = None
+
+        def chat(self, messages, params, **kwargs):  # type: ignore[no-untyped-def]
+            if "tool_choice" in kwargs:
+                raise TypeError("chat() got an unexpected keyword argument 'tool_choice'")
+            self.received_kwargs = kwargs
+            completion = SimpleNamespace(text="ok", finish_reason="stop", token_ids=[1])
+            return [SimpleNamespace(outputs=[completion], prompt_token_ids=[1, 2])]
+
+        def get_tokenizer(self):  # type: ignore[no-untyped-def]
+            class _TK:
+                def apply_chat_template(self, **kw):  # type: ignore[no-untyped-def]
+                    return [1, 2, 3]
+
+            return _TK()
+
+    cfg = Config()
+    client = VllmClient.from_config(cfg.model, cfg.vllm)
+    mock = _StrictMockLLM()
+    client._llm = mock
+
+    def _fake_sampling_params(**overrides: object) -> object:
+        return SimpleNamespace(**overrides)
+
+    client._sampling_params = _fake_sampling_params  # type: ignore[method-assign]
+
+    result = client.chat_via_template(
+        [{"role": "user", "content": "hi"}],
+        tools=[
+            {
+                "type": "function",
+                "function": {"name": "search", "description": "", "parameters": {}},
+            }
+        ],
+        tool_choice={"type": "function", "function": {"name": "search"}},
+    )
+
+    assert result.answer == "ok"
+    assert mock.received_kwargs is not None
+    assert "tool_choice" not in mock.received_kwargs
+    assert mock.received_kwargs.get("tools") is not None
