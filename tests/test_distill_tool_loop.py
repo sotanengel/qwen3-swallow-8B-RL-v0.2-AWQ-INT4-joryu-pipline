@@ -6,10 +6,23 @@ from pathlib import Path
 
 from joryu.config import Config
 from joryu.distill import run_distill
+from joryu.tool_calls import ParsedToolCall
 from joryu.tool_executor import StubToolExecutor
 from tests.helpers.jsonl import read_jsonl, write_jsonl
 
 from .conftest import FakeVllmClient
+
+
+class CountingStubToolExecutor(StubToolExecutor):
+    """StubToolExecutor with run() call counter."""
+
+    def __init__(self, fixed: dict[str, str] | None = None) -> None:
+        super().__init__(fixed)
+        self.run_count = 0
+
+    def run(self, call: ParsedToolCall) -> str:
+        self.run_count += 1
+        return super().run(call)
 
 
 def _write_bank(path: Path, rows: list[dict]) -> None:
@@ -266,3 +279,153 @@ def test_tool_loop_multiple_tool_calls_one_assistant_message(tmp_path: Path) -> 
     assert {m["name"] for m in tool_msgs} == {"search", "calc"}
     expected_ids = {tc["id"] for tc in tool_calls}
     assert {m["tool_call_id"] for m in tool_msgs} == expected_ids
+
+
+def test_tool_loop_dedupes_repeated_url_within_turn(tmp_path: Path) -> None:
+    bank = tmp_path / "bank.jsonl"
+    _write_bank(
+        bank,
+        [{"prompt": "URL取得", "tool_ids": ["fetch_url"]}],
+    )
+    out = tmp_path / "out.jsonl"
+    cfg = Config()
+    cfg.distill.tool_loop = True
+    url = "https://example.com/page"
+    turn1 = (
+        f'<tool_call>{{"name":"fetch_url","arguments":{{"url":"{url}"}}}}</tool_call>'
+        f'<tool_call>{{"name":"fetch_url","arguments":{{"url":"{url}"}}}}</tool_call>'
+        f'<tool_call>{{"name":"fetch_url","arguments":{{"url":"{url}"}}}}</tool_call>'
+    )
+    client = FakeVllmClient(answers=[turn1, "完了"], thinking=None)
+    executor = CountingStubToolExecutor({"fetch_url": "page body"})
+    run_distill(
+        cfg,
+        bank_path=bank,
+        out_path=out,
+        client=client,
+        executor=executor,
+        tool_loop=True,
+    )
+    assert executor.run_count == 1
+    rec = read_jsonl(out)[0]
+    tool_turns = [t for t in rec["turns"] if t["role"] == "tool"]
+    assert len(tool_turns) == 3
+    assert tool_turns[0]["content"] == "page body"
+    assert tool_turns[1]["content"] == "page body"
+    assert tool_turns[1]["deduped"] is True
+    assert tool_turns[2]["deduped"] is True
+
+
+def test_tool_loop_dedupes_across_turns(tmp_path: Path) -> None:
+    bank = tmp_path / "bank.jsonl"
+    _write_bank(
+        bank,
+        [{"prompt": "URL取得", "tool_ids": ["fetch_url"]}],
+    )
+    out = tmp_path / "out.jsonl"
+    cfg = Config()
+    cfg.distill.tool_loop = True
+    url = "https://example.com/page"
+    turn1 = f'<tool_call>{{"name":"fetch_url","arguments":{{"url":"{url}"}}}}</tool_call>'
+    turn2 = f'<tool_call>{{"name":"fetch_url","arguments":{{"url":"{url}"}}}}</tool_call>'
+    client = FakeVllmClient(answers=[turn1, turn2, "完了"], thinking=None)
+    executor = CountingStubToolExecutor({"fetch_url": "page body"})
+    run_distill(
+        cfg,
+        bank_path=bank,
+        out_path=out,
+        client=client,
+        executor=executor,
+        tool_loop=True,
+    )
+    assert executor.run_count == 1
+    rec = read_jsonl(out)[0]
+    deduped_turns = [t for t in rec["turns"] if t.get("role") == "tool" and t.get("deduped")]
+    assert len(deduped_turns) == 1
+
+
+def test_tool_loop_distinct_args_not_deduped(tmp_path: Path) -> None:
+    bank = tmp_path / "bank.jsonl"
+    _write_bank(
+        bank,
+        [{"prompt": "URL取得", "tool_ids": ["fetch_url"]}],
+    )
+    out = tmp_path / "out.jsonl"
+    cfg = Config()
+    cfg.distill.tool_loop = True
+    turn1 = (
+        '<tool_call>{"name":"fetch_url","arguments":{"url":"https://a.example"}}</tool_call>'
+        '<tool_call>{"name":"fetch_url","arguments":{"url":"https://b.example"}}</tool_call>'
+    )
+    client = FakeVllmClient(answers=[turn1, "完了"], thinking=None)
+    executor = CountingStubToolExecutor({"fetch_url": "page body"})
+    run_distill(
+        cfg,
+        bank_path=bank,
+        out_path=out,
+        client=client,
+        executor=executor,
+        tool_loop=True,
+    )
+    assert executor.run_count == 2
+    rec = read_jsonl(out)[0]
+    deduped_turns = [t for t in rec["turns"] if t.get("deduped")]
+    assert deduped_turns == []
+
+
+def test_tool_loop_dedupe_metadata_recorded(tmp_path: Path) -> None:
+    bank = tmp_path / "bank.jsonl"
+    _write_bank(
+        bank,
+        [{"prompt": "URL取得", "tool_ids": ["fetch_url"]}],
+    )
+    out = tmp_path / "out.jsonl"
+    cfg = Config()
+    cfg.distill.tool_loop = True
+    url = "https://example.com/page"
+    turn1 = (
+        f'<tool_call>{{"name":"fetch_url","arguments":{{"url":"{url}"}}}}</tool_call>'
+        f'<tool_call>{{"name":"fetch_url","arguments":{{"url":"{url}"}}}}</tool_call>'
+    )
+    client = FakeVllmClient(answers=[turn1, "完了"], thinking=None)
+    executor = CountingStubToolExecutor({"fetch_url": "page body"})
+    run_distill(
+        cfg,
+        bank_path=bank,
+        out_path=out,
+        client=client,
+        executor=executor,
+        tool_loop=True,
+    )
+    rec = read_jsonl(out)[0]
+    assert rec["tool_loop_dedupe"] == {"skipped_calls": 1, "unique_calls": 1}
+
+
+def test_tool_loop_dedupe_can_be_disabled(tmp_path: Path) -> None:
+    bank = tmp_path / "bank.jsonl"
+    _write_bank(
+        bank,
+        [{"prompt": "URL取得", "tool_ids": ["fetch_url"]}],
+    )
+    out = tmp_path / "out.jsonl"
+    cfg = Config()
+    cfg.distill.tool_loop = True
+    cfg.distill.tool_loop_dedupe = False
+    url = "https://example.com/page"
+    turn1 = (
+        f'<tool_call>{{"name":"fetch_url","arguments":{{"url":"{url}"}}}}</tool_call>'
+        f'<tool_call>{{"name":"fetch_url","arguments":{{"url":"{url}"}}}}</tool_call>'
+    )
+    client = FakeVllmClient(answers=[turn1, "完了"], thinking=None)
+    executor = CountingStubToolExecutor({"fetch_url": "page body"})
+    run_distill(
+        cfg,
+        bank_path=bank,
+        out_path=out,
+        client=client,
+        executor=executor,
+        tool_loop=True,
+    )
+    assert executor.run_count == 2
+    rec = read_jsonl(out)[0]
+    assert "tool_loop_dedupe" not in rec

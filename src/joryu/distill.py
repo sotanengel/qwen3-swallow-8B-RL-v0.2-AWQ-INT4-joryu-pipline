@@ -189,6 +189,14 @@ def _append_tool_turn_messages(
     return updated
 
 
+def _tool_call_dedupe_key(call: ParsedToolCall) -> tuple[str, str]:
+    """(name, arguments) の決定論的キーを返す。"""
+    return (
+        call.name,
+        json.dumps(call.arguments, sort_keys=True, ensure_ascii=False),
+    )
+
+
 def _run_chat_loop(
     client: SupportsChat,
     messages: list[dict[str, Any]],
@@ -198,12 +206,17 @@ def _run_chat_loop(
     max_turns: int,
     sampling: dict[str, Any],
     no_think_fallback: bool = False,
-) -> tuple[ChatResult, list[dict[str, Any]]]:
+    tool_loop_dedupe: bool = True,
+) -> tuple[ChatResult, list[dict[str, Any]], dict[str, int] | None]:
     """tool_call が無くなるか max_turns に達するまで chat を回す。"""
     turns: list[dict[str, Any]] = []
     working_messages = list(messages)
     final_chat: ChatResult | None = None
     exhausted = False
+    executed_cache: dict[tuple[str, str], str] = {}
+    call_index_by_key: dict[tuple[str, str], int] = {}
+    skipped_calls = 0
+    unique_calls = 0
 
     for _turn in range(max_turns):
         chat = client.chat_via_template(
@@ -240,12 +253,33 @@ def _run_chat_loop(
         assistant_content = chat.answer or ""
         tool_results: list[tuple[str, str]] = []
         for call in chat.tool_calls:
-            try:
-                result = executor.run(call)
-            except (KeyError, ValueError) as exc:
-                result = f"error: {exc}"
+            deduped = False
+            original_call_index: int | None = None
+            key = _tool_call_dedupe_key(call)
+            if tool_loop_dedupe and key in executed_cache:
+                result = executed_cache[key]
+                deduped = True
+                original_call_index = call_index_by_key[key]
+                skipped_calls += 1
+            else:
+                try:
+                    result = executor.run(call)
+                except (KeyError, ValueError) as exc:
+                    result = f"error: {exc}"
+                if tool_loop_dedupe:
+                    executed_cache[key] = result
+                    call_index_by_key[key] = unique_calls
+                    unique_calls += 1
             tool_results.append((call.name, result))
-            turns.append({"role": "tool", "name": call.name, "content": result})
+            tool_turn: dict[str, Any] = {
+                "role": "tool",
+                "name": call.name,
+                "content": result,
+            }
+            if deduped:
+                tool_turn["deduped"] = True
+                tool_turn["original_call_index"] = original_call_index
+            turns.append(tool_turn)
         working_messages = _append_tool_turn_messages(
             working_messages,
             assistant_content=assistant_content,
@@ -268,16 +302,20 @@ def _run_chat_loop(
             effective_max_tokens=final_chat.effective_max_tokens,
             tool_calls=final_chat.tool_calls,
         )
-    return final_chat, turns
+    dedupe_meta: dict[str, int] | None = None
+    if tool_loop_dedupe and (skipped_calls or unique_calls):
+        dedupe_meta = {"skipped_calls": skipped_calls, "unique_calls": unique_calls}
+    return final_chat, turns, dedupe_meta
 
 
 def _make_tool_loop_chat_fn(
     client: SupportsChat,
     executor: ToolExecutor,
     max_turns: int,
-    turns_holder: dict[str, list[dict[str, Any]]],
+    turns_holder: dict[str, Any],
     *,
     no_think_fallback: bool = False,
+    tool_loop_dedupe: bool = True,
 ) -> Callable[..., ChatResult]:
     def _chat_with_loop(
         loop_messages: list[dict[str, str]],
@@ -285,7 +323,7 @@ def _make_tool_loop_chat_fn(
         tools: list[dict[str, Any]] | None,
         **sampling_kwargs: Any,
     ) -> ChatResult:
-        chat, turns = _run_chat_loop(
+        chat, turns, dedupe_meta = _run_chat_loop(
             client,
             loop_messages,
             tools=tools,
@@ -293,8 +331,13 @@ def _make_tool_loop_chat_fn(
             max_turns=max_turns,
             sampling=sampling_kwargs,
             no_think_fallback=no_think_fallback,
+            tool_loop_dedupe=tool_loop_dedupe,
         )
         turns_holder["turns"] = turns
+        if dedupe_meta is not None:
+            turns_holder["tool_loop_dedupe"] = dedupe_meta
+        else:
+            turns_holder.pop("tool_loop_dedupe", None)
         return chat
 
     return _chat_with_loop
@@ -316,7 +359,7 @@ def _make_build_with_turns(
     build_record: Callable[[ChatResult], dict[str, Any]],
     *,
     use_tool_loop: bool,
-    turns_holder: dict[str, list[dict[str, Any]]],
+    turns_holder: dict[str, Any],
     client: SupportsChat | None = None,
     messages: list[dict[str, str]] | None = None,
     tools: list[dict[str, Any]] | None = None,
@@ -346,6 +389,8 @@ def _make_build_with_turns(
             aggregated = _aggregate_tool_calls_from_turns(turns_holder["turns"])
             if aggregated:
                 record["tool_calls"] = aggregated
+            if dedupe_meta := turns_holder.get("tool_loop_dedupe"):
+                record["tool_loop_dedupe"] = dedupe_meta
         return record
 
     return _build_with_turns
@@ -501,6 +546,7 @@ def run_distill(
 
     use_tool_loop = config.distill.tool_loop if tool_loop is None else tool_loop
     no_think_fallback = config.distill.no_think_fallback
+    tool_loop_dedupe = config.distill.tool_loop_dedupe
     loop_max_turns = (
         config.distill.tool_loop_max_turns if tool_loop_max_turns is None else tool_loop_max_turns
     )
@@ -547,7 +593,7 @@ def run_distill(
                     model_name=config.model.name,
                     config_hash=fingerprint,
                 )
-                turns_holder: dict[str, list[dict[str, Any]]] = {"turns": []}
+                turns_holder: dict[str, Any] = {"turns": []}
                 chat_fn = (
                     _make_tool_loop_chat_fn(
                         client,
@@ -555,6 +601,7 @@ def run_distill(
                         loop_max_turns,
                         turns_holder,
                         no_think_fallback=no_think_fallback,
+                        tool_loop_dedupe=tool_loop_dedupe,
                     )
                     if use_tool_loop and loop_executor is not None
                     else None
