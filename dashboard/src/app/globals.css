@@ -427,3 +427,90 @@ pre.snippet {
 .markdown-body a {
   color: var(--accent);
 }
+
+.outputs-hierarchy {
+  display: flex;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow-x: auto;
+  background: var(--surface);
+  min-height: 320px;
+}
+
+.outputs-hierarchy-col {
+  flex: 0 0 280px;
+  min-width: 240px;
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  max-height: 70vh;
+}
+
+.outputs-hierarchy-col-records {
+  flex: 1 1 480px;
+  min-width: 360px;
+}
+
+.outputs-hierarchy-col:last-child {
+  border-right: none;
+}
+
+.outputs-hierarchy-col-header {
+  padding: 0.6rem 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.outputs-hierarchy-col-sub {
+  display: block;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+}
+
+.outputs-hierarchy-row {
+  cursor: pointer;
+}
+
+.outputs-hierarchy-row:hover td {
+  background: var(--accent-soft);
+}
+
+.outputs-hierarchy-folder-icon {
+  display: inline-block;
+  width: 0.85rem;
+  height: 0.7rem;
+  margin-right: 0.35rem;
+  vertical-align: middle;
+  background: var(--muted);
+  border-radius: 2px 2px 0 0;
+  position: relative;
+}
+
+.outputs-hierarchy-folder-icon::before {
+  content: "";
+  position: absolute;
+  top: -3px;
+  left: 0;
+  width: 40%;
+  height: 3px;
+  background: var(--muted);
+  border-radius: 1px 1px 0 0;
+}
+
+.outputs-hierarchy-empty {
+  padding: 1rem 0.75rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin: 0;
+}
