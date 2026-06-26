@@ -21,7 +21,7 @@ bash scripts/setup-dev.sh
 1. `uv run ruff check .`
 2. `uv run ruff format --check .`
 3. `uvx pre-commit run --all-files`（zizmor / pinact / 基本フック含む）
-4. `uv run pytest --cov=joryu --cov-report=term-missing`
+4. `bash scripts/check_coverage.sh`（`pyproject.toml` の `fail_under` 未満で失敗）
 5. `bash scripts/verify_pipeline.sh`（CI と同じ end-to-end スモーク）
 
 `--quick` は開発中の途中確認のみ。PR・コミット前では使用禁止。
