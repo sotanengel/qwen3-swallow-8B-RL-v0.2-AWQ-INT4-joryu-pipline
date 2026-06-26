@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { OutputsHierarchyView } from "@/components/OutputsHierarchyView";
 import { deleteAllOutputs, deleteOutput } from "@/lib/outputs";
 import { useIntervalPoll } from "@/lib/useIntervalPoll";
 import { useDistillJobFastPoll } from "@/lib/useDistillJobFastPoll";
@@ -58,6 +59,13 @@ export default function OutputsPage() {
   const [rankedLoading, setRankedLoading] = useState(false);
   const [rankedUnavailable, setRankedUnavailable] = useState(false);
 
+  const isSearchActive = query.trim().length > 0;
+
+  const modeFiltered = useMemo(
+    () => searchRecords(records, { query: "", mode, category: undefined }),
+    [records, mode],
+  );
+
   const categories = useMemo(() => {
     const set = new Set<string>();
     for (const r of records) {
@@ -112,7 +120,7 @@ export default function OutputsPage() {
     }
   }, [rankedUnavailable, searchMode]);
 
-  const isRanked = searchMode === "ranked";
+  const isRanked = isSearchActive && searchMode === "ranked";
   const totalCount = isRanked ? rankedTotal : keywordFiltered.length;
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
   const keywordPageRows = keywordFiltered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
@@ -129,13 +137,15 @@ export default function OutputsPage() {
     setError(null);
     try {
       await deleteOutput(id);
-      const nextFilteredLen = totalCount - 1;
-      const nextTotalPages = Math.max(1, Math.ceil(nextFilteredLen / PAGE_SIZE));
-      if (page >= nextTotalPages) {
-        setPage(Math.max(0, nextTotalPages - 1));
-      }
-      if (isRanked) {
-        void runRankedSearch();
+      if (isSearchActive) {
+        const nextFilteredLen = totalCount - 1;
+        const nextTotalPages = Math.max(1, Math.ceil(nextFilteredLen / PAGE_SIZE));
+        if (page >= nextTotalPages) {
+          setPage(Math.max(0, nextTotalPages - 1));
+        }
+        if (isRanked) {
+          void runRankedSearch();
+        }
       }
     } catch (exc) {
       setError(exc instanceof Error ? exc.message : String(exc));
@@ -211,6 +221,8 @@ export default function OutputsPage() {
             setPage(0);
           }}
           aria-label="検索モード"
+          disabled={!isSearchActive}
+          title={!isSearchActive ? "検索クエリ入力時のみ利用可能" : undefined}
         >
           <option value="keyword">keyword</option>
           <option value="ranked">ranked (BM25)</option>
@@ -232,6 +244,8 @@ export default function OutputsPage() {
             setCategory(e.target.value);
             setPage(0);
           }}
+          disabled={!isSearchActive}
+          title={!isSearchActive ? "検索時のみ利用可能（通常閲覧は左列で category を選択）" : undefined}
         >
           <option value="">category: all</option>
           {categories.map((c) => (
@@ -254,107 +268,125 @@ export default function OutputsPage() {
           <br />
           (dashboard/public/responses.jsonl にシンボリックリンクまたはコピーを置いてください)
         </p>
-      ) : (
+      ) : isSearchActive ? (
         <p style={{ color: "var(--muted)", fontSize: "0.9rem" }}>
           {isRanked && rankedLoading ? "検索中… " : ""}
           {totalCount.toLocaleString()} / {records.length.toLocaleString()} 件 ヒット (ページ{" "}
           {page + 1} / {totalPages})
         </p>
+      ) : (
+        <p style={{ color: "var(--muted)", fontSize: "0.9rem" }}>
+          全 {modeFiltered.length.toLocaleString()} 件 — category → style_id → records
+        </p>
       )}
 
-      <div className="outputs-table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>category</th>
-              <th>mode</th>
-              <th>style_id</th>
-              <th>model</th>
-              <th>prompt</th>
-              <th>answer</th>
-              <th>tokens</th>
-              <th>status</th>
-              <th>created_at</th>
-              {isRanked ? (
-                <>
-                  <th>score</th>
-                  <th>snippet</th>
-                </>
-              ) : null}
-              <th>操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            {displayRows.map(({ record: r, hit }) => {
-              const id = recordId(r);
-              return (
-                <tr
-                  key={id}
-                  className="output-list-row"
-                  onClick={() => router.push(`/outputs/${id}`)}
-                >
-                  <td style={{ verticalAlign: "top" }}>{r.category ?? ""}</td>
-                  <td style={{ verticalAlign: "top" }}>{r.mode ?? ""}</td>
-                  <td style={{ verticalAlign: "top" }}>{r.style_id ?? "-"}</td>
-                  <td style={{ verticalAlign: "top" }}>{r.model ?? "-"}</td>
-                  <td>{truncateText(r.prompt, 80)}</td>
-                  <td>{truncateText(r.answer, 60)}</td>
-                  <td style={{ verticalAlign: "top", whiteSpace: "nowrap" }}>{formatTokens(r)}</td>
-                  <td style={{ verticalAlign: "top" }}>
-                    {formatStatus(r) === "truncated" ? (
-                      <span className="badge-truncated">truncated</span>
-                    ) : (
-                      formatStatus(r)
-                    )}
-                  </td>
-                  <td style={{ verticalAlign: "top", whiteSpace: "nowrap" }}>
-                    {r.created_at ?? "-"}
-                  </td>
+      {loaded && !isSearchActive ? (
+        <OutputsHierarchyView
+          records={modeFiltered}
+          deletingId={deletingId}
+          onDeleteRecord={(record) => void onDeleteOne(record)}
+        />
+      ) : null}
+
+      {loaded && isSearchActive ? (
+        <>
+          <div className="outputs-table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>category</th>
+                  <th>mode</th>
+                  <th>style_id</th>
+                  <th>model</th>
+                  <th>prompt</th>
+                  <th>answer</th>
+                  <th>tokens</th>
+                  <th>status</th>
+                  <th>created_at</th>
                   {isRanked ? (
                     <>
-                      <td style={{ verticalAlign: "top", whiteSpace: "nowrap" }}>
-                        {hit ? hit.score.toFixed(2) : "-"}
-                      </td>
-                      <td style={{ verticalAlign: "top", maxWidth: "16rem" }}>
-                        {hit?.snippet ? (
-                          <pre className="snippet search-snippet">{hit.snippet}</pre>
-                        ) : (
-                          "-"
-                        )}
-                      </td>
+                      <th>score</th>
+                      <th>snippet</th>
                     </>
                   ) : null}
-                  <td style={{ verticalAlign: "top" }}>
-                    <button
-                      type="button"
-                      className="danger-btn"
-                      disabled={deletingId === id}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        void onDeleteOne(r);
-                      }}
-                    >
-                      {deletingId === id ? "削除中…" : "削除"}
-                    </button>
-                  </td>
+                  <th>操作</th>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+              </thead>
+              <tbody>
+                {displayRows.map(({ record: r, hit }) => {
+                  const id = recordId(r);
+                  return (
+                    <tr
+                      key={id}
+                      className="output-list-row"
+                      onClick={() => router.push(`/outputs/${id}`)}
+                    >
+                      <td style={{ verticalAlign: "top" }}>{r.category ?? ""}</td>
+                      <td style={{ verticalAlign: "top" }}>{r.mode ?? ""}</td>
+                      <td style={{ verticalAlign: "top" }}>{r.style_id ?? "-"}</td>
+                      <td style={{ verticalAlign: "top" }}>{r.model ?? "-"}</td>
+                      <td>{truncateText(r.prompt, 80)}</td>
+                      <td>{truncateText(r.answer, 60)}</td>
+                      <td style={{ verticalAlign: "top", whiteSpace: "nowrap" }}>
+                        {formatTokens(r)}
+                      </td>
+                      <td style={{ verticalAlign: "top" }}>
+                        {formatStatus(r) === "truncated" ? (
+                          <span className="badge-truncated">truncated</span>
+                        ) : (
+                          formatStatus(r)
+                        )}
+                      </td>
+                      <td style={{ verticalAlign: "top", whiteSpace: "nowrap" }}>
+                        {r.created_at ?? "-"}
+                      </td>
+                      {isRanked ? (
+                        <>
+                          <td style={{ verticalAlign: "top", whiteSpace: "nowrap" }}>
+                            {hit ? hit.score.toFixed(2) : "-"}
+                          </td>
+                          <td style={{ verticalAlign: "top", maxWidth: "16rem" }}>
+                            {hit?.snippet ? (
+                              <pre className="snippet search-snippet">{hit.snippet}</pre>
+                            ) : (
+                              "-"
+                            )}
+                          </td>
+                        </>
+                      ) : null}
+                      <td style={{ verticalAlign: "top" }}>
+                        <button
+                          type="button"
+                          className="danger-btn"
+                          disabled={deletingId === id}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void onDeleteOne(r);
+                          }}
+                        >
+                          {deletingId === id ? "削除中…" : "削除"}
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
 
-      <div style={{ display: "flex", gap: "0.5rem", marginTop: "1rem" }}>
-        <button onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0}>
-          ‹ 前へ
-        </button>
-        <button
-          onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-          disabled={page >= totalPages - 1}
-        >
-          次へ ›
-        </button>
-      </div>
+          <div style={{ display: "flex", gap: "0.5rem", marginTop: "1rem" }}>
+            <button onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0}>
+              ‹ 前へ
+            </button>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+              disabled={page >= totalPages - 1}
+            >
+              次へ ›
+            </button>
+          </div>
+        </>
+      ) : null}
     </>
   );
 }
