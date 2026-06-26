@@ -3,6 +3,17 @@ import { describe, expect, it } from "vitest";
 import { parseSseBuffer, parseSseText } from "./sse-parse";
 
 describe("parseSseBuffer", () => {
+  it("parses column_start and turn_start events", () => {
+    const raw =
+      'event: column_start\ndata: {"column":"prose"}\n\n' +
+      'event: turn_start\ndata: {"column":"prose","turn":1}\n\n';
+    const events = parseSseText(raw);
+    expect(events).toEqual([
+      { type: "column_start", column: "prose" },
+      { type: "turn_start", column: "prose", turn: 1 },
+    ]);
+  });
+
   it("parses a single complete event", () => {
     const raw = 'event: token\ndata: {"column":"prose","delta":"hi"}\n\n';
     const { events, remainder } = parseSseBuffer(raw);

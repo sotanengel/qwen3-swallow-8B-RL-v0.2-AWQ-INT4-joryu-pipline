@@ -19,6 +19,35 @@ vi.mock("@/lib/chat", async (importOriginal) => {
 });
 
 describe("useChatColumns", () => {
+  it("applies column_start before tokens via stream", async () => {
+    mockStreamMessage.mockImplementation(
+      async (
+        _sid: string,
+        _prompt: string,
+        onEvent: (e: { type: string; column?: string; delta?: string }) => void,
+      ) => {
+        onEvent({ type: "column_start", column: "prose" });
+        onEvent({ type: "token", column: "prose", delta: "hi" });
+        onEvent({ type: "column_done", column: "prose" });
+      },
+    );
+    const { result } = renderHook(() => useChatColumns());
+
+    act(() => {
+      result.current.setColumnsFromSession([
+        { style_id: "prose", label: "散文", messages: [], turn_index: 0 },
+        { style_id: "qa_short", label: "短答", messages: [], turn_index: 0 },
+      ]);
+    });
+
+    await act(async () => {
+      await result.current.sendGlobal("sess-1", "hello");
+    });
+
+    expect(result.current.columns[0]?.isStreaming).toBe(false);
+    expect(result.current.columns[1]?.turn_index).toBe(0);
+  });
+
   it("applies optimistic update and SSE events on sendGlobal", async () => {
     mockStreamMessage.mockImplementation(
       async (_sid: string, _prompt: string, onEvent: (e: { type: string; column?: string; delta?: string }) => void) => {

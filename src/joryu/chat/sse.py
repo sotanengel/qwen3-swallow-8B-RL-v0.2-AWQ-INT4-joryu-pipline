@@ -10,7 +10,7 @@ from typing import Any
 from joryu.chat.session import ChatSession
 from joryu.chat.streamer import stream_column_turn
 from joryu.tool_executor import ToolExecutor
-from joryu.vllm_client import SupportsChat
+from joryu.vllm_client import SupportsChat, SupportsChatStream
 
 DEFAULT_SAMPLING = {"temperature": 0.7, "top_p": 0.9}
 
@@ -54,6 +54,7 @@ async def sse_all_columns(
     *,
     client: SupportsChat,
     executor: ToolExecutor | None,
+    stream_client: SupportsChatStream | None = None,
     sampling: dict[str, Any] | None = None,
 ) -> AsyncIterator[str]:
     samp = sampling or DEFAULT_SAMPLING
@@ -66,6 +67,7 @@ async def sse_all_columns(
                 prompt,
                 client=client,
                 executor=executor,
+                stream_client=stream_client,
                 sampling=samp,
             ),
         )
@@ -83,6 +85,7 @@ async def sse_single_column(
     *,
     client: SupportsChat,
     executor: ToolExecutor | None,
+    stream_client: SupportsChatStream | None = None,
     sampling: dict[str, Any] | None = None,
 ) -> AsyncIterator[str]:
     if style_id not in session.columns:
@@ -96,6 +99,7 @@ async def sse_single_column(
         prompt,
         client=client,
         executor=executor,
+        stream_client=stream_client,
         sampling=samp,
     ):
         yield format_sse(dict(event))

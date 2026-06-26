@@ -10,7 +10,7 @@ from joryu.chat.sse import sse_all_columns, sse_single_column
 from joryu.config import load_config
 from joryu.styles import StylePreset, load_styles
 from joryu.tool_executor import ToolExecutor
-from joryu.vllm_client import SupportsChat
+from joryu.vllm_client import SupportsChat, SupportsChatStream
 
 
 class ChatService:
@@ -23,11 +23,13 @@ class ChatService:
         session_store: ChatSessionStore,
         chat_client: SupportsChat,
         executor: ToolExecutor,
+        stream_client: SupportsChatStream | None = None,
     ) -> None:
         self._repo_root = repo_root
         self._session_store = session_store
         self._chat_client = chat_client
         self._executor = executor
+        self._stream_client = stream_client
         self._cfg = load_config(repo_root / "config.yaml")
 
     def load_styles(self) -> dict[str, StylePreset]:
@@ -67,6 +69,7 @@ class ChatService:
             prompt,
             client=self._chat_client,
             executor=self._executor,
+            stream_client=self._stream_client,
         ):
             yield chunk
 
@@ -82,5 +85,6 @@ class ChatService:
             prompt,
             client=self._chat_client,
             executor=self._executor,
+            stream_client=self._stream_client,
         ):
             yield chunk

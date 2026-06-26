@@ -10,6 +10,46 @@ const baseColumn = (): ColumnUiState => ({
 });
 
 describe("applyChatEvent", () => {
+  it("sets streaming state on column_start", () => {
+    const next = applyChatEvent([baseColumn()], {
+      type: "column_start",
+      column: "prose",
+    });
+    expect(next[0]?.isStreaming).toBe(true);
+    expect(next[0]?.streamingText).toBe("");
+  });
+
+  it("sets streaming state on turn_start", () => {
+    const next = applyChatEvent([baseColumn()], {
+      type: "turn_start",
+      column: "prose",
+      turn: 1,
+    });
+    expect(next[0]?.isStreaming).toBe(true);
+  });
+
+  it("finalizes only the target column on column_done", () => {
+    const cols: ColumnUiState[] = [
+      { ...baseColumn(), style_id: "prose", label: "散文" },
+      { ...baseColumn(), style_id: "qa_short", label: "短答" },
+    ];
+    let updated = applyChatEvent(cols, {
+      type: "token",
+      column: "prose",
+      delta: "done-first",
+    });
+    updated = applyChatEvent(updated, {
+      type: "column_done",
+      column: "prose",
+      finish_reason: "stop",
+      record_id: "abc",
+    });
+    expect(updated[0]?.turn_index).toBe(1);
+    expect(updated[0]?.isStreaming).toBe(false);
+    expect(updated[1]?.turn_index).toBe(0);
+    expect(updated[1]?.isStreaming).toBeUndefined();
+  });
+
   it("appends streaming tokens", () => {
     const next = applyChatEvent([baseColumn()], {
       type: "token",

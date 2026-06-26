@@ -1663,6 +1663,7 @@ dependencies = [
 [package.optional-dependencies]
 api = [
     { name = "fastapi" },
+    { name = "httpx" },
     { name = "rank-bm25" },
     { name = "uvicorn", extra = ["standard"] },
 ]
@@ -1688,6 +1689,7 @@ dev = [
 requires-dist = [
     { name = "datasketch", specifier = ">=1.6" },
     { name = "fastapi", marker = "extra == 'api'", specifier = ">=0.115" },
+    { name = "httpx", marker = "extra == 'api'", specifier = ">=0.27" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "rank-bm25", marker = "extra == 'api'", specifier = ">=0.2" },
     { name = "rank-bm25", marker = "extra == 'search'", specifier = ">=0.2" },

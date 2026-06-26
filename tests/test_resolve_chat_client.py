@@ -11,8 +11,10 @@ from joryu.vllm_client import (
     VllmClient,
     VllmHttpClient,
     resolve_chat_client,
+    resolve_stream_chat_client,
 )
 from joryu.vllm_serve_client import VllmServeClient
+from joryu.vllm_stream_client import VllmServeStreamClient
 
 
 def test_resolve_vllm_serve_backend_returns_serve_client(
@@ -68,3 +70,17 @@ def test_fingerprint_unchanged_when_backend_changes() -> None:
     alt = Config()
     alt.vllm.backend = "joryu-llm-serve"
     assert base.fingerprint() == alt.fingerprint()
+
+
+def test_resolve_stream_client_vllm_serve(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("JORYU_VLLM_URL", raising=False)
+    cfg = VllmConfig(backend="vllm-serve", model_path="org/model")
+    client = resolve_stream_chat_client(ModelConfig(), cfg)
+    assert isinstance(client, VllmServeStreamClient)
+    assert client._base_url == DEFAULT_LOCAL_VLLM_URL.rstrip("/").removesuffix("/v1")
+    assert client._model == "org/model"
+
+
+def test_resolve_stream_client_non_vllm_serve_returns_none() -> None:
+    assert resolve_stream_chat_client(ModelConfig(), VllmConfig(backend="inproc")) is None
+    assert resolve_stream_chat_client(ModelConfig(), VllmConfig(backend="joryu-llm-serve")) is None

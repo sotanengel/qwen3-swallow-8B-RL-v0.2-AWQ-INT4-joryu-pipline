@@ -1,6 +1,8 @@
 /** SSE イベントパーサ（テスト可能な純関数）。 */
 
 export type ChatEvent =
+  | { type: "column_start"; column: string }
+  | { type: "turn_start"; column: string; turn: number }
   | { type: "token"; column: string; delta: string }
   | { type: "tool_call"; column: string; call_id: string; name: string; arguments: unknown }
   | { type: "tool_result"; column: string; call_id: string; content: string }

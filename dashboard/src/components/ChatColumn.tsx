@@ -79,7 +79,7 @@ export function ChatColumn({ column, showInput, disabled, onSend }: ChatColumnPr
             {msg.content}
           </div>
         ))}
-        {column.isStreaming && column.streamingText ? (
+        {column.isStreaming ? (
           <div
             style={{
               padding: "0.5rem 0.75rem",
@@ -89,7 +89,11 @@ export function ChatColumn({ column, showInput, disabled, onSend }: ChatColumnPr
               whiteSpace: "pre-wrap",
             }}
           >
-            {column.streamingText}
+            {column.streamingText ? (
+              column.streamingText
+            ) : (
+              <span style={{ color: "var(--muted)" }}>考え中…</span>
+            )}
           </div>
         ) : null}
         {(column.toolCalls ?? []).map((tc) => (
@@ -169,6 +173,18 @@ export function applyChatEvent(
   return columns.map((col) => {
     if (col.style_id !== colId) return col;
     switch (event.type) {
+      case "column_start":
+        return {
+          ...col,
+          isStreaming: true,
+          streamingText: col.streamingText ?? "",
+        };
+      case "turn_start":
+        return {
+          ...col,
+          isStreaming: true,
+          streamingText: col.streamingText ?? "",
+        };
       case "token":
         return {
           ...col,
