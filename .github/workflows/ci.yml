@@ -37,8 +37,8 @@ jobs:
       - name: Ruff format check
         run: uv run ruff format --check .
 
-      - name: Run tests
-        run: uv run pytest --cov=joryu --cov-report=term-missing
+      - name: Check test coverage
+        run: bash scripts/check_coverage.sh
 
       - name: End-to-end smoke (no GPU)
         run: bash scripts/verify_pipeline.sh
