@@ -59,12 +59,31 @@ async def _collect(session, column, prompt, client, **kwargs):
     return events
 
 
+def test_stream_with_stream_client(tmp_path: Path) -> None:
+    from tests.conftest import FakeStreamClient
+
+    session = _make_session(tmp_path)
+    column = session.columns["prose"]
+    client = FakeVllmClient(answer="unused", thinking=None)
+    stream_client = FakeStreamClient(answer="streaming")
+    events = _run(
+        _collect(session, column, "hi", client, stream_client=stream_client),
+    )
+    types = [e["type"] for e in events]
+    assert types[0] == "column_start"
+    assert "token" in types
+    assert types[-1] == "column_done"
+    assert stream_client.calls
+
+
 def test_stream_yields_token_then_column_done(tmp_path: Path) -> None:
     session = _make_session(tmp_path)
     column = session.columns["prose"]
     client = FakeVllmClient(answer="こんにちは", thinking=None)
     events = _run(_collect(session, column, "hi", client))
     types = [e["type"] for e in events]
+    assert types[0] == "column_start"
+    assert "turn_start" in types
     assert "token" in types
     assert types[-1] == "column_done"
     assert column.turn_index == 1

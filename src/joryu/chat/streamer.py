@@ -10,7 +10,7 @@ from joryu.chat.tool_loop import ToolLoopRunner
 from joryu.chat.turn_persistence import TurnPersistence
 from joryu.styles import apply_style
 from joryu.tool_executor import ToolExecutor
-from joryu.vllm_client import SupportsChat
+from joryu.vllm_client import SupportsChat, SupportsChatStream
 
 DEFAULT_MAX_TURNS = 4
 
@@ -23,11 +23,13 @@ async def stream_column_turn(
     client: SupportsChat,
     sampling: dict[str, Any],
     executor: ToolExecutor | None = None,
+    stream_client: SupportsChatStream | None = None,
     max_turns: int = DEFAULT_MAX_TURNS,
     tool_loop_dedupe: bool = True,
 ) -> AsyncIterator[dict[str, Any]]:
     """1 列 1 ターン分をストリーム。完了時に JSONL へ 1 行追記。"""
     column_id = column.style_id
+    yield {"type": "column_start", "column": column_id}
     preset = session.style_presets[column_id]
     _style_id, system_prompt = apply_style(session.base_system_prompt, preset)
     turn_index = column.turn_index
@@ -50,6 +52,7 @@ async def stream_column_turn(
         tools=session.tools or None,
         executor=executor,
         client=client,
+        stream_client=stream_client,
         sampling=sampling,
     ):
         if event.get("type") == "_tool_loop_done":

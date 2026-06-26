@@ -165,4 +165,65 @@ uv run joryu-stats --config "$cfg" --input "$out" --output "$stats" \
 test -s "$work/curation.json" || { echo "[verify] FAIL: curation.json empty"; exit 1; }
 echo "[verify]  -> curation.json written" >&2
 
+echo "[verify] step 6: chat SSE progress + streaming smoke" >&2
+uv run python - <<'PY'
+import json
+import sys
+from pathlib import Path
+
+sys.path.insert(0, "tests")
+from fastapi.testclient import TestClient
+
+from conftest import FakeStreamClient, FakeVllmClient
+from joryu.api.app import create_app
+
+root = Path(".")
+work = root / "data" / ".verify-tmp"
+work.mkdir(parents=True, exist_ok=True)
+(work / "config.yaml").write_text(
+    (root / "config.yaml").read_text(encoding="utf-8"),
+    encoding="utf-8",
+)
+for name in ("styles.yaml", "tools.yaml"):
+    (work / name).write_text((root / name).read_text(encoding="utf-8"), encoding="utf-8")
+(work / "data" / "distilled").mkdir(parents=True, exist_ok=True)
+
+app = create_app(repo_root=work)
+app.state.chat_client = FakeVllmClient(answer="fallback", thinking=None)
+app.state.stream_chat_client = FakeStreamClient(answer="streamed")
+client = TestClient(app)
+
+created = client.post("/api/chat/sessions").json()
+session_id = created["session_id"]
+with client.stream(
+    "POST",
+    f"/api/chat/sessions/{session_id}/messages",
+    json={"prompt": "hello"},
+) as resp:
+    assert resp.status_code == 200
+    body = resp.read().decode("utf-8")
+
+events: list[tuple[str, dict]] = []
+for block in body.strip().split("\n\n"):
+    if not block.strip():
+        continue
+    event_type = ""
+    data_line = ""
+    for line in block.split("\n"):
+        if line.startswith("event: "):
+            event_type = line[7:]
+        elif line.startswith("data: "):
+            data_line = line[6:]
+    if event_type and data_line:
+        events.append((event_type, json.loads(data_line)))
+
+types = [t for t, _ in events]
+assert "column_start" in types, types
+assert "turn_start" in types, types
+assert "token" in types, types
+assert types.index("column_start") < types.index("token")
+assert types.index("token") < types.index("column_done")
+print("[verify]  -> chat SSE order OK", file=sys.stderr)
+PY
+
 echo "[verify] OK: end-to-end smoke passed" >&2

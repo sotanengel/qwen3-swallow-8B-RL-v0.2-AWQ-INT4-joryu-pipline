@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import uuid
 from collections.abc import AsyncIterator
@@ -12,7 +13,7 @@ from joryu.chat.token_stream import TokenStreamer
 from joryu.tool_call_recovery import recover_tool_call
 from joryu.tool_calls import ParsedToolCall
 from joryu.tool_executor import ToolExecutor
-from joryu.vllm_client import ChatResult, SupportsChat
+from joryu.vllm_client import ChatResult, SupportsChat, SupportsChatStream
 
 DEFAULT_MAX_TURNS = 4
 
@@ -90,6 +91,51 @@ class ToolLoopRunner:
         self._tool_loop_dedupe = tool_loop_dedupe
         self._token_streamer = token_streamer or TokenStreamer()
 
+    async def _chat_sync(
+        self,
+        client: SupportsChat,
+        working_messages: list[dict[str, Any]],
+        *,
+        tools_arg: list[dict[str, Any]] | None,
+        sampling: dict[str, Any],
+    ) -> ChatResult:
+        return await asyncio.to_thread(
+            client.chat_via_template,
+            working_messages,
+            enable_thinking=True,
+            tools=tools_arg,
+            **sampling,
+        )
+
+    async def _chat_streaming(
+        self,
+        stream_client: SupportsChatStream,
+        column_id: str,
+        working_messages: list[dict[str, Any]],
+        *,
+        tools_arg: list[dict[str, Any]] | None,
+        sampling: dict[str, Any],
+    ) -> AsyncIterator[dict[str, Any] | ChatResult]:
+        chat: ChatResult | None = None
+        async for chunk in stream_client.chat_stream(
+            working_messages,
+            enable_thinking=True,
+            tools=tools_arg,
+            **sampling,
+        ):
+            kind = getattr(chunk, "kind", None)
+            if kind == "content" and chunk.delta:
+                yield {
+                    "type": "token",
+                    "column": column_id,
+                    "delta": chunk.delta,
+                }
+            elif kind == "done" and chunk.result is not None:
+                chat = chunk.result
+        if chat is None:
+            raise RuntimeError("streaming chat returned no result")
+        yield chat
+
     async def run(
         self,
         *,
@@ -99,6 +145,7 @@ class ToolLoopRunner:
         tools: list[dict[str, Any]] | None,
         executor: ToolExecutor | None,
         client: SupportsChat,
+        stream_client: SupportsChatStream | None = None,
         sampling: dict[str, Any],
     ) -> AsyncIterator[dict[str, Any]]:
         turns: list[dict[str, Any]] = []
@@ -107,15 +154,42 @@ class ToolLoopRunner:
         executed_cache: dict[tuple[str, str], str] = {}
         tools_arg = tools or None
 
-        for _ in range(self._max_turns):
-            chat = client.chat_via_template(
-                working_messages,
-                enable_thinking=True,
-                tools=tools_arg,
-                **sampling,
-            )
+        for turn_index in range(self._max_turns):
+            yield {
+                "type": "turn_start",
+                "column": column_id,
+                "turn": turn_index + 1,
+            }
+
+            if stream_client is not None:
+                chat: ChatResult | None = None
+                async for item in self._chat_streaming(
+                    stream_client,
+                    column_id,
+                    working_messages,
+                    tools_arg=tools_arg,
+                    sampling=sampling,
+                ):
+                    if isinstance(item, ChatResult):
+                        chat = item
+                    else:
+                        yield item
+                if chat is None:
+                    yield {"type": "error", "column": column_id, "message": "no chat result"}
+                    return
+            else:
+                chat = await self._chat_sync(
+                    client,
+                    working_messages,
+                    tools_arg=tools_arg,
+                    sampling=sampling,
+                )
+                async for tok in self._token_streamer.stream(column_id, chat.answer or ""):
+                    yield tok
+
             if tools_arg:
-                chat, _recovery = recover_tool_call(
+                chat, _recovery = await asyncio.to_thread(
+                    recover_tool_call,
                     client,
                     chat,
                     messages=working_messages,
@@ -133,9 +207,6 @@ class ToolLoopRunner:
                 assistant_turn["raw_completion"] = chat.raw_completion
             turns.append(assistant_turn)
 
-            async for tok in self._token_streamer.stream(column_id, chat.answer or ""):
-                yield tok
-
             if not chat.tool_calls or executor is None:
                 column_messages.append({"role": "assistant", "content": chat.answer or ""})
                 break
@@ -149,7 +220,7 @@ class ToolLoopRunner:
                     result = executed_cache[key]
                 else:
                     try:
-                        result = executor.run(call)
+                        result = await asyncio.to_thread(executor.run, call)
                     except (KeyError, ValueError) as exc:
                         result = f"error: {exc}"
                     if self._tool_loop_dedupe:

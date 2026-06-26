@@ -258,6 +258,9 @@ def test_sse_initial_broadcast(client: TestClient, repo_root: Path) -> None:
         body = resp.read().decode("utf-8")
     events = _parse_sse(body)
     types = [t for t, _ in events]
+    assert "column_start" in types
+    assert "turn_start" in types
+    assert types.index("column_start") < types.index("token")
     assert "token" in types
     assert "column_done" in types
     assert types[-1] == "done"

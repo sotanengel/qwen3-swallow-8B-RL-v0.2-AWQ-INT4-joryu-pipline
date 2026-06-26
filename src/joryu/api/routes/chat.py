@@ -12,12 +12,13 @@ from joryu.api.deps import (
     get_chat_client,
     get_executor,
     get_session_store,
+    get_stream_chat_client,
     require_idle,
 )
 from joryu.chat.service import ChatService
 from joryu.chat.session import ChatSession, ChatSessionStore
 from joryu.tool_executor import ToolExecutor
-from joryu.vllm_client import SupportsChat
+from joryu.vllm_client import SupportsChat, SupportsChatStream
 
 router = APIRouter()
 
@@ -46,6 +47,7 @@ class MessageRequest(BaseModel):
 def _chat_service(
     request: Request,
     chat_client: Annotated[SupportsChat, Depends(get_chat_client)],
+    stream_client: Annotated[SupportsChatStream | None, Depends(get_stream_chat_client)],
     executor: Annotated[ToolExecutor, Depends(get_executor)],
     session_store: Annotated[ChatSessionStore, Depends(get_session_store)],
 ) -> ChatService:
@@ -54,6 +56,7 @@ def _chat_service(
         session_store=session_store,
         chat_client=chat_client,
         executor=executor,
+        stream_client=stream_client,
     )
 
 

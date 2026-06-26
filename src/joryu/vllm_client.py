@@ -16,6 +16,7 @@ import re
 import threading
 import urllib.error
 import urllib.request
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Any, Protocol
 
@@ -30,6 +31,7 @@ from joryu.vllm_limits import clamp_model_limits, load_probe_limits
 __all__ = [
     "ChatResult",
     "SupportsChat",
+    "SupportsChatStream",
     "VllmClient",
     "VllmError",
     "VllmHttpClient",
@@ -39,6 +41,7 @@ __all__ = [
     "compute_effective_max_tokens",
     "extract_known_tool_names",
     "resolve_chat_client",
+    "resolve_stream_chat_client",
     "resolve_vllm_serve_url",
 ]
 
@@ -155,6 +158,20 @@ class SupportsChat(Protocol):
         tool_choice: dict[str, Any] | str | None = None,
         **sampling_overrides: Any,
     ) -> ChatResult: ...
+
+
+class SupportsChatStream(Protocol):
+    """OpenAI SSE streaming 対応クライアント。"""
+
+    def chat_stream(
+        self,
+        messages: list[dict[str, Any]],
+        *,
+        enable_thinking: bool = True,
+        tools: list[dict[str, Any]] | None = None,
+        tool_choice: dict[str, Any] | str | None = None,
+        **sampling_overrides: Any,
+    ) -> AsyncIterator[Any]: ...
 
 
 def extract_known_tool_names(tools: list[dict[str, Any]] | None) -> set[str]:
@@ -429,6 +446,19 @@ def resolve_chat_client(model_cfg: ModelConfig, vllm_cfg: VllmConfig) -> Support
     if backend == "joryu-llm-serve":
         return VllmHttpClient(url or DEFAULT_LOCAL_JORYU_URL)
     raise VllmError(f"unknown vllm.backend: {backend!r}")
+
+
+def resolve_stream_chat_client(
+    model_cfg: ModelConfig,
+    vllm_cfg: VllmConfig,
+) -> SupportsChatStream | None:
+    """backend が vllm-serve のときのみ streaming クライアントを返す。"""
+    if vllm_cfg.backend != "vllm-serve":
+        return None
+    from joryu.vllm_stream_client import VllmServeStreamClient
+
+    url = resolve_vllm_serve_url(vllm_cfg)
+    return VllmServeStreamClient(url or DEFAULT_LOCAL_VLLM_URL, model=vllm_cfg.model_path)
 
 
 class VllmHttpClient:

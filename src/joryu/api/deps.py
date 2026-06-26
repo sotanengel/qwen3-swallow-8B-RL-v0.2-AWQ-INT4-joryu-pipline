@@ -13,7 +13,12 @@ from joryu.jobs.runner import JobRunner
 from joryu.jobs.store import JobStore
 from joryu.tool_executor import ToolExecutor, build_default_executor
 from joryu.tools import load_tools, merge_tools
-from joryu.vllm_client import SupportsChat, resolve_chat_client
+from joryu.vllm_client import (
+    SupportsChat,
+    SupportsChatStream,
+    resolve_chat_client,
+    resolve_stream_chat_client,
+)
 
 
 def get_job_store(request: Request) -> JobStore:
@@ -52,6 +57,16 @@ def get_chat_client(request: Request) -> SupportsChat:
         return override
     _repo_root, cfg = _load_repo_config(request)
     return resolve_chat_client(cfg.model, cfg.vllm)
+
+
+def get_stream_chat_client(request: Request) -> SupportsChatStream | None:
+    override = getattr(request.app.state, "stream_chat_client", None)
+    if override is not None:
+        return override
+    if getattr(request.app.state, "chat_client", None) is not None:
+        return None
+    _repo_root, cfg = _load_repo_config(request)
+    return resolve_stream_chat_client(cfg.model, cfg.vllm)
 
 
 def get_executor(request: Request) -> ToolExecutor:

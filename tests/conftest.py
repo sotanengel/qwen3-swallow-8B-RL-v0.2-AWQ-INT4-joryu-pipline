@@ -80,6 +80,73 @@ class FakeVllmClient:
         )
 
 
+class FakeStreamClient:
+    """SupportsChatStream 互換のテスト用 streaming クライアント。"""
+
+    def __init__(
+        self,
+        answer: str = "回答",
+        thinking: str | None = None,
+        *,
+        finish_reason: str = "stop",
+        answers: list[str] | None = None,
+    ) -> None:
+        self.answer = answer
+        self.thinking = thinking
+        self.finish_reason = finish_reason
+        self.answers = answers
+        self.calls: list[dict[str, Any]] = []
+        self._call_index = 0
+
+    async def chat_stream(
+        self,
+        messages: list[dict[str, Any]],
+        *,
+        enable_thinking: bool = True,
+        tools: list[dict[str, Any]] | None = None,
+        tool_choice: dict[str, Any] | str | None = None,
+        **sampling_overrides: Any,
+    ):
+        from joryu.vllm_stream_client import StreamChunk
+
+        self.calls.append(
+            {
+                "messages": messages,
+                "enable_thinking": enable_thinking,
+                "tools": tools,
+                "tool_choice": tool_choice,
+                "sampling": dict(sampling_overrides),
+            }
+        )
+        if self.answers is not None:
+            answer = self.answers[min(self._call_index, len(self.answers) - 1)]
+        else:
+            answer = self.answer
+        self._call_index += 1
+
+        known = extract_known_tool_names(tools)
+        tool_calls, cleaned_answer, diagnostics = extract_tool_calls_with_diagnostics(
+            answer,
+            known_tool_names=known or None,
+        )
+        for i in range(0, len(cleaned_answer), 4):
+            yield StreamChunk(kind="content", delta=cleaned_answer[i : i + 4])
+        result = ChatResult(
+            thinking=self.thinking if enable_thinking is not False else None,
+            answer=cleaned_answer,
+            finish_reason=self.finish_reason,
+            prompt_tokens=10,
+            completion_tokens=5,
+            effective_max_tokens=sampling_overrides.get("max_tokens"),
+            tool_calls=tuple(tool_calls),
+            raw_completion=answer,
+            suspected_unparsed_tool_calls=tuple(
+                diagnostics.get("suspected_unparsed_tool_calls", [])
+            ),
+        )
+        yield StreamChunk(kind="done", finish_reason=self.finish_reason, result=result)
+
+
 @pytest.fixture()
 def fake_client() -> FakeVllmClient:
     return FakeVllmClient()
