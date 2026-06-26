@@ -240,13 +240,10 @@ def _run_chat_loop(
         assistant_content = chat.answer or ""
         tool_results: list[tuple[str, str]] = []
         for call in chat.tool_calls:
-            if call.name == "<malformed>":
-                result = "error: malformed tool_call"
-            else:
-                try:
-                    result = executor.run(call)
-                except (KeyError, ValueError) as exc:
-                    result = f"error: {exc}"
+            try:
+                result = executor.run(call)
+            except (KeyError, ValueError) as exc:
+                result = f"error: {exc}"
             tool_results.append((call.name, result))
             turns.append({"role": "tool", "name": call.name, "content": result})
         working_messages = _append_tool_turn_messages(
