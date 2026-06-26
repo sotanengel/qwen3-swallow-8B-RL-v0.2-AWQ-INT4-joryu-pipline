@@ -52,6 +52,19 @@ class VllmConfig:
     serve_url: str = ""
 
 
+# config_hash (下流 SFT 再現性) から除外する vllm キー。
+# 推論結果に影響しないデプロイ/接続設定のみ。
+_VLLM_FINGERPRINT_EXCLUDE_KEYS = frozenset({"backend", "serve_port", "serve_url"})
+
+
+def vllm_fingerprint_payload(vllm: VllmConfig) -> dict[str, Any]:
+    """``Config.fingerprint()`` 用 vllm 辞書 (接続先・backend は除外)。"""
+    payload = asdict(vllm)
+    for key in _VLLM_FINGERPRINT_EXCLUDE_KEYS:
+        payload.pop(key, None)
+    return payload
+
+
 _DEFAULT_SYSTEM_PROMPT = (
     "あなたは丁寧で正確な日本語アシスタントです。\nユーザの質問に、自然な日本語で答えてください。\n"
 )
@@ -155,7 +168,7 @@ class Config:
         """
         payload_dict = {
             "model": asdict(self.model),
-            "vllm": asdict(self.vllm),
+            "vllm": vllm_fingerprint_payload(self.vllm),
             "distill": asdict(self.distill),
             "export": asdict(self.export),
         }

@@ -128,3 +128,18 @@ def test_distill_no_think_fallback_defaults_false() -> None:
 def test_distill_tools_repetition_penalty_defaults() -> None:
     cfg = Config()
     assert cfg.distill.tools_repetition_penalty == pytest.approx(1.0)
+
+
+def test_fingerprint_unchanged_when_vllm_serve_url_changes() -> None:
+    """接続先 URL は config_hash に含めない (下流 SFT 互換)。"""
+    base = Config()
+    alt = Config()
+    alt.vllm.serve_url = "http://localhost:9999"
+    assert base.fingerprint() == alt.fingerprint()
+
+
+def test_fingerprint_unchanged_when_vllm_serve_port_changes() -> None:
+    base = Config()
+    alt = Config()
+    alt.vllm.serve_port = 9999
+    assert base.fingerprint() == alt.fingerprint()
