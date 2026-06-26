@@ -19,11 +19,11 @@ def test_resolve_vllm_serve_backend_returns_serve_client(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.delenv("JORYU_VLLM_URL", raising=False)
-    cfg = VllmConfig(backend="vllm-serve", serve_url="")
-    client = resolve_chat_client(ModelConfig(name="my-model"), cfg)
+    cfg = VllmConfig(backend="vllm-serve", serve_url="", model_path="org/my-model")
+    client = resolve_chat_client(ModelConfig(name="short-name"), cfg)
     assert isinstance(client, VllmServeClient)
     assert client._base_url == DEFAULT_LOCAL_VLLM_URL.rstrip("/").removesuffix("/v1")
-    assert client._model == "my-model"
+    assert client._model == "org/my-model"
 
 
 def test_resolve_vllm_serve_backend_uses_env_url(monkeypatch: pytest.MonkeyPatch) -> None:

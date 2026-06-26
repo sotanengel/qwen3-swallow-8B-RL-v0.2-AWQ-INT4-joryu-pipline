@@ -425,7 +425,7 @@ def resolve_chat_client(model_cfg: ModelConfig, vllm_cfg: VllmConfig) -> Support
     if backend == "vllm-serve":
         from joryu.vllm_serve_client import VllmServeClient
 
-        return VllmServeClient(url or DEFAULT_LOCAL_VLLM_URL, model=model_cfg.name)
+        return VllmServeClient(url or DEFAULT_LOCAL_VLLM_URL, model=vllm_cfg.model_path)
     if backend == "joryu-llm-serve":
         return VllmHttpClient(url or DEFAULT_LOCAL_JORYU_URL)
     raise VllmError(f"unknown vllm.backend: {backend!r}")
