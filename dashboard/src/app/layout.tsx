@@ -27,6 +27,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <Link href="/distributions">分布</Link>
             <Link href="/curation">高品質抽出</Link>
             <Link href="/jobs">ジョブ</Link>
+            <Link href="/chat">チャット</Link>
           </nav>
         </header>
         <DistillLiveAlertBanner />
