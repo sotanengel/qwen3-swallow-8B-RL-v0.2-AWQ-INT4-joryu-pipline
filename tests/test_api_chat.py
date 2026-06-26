@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import time
 from pathlib import Path
 
@@ -12,6 +13,7 @@ from joryu.api.app import create_app
 from joryu.jobs.models import DistillJobSpec, JobRecord, JobStatus
 from joryu.jobs.runner import JobRunner
 from joryu.styles import StylePreset
+from tests.conftest import FakeVllmClient
 
 TOOLS_YAML = """
 tools:
@@ -74,7 +76,26 @@ export:
 @pytest.fixture
 def client(repo_root: Path) -> TestClient:
     app = create_app(repo_root=repo_root)
+    app.state.chat_client = FakeVllmClient(answer="テスト応答", thinking=None)
     return TestClient(app)
+
+
+def _parse_sse(text: str) -> list[tuple[str, dict]]:
+    events: list[tuple[str, dict]] = []
+    blocks = text.strip().split("\n\n")
+    for block in blocks:
+        if not block.strip():
+            continue
+        event_type = ""
+        data_line = ""
+        for line in block.split("\n"):
+            if line.startswith("event: "):
+                event_type = line[7:]
+            elif line.startswith("data: "):
+                data_line = line[6:]
+        if event_type and data_line:
+            events.append((event_type, json.loads(data_line)))
+    return events
 
 
 def test_list_styles(client: TestClient) -> None:
@@ -179,8 +200,99 @@ def test_probe_rejects_when_queued_job_exists(client: TestClient) -> None:
 def test_purge_expired_on_create(client: TestClient) -> None:
     store = client.app.state.chat_sessions
     styles = {"prose": StylePreset(style_id="prose", label="散文", instruction="散文で。")}
-    old = store.create(styles)
+    from joryu.tool_executor import StubToolExecutor
+
+    old = store.create(
+        styles,
+        base_system_prompt="base",
+        model_name="m",
+        config_hash="h",
+        tools=[],
+        tool_ids=[],
+        out_path=client.app.state.repo_root / "data" / "distilled" / "responses.jsonl",
+        executor=StubToolExecutor(),
+    )
     old.expires_at = time.monotonic() - 1
     store._sessions[old.session_id] = old
     client.post("/api/chat/sessions")
     assert store.get(old.session_id) is None
+
+
+def test_sse_initial_broadcast(client: TestClient, repo_root: Path) -> None:
+    created = client.post("/api/chat/sessions").json()
+    session_id = created["session_id"]
+    with client.stream(
+        "POST",
+        f"/api/chat/sessions/{session_id}/messages",
+        json={"prompt": "hello"},
+    ) as resp:
+        assert resp.status_code == 200
+        body = resp.read().decode("utf-8")
+    events = _parse_sse(body)
+    types = [t for t, _ in events]
+    assert "token" in types
+    assert "column_done" in types
+    assert types[-1] == "done"
+    out_path = repo_root / "data" / "distilled" / "responses.jsonl"
+    lines = out_path.read_text(encoding="utf-8").strip().split("\n")
+    assert len(lines) == 4
+    for line in lines:
+        rec = json.loads(line)
+        assert rec["category"] == "人間との対話"
+        assert rec["session_id"] == session_id
+
+
+def test_sse_column_message(client: TestClient) -> None:
+    created = client.post("/api/chat/sessions").json()
+    session_id = created["session_id"]
+    with client.stream(
+        "POST",
+        f"/api/chat/sessions/{session_id}/messages",
+        json={"prompt": "first"},
+    ) as resp:
+        resp.read()
+    with client.stream(
+        "POST",
+        f"/api/chat/sessions/{session_id}/columns/prose/messages",
+        json={"prompt": "second"},
+    ) as resp:
+        assert resp.status_code == 200
+        body = resp.read().decode("utf-8")
+    events = _parse_sse(body)
+    assert events[-1][0] == "done"
+    session = client.get(f"/api/chat/sessions/{session_id}").json()
+    prose = next(c for c in session["columns"] if c["style_id"] == "prose")
+    assert prose["turn_index"] == 2
+
+
+def test_initial_broadcast_rejects_after_first_turn(client: TestClient) -> None:
+    created = client.post("/api/chat/sessions").json()
+    session_id = created["session_id"]
+    with client.stream(
+        "POST",
+        f"/api/chat/sessions/{session_id}/messages",
+        json={"prompt": "first"},
+    ) as resp:
+        resp.read()
+    resp = client.post(
+        f"/api/chat/sessions/{session_id}/messages",
+        json={"prompt": "again"},
+    )
+    assert resp.status_code == 400
+
+
+def test_messages_reject_when_job_active(client: TestClient) -> None:
+    created = client.post("/api/chat/sessions").json()
+    session_id = created["session_id"]
+    runner: JobRunner = client.app.state.job_runner
+    with runner._lock:
+        runner._running_id = "busy"
+    try:
+        resp = client.post(
+            f"/api/chat/sessions/{session_id}/messages",
+            json={"prompt": "hi"},
+        )
+        assert resp.status_code == 409
+    finally:
+        with runner._lock:
+            runner._running_id = None
