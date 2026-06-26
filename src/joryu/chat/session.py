@@ -5,9 +5,11 @@ from __future__ import annotations
 import time
 import uuid
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from joryu.styles import StylePreset
+from joryu.tool_executor import ToolExecutor
 
 
 @dataclass
@@ -24,6 +26,14 @@ class ChatSession:
     columns: dict[str, ChatColumn]
     created_at: float
     expires_at: float
+    base_system_prompt: str = ""
+    model_name: str = ""
+    config_hash: str = ""
+    tools: list[dict[str, Any]] = field(default_factory=list)
+    tool_ids: list[str] = field(default_factory=list)
+    out_path: Path = field(default_factory=lambda: Path("data/distilled/responses.jsonl"))
+    style_presets: dict[str, StylePreset] = field(default_factory=dict)
+    executor: ToolExecutor | None = None
 
 
 class ChatSessionStore:
@@ -34,7 +44,18 @@ class ChatSessionStore:
     def __init__(self) -> None:
         self._sessions: dict[str, ChatSession] = {}
 
-    def create(self, styles: dict[str, StylePreset]) -> ChatSession:
+    def create(
+        self,
+        styles: dict[str, StylePreset],
+        *,
+        base_system_prompt: str,
+        model_name: str,
+        config_hash: str,
+        tools: list[dict[str, Any]],
+        tool_ids: list[str],
+        out_path: Path,
+        executor: ToolExecutor,
+    ) -> ChatSession:
         self.purge_expired()
         now = time.monotonic()
         session_id = str(uuid.uuid4())
@@ -47,6 +68,14 @@ class ChatSessionStore:
             columns=columns,
             created_at=now,
             expires_at=now + self.TTL_SECONDS,
+            base_system_prompt=base_system_prompt,
+            model_name=model_name,
+            config_hash=config_hash,
+            tools=tools,
+            tool_ids=tool_ids,
+            out_path=out_path,
+            style_presets=dict(styles),
+            executor=executor,
         )
         self._sessions[session_id] = session
         return session
