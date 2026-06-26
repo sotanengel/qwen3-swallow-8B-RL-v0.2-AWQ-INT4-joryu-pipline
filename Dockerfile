@@ -46,4 +46,4 @@ ENV PATH="/app/.venv/bin:/usr/local/bin:$PATH" \
     VLLM_DEEP_GEMM_WARMUP=skip \
     VLLM_USE_FLASHINFER_SAMPLER=0
 
-CMD ["joryu-llm-serve", "--host", "0.0.0.0", "--port", "8100"]
+CMD ["vllm", "serve", "tokyotech-llm/Qwen3-Swallow-8B-RL-v0.2-AWQ-INT4", "--host=0.0.0.0", "--port=8100", "--quantization=awq_marlin", "--dtype=bfloat16", "--max-model-len=4096", "--gpu-memory-utilization=0.85", "--kv-cache-dtype=fp8", "--enable-prefix-caching", "--max-num-seqs=1", "--swap-space=4", "--enforce-eager", "--enable-auto-tool-choice", "--tool-call-parser=hermes", "--reasoning-parser=qwen3"]
