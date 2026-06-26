@@ -92,6 +92,10 @@ class DistillConfig:
     no_think_fallback: bool = False
     # tools 付き variant の repetition_penalty (構造化出力保護, #113)
     tools_repetition_penalty: float = 1.0
+    # finish_reason=length 時の max_tokens 拡大上限 (num_ctx 内。None で無効)
+    truncation_retry_max_tokens: int | None = None
+    # 打ち切り再試行の上限回数 (到達時は最後のレコードを採用)
+    truncation_retry_max_attempts: int | None = None
 
 
 @dataclass

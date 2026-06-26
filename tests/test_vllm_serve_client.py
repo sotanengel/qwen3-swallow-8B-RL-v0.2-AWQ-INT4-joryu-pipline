@@ -107,6 +107,46 @@ def test_vllm_serve_client_sends_top_k_and_repetition_penalty_top_level(
     assert "extra_body" not in body
 
 
+def test_openai_response_to_chat_result_parses_reasoning_field() -> None:
+    """vllm serve (--reasoning-parser=qwen3) は reasoning_content ではなく reasoning を返す。"""
+    data = {
+        "choices": [
+            {
+                "message": {
+                    "role": "assistant",
+                    "content": "answer text",
+                    "reasoning": "qwen3 internal reasoning",
+                },
+                "finish_reason": "stop",
+            }
+        ],
+        "usage": {"prompt_tokens": 3, "completion_tokens": 2},
+    }
+    result = openai_response_to_chat_result(data, effective_max_tokens=64)
+    assert result.thinking == "qwen3 internal reasoning"
+    assert result.answer == "answer text"
+    assert "qwen3 internal reasoning" in (result.raw_completion or "")
+
+
+def test_openai_response_to_chat_result_prefers_reasoning_content() -> None:
+    data = {
+        "choices": [
+            {
+                "message": {
+                    "role": "assistant",
+                    "content": "answer",
+                    "reasoning_content": "preferred",
+                    "reasoning": "fallback",
+                },
+                "finish_reason": "stop",
+            }
+        ],
+        "usage": {},
+    }
+    result = openai_response_to_chat_result(data, effective_max_tokens=32)
+    assert result.thinking == "preferred"
+
+
 def test_openai_response_to_chat_result_parses_reasoning_content() -> None:
     data = {
         "choices": [

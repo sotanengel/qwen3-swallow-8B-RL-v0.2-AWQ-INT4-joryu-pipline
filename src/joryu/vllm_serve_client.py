@@ -93,6 +93,15 @@ def _reconstruct_raw_completion(
     return content
 
 
+def _extract_reasoning_from_message(message: dict[str, Any]) -> str | None:
+    """OpenAI / vllm serve の reasoning フィールドを thinking 文字列として取り出す。"""
+    for key in ("reasoning_content", "reasoning"):
+        value = message.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
+
+
 def openai_response_to_chat_result(
     data: dict[str, Any],
     *,
@@ -109,8 +118,7 @@ def openai_response_to_chat_result(
     if not isinstance(content, str):
         content = str(content)
 
-    reasoning = message.get("reasoning_content")
-    reasoning_str = reasoning.strip() if isinstance(reasoning, str) and reasoning.strip() else None
+    reasoning_str = _extract_reasoning_from_message(message)
 
     openai_tool_calls = message.get("tool_calls") or []
     parsed_from_openai: list[ParsedToolCall] = []

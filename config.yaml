@@ -44,6 +44,10 @@ distill:
   out_dir: "data/distilled"
   out_file: "responses.jsonl"
   min_interval_sec: 0.5
+  # finish_reason=length 時に max_tokens を 1.5x 拡大する上限 (num_ctx 4096 - 余白 512)
+  truncation_retry_max_tokens: 3584
+  # 打ち切り再試行の上限 (到達時は truncation_retry_capped 付きで採用)
+  truncation_retry_max_attempts: 10
   styles_file: "styles.yaml"
   system_prompt: |
     あなたは丁寧で正確な日本語アシスタントです。

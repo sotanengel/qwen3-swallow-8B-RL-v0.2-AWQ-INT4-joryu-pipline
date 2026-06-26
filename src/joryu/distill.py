@@ -591,6 +591,8 @@ def run_distill(
                         chat_fn=chat_fn,
                         deadline=deadline,
                         min_interval_sec=config.distill.min_interval_sec,
+                        max_tokens_cap=config.distill.truncation_retry_max_tokens,
+                        max_attempts=config.distill.truncation_retry_max_attempts,
                         on_retry=on_retry,
                         log=log,
                     )
