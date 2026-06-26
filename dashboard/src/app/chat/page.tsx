@@ -9,10 +9,13 @@ import {
 } from "@/components/ChatColumn";
 import {
   createSession,
+  JobActiveError,
   streamColumnMessage,
   streamMessage,
   type ChatEvent,
 } from "@/lib/chat";
+import { useCurateJobFastPoll } from "@/lib/useJobFastPoll";
+import { useDistillJobFastPoll } from "@/lib/useDistillJobFastPoll";
 
 export default function ChatPage() {
   const [columns, setColumns] = useState<ColumnUiState[]>([]);
@@ -21,6 +24,17 @@ export default function ChatPage() {
   const [error, setError] = useState<string | null>(null);
   const [globalPrompt, setGlobalPrompt] = useState("");
   const [globalSending, setGlobalSending] = useState(false);
+  const [jobBlocked, setJobBlocked] = useState(false);
+  const distillActive = useDistillJobFastPoll();
+  const curateActive = useCurateJobFastPoll();
+  const jobActive = distillActive || curateActive;
+  const chatDisabled = jobActive || jobBlocked;
+
+  useEffect(() => {
+    if (!jobActive) {
+      setJobBlocked(false);
+    }
+  }, [jobActive]);
 
   useEffect(() => {
     const init = async () => {
@@ -54,7 +68,7 @@ export default function ChatPage() {
   const handleGlobalSend = async (e: FormEvent) => {
     e.preventDefault();
     const prompt = globalPrompt.trim();
-    if (!prompt || !sessionId || globalSending) return;
+    if (!prompt || !sessionId || globalSending || chatDisabled) return;
     setGlobalSending(true);
     setError(null);
     setColumns((prev) =>
@@ -70,6 +84,9 @@ export default function ChatPage() {
     try {
       await streamMessage(sessionId, prompt, handleEvent);
     } catch (err) {
+      if (err instanceof JobActiveError) {
+        setJobBlocked(true);
+      }
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setGlobalSending(false);
@@ -77,7 +94,7 @@ export default function ChatPage() {
   };
 
   const handleColumnSend = async (styleId: string, prompt: string) => {
-    if (!sessionId) return;
+    if (!sessionId || chatDisabled) return;
     setError(null);
     setColumns((prev) =>
       prev.map((c) =>
@@ -95,6 +112,9 @@ export default function ChatPage() {
     try {
       await streamColumnMessage(sessionId, styleId, prompt, handleEvent);
     } catch (err) {
+      if (err instanceof JobActiveError) {
+        setJobBlocked(true);
+      }
       setError(err instanceof Error ? err.message : String(err));
     }
   };
@@ -109,6 +129,21 @@ export default function ChatPage() {
       <p style={{ color: "var(--muted)", fontSize: "0.9rem" }}>
         全スタイルで並列比較。初回は共通入力、2 ターン目以降は列ごとに独立した対話ができます。
       </p>
+      {chatDisabled ? (
+        <div
+          role="alert"
+          style={{
+            background: "#d4a72c33",
+            border: "1px solid #d4a72c",
+            borderRadius: "8px",
+            padding: "0.75rem 1rem",
+            marginBottom: "1rem",
+            color: "var(--text)",
+          }}
+        >
+          ジョブ実行中のためチャットを停止しています
+        </div>
+      ) : null}
       {error ? (
         <p style={{ color: "#f85149", marginBottom: "1rem" }}>{error}</p>
       ) : null}
@@ -126,6 +161,7 @@ export default function ChatPage() {
             key={col.style_id}
             column={col}
             showInput={!isInitialPhase}
+            disabled={chatDisabled}
             onSend={handleColumnSend}
           />
         ))}
@@ -144,7 +180,7 @@ export default function ChatPage() {
           <textarea
             value={globalPrompt}
             onChange={(e) => setGlobalPrompt(e.target.value)}
-            disabled={globalSending}
+            disabled={globalSending || chatDisabled}
             rows={3}
             placeholder="全スタイルに同じ質問を送信…"
             style={{
@@ -160,7 +196,7 @@ export default function ChatPage() {
           />
           <button
             type="submit"
-            disabled={globalSending || !globalPrompt.trim()}
+            disabled={globalSending || chatDisabled || !globalPrompt.trim()}
             style={{
               padding: "0.6rem 1.25rem",
               background: "var(--accent)",
