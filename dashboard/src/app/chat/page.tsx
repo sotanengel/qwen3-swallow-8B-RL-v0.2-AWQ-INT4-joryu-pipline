@@ -1,34 +1,29 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 
-import {
-  applyChatEvent,
-  ChatColumn,
-  type ColumnUiState,
-} from "@/components/ChatColumn";
-import {
-  createSession,
-  JobActiveError,
-  streamColumnMessage,
-  streamMessage,
-  type ChatEvent,
-} from "@/lib/chat";
+import { ChatColumn } from "@/components/ChatColumn";
+import { createSession } from "@/lib/chat";
+import { useChatColumns } from "@/lib/useChatColumns";
 import { useCurateJobFastPoll } from "@/lib/useJobFastPoll";
 import { useDistillJobFastPoll } from "@/lib/useDistillJobFastPoll";
 
 export default function ChatPage() {
-  const [columns, setColumns] = useState<ColumnUiState[]>([]);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [globalPrompt, setGlobalPrompt] = useState("");
-  const [globalSending, setGlobalSending] = useState(false);
   const [jobBlocked, setJobBlocked] = useState(false);
   const distillActive = useDistillJobFastPoll();
   const curateActive = useCurateJobFastPoll();
   const jobActive = distillActive || curateActive;
   const chatDisabled = jobActive || jobBlocked;
+
+  const { columns, setColumnsFromSession, globalSending, sendGlobal, sendColumn } =
+    useChatColumns({
+      onJobBlocked: () => setJobBlocked(true),
+      onSuccess: () => setJobBlocked(false),
+    });
 
   useEffect(() => {
     if (!jobActive) {
@@ -41,12 +36,7 @@ export default function ChatPage() {
       try {
         const session = await createSession();
         setSessionId(session.session_id);
-        setColumns(
-          session.columns.map((c) => ({
-            ...c,
-            messages: c.messages ?? [],
-          })),
-        );
+        setColumnsFromSession(session.columns);
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e));
       } finally {
@@ -54,67 +44,32 @@ export default function ChatPage() {
       }
     };
     void init();
-  }, []);
+  }, [setColumnsFromSession]);
 
   const isInitialPhase = useMemo(
     () => columns.length > 0 && columns.every((c) => c.turn_index === 0),
     [columns],
   );
 
-  const handleEvent = useCallback((event: ChatEvent) => {
-    setColumns((prev) => applyChatEvent(prev, event));
-  }, []);
-
   const handleGlobalSend = async (e: FormEvent) => {
     e.preventDefault();
     const prompt = globalPrompt.trim();
     if (!prompt || !sessionId || globalSending || chatDisabled) return;
-    setGlobalSending(true);
     setError(null);
-    setColumns((prev) =>
-      prev.map((c) => ({
-        ...c,
-        isStreaming: true,
-        streamingText: "",
-        toolCalls: [],
-        messages: [...c.messages, { role: "user", content: prompt }],
-      })),
-    );
     setGlobalPrompt("");
     try {
-      await streamMessage(sessionId, prompt, handleEvent);
+      await sendGlobal(sessionId, prompt);
     } catch (err) {
-      if (err instanceof JobActiveError) {
-        setJobBlocked(true);
-      }
       setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setGlobalSending(false);
     }
   };
 
   const handleColumnSend = async (styleId: string, prompt: string) => {
     if (!sessionId || chatDisabled) return;
     setError(null);
-    setColumns((prev) =>
-      prev.map((c) =>
-        c.style_id === styleId
-          ? {
-              ...c,
-              isStreaming: true,
-              streamingText: "",
-              toolCalls: [],
-              messages: [...c.messages, { role: "user", content: prompt }],
-            }
-          : c,
-      ),
-    );
     try {
-      await streamColumnMessage(sessionId, styleId, prompt, handleEvent);
+      await sendColumn(sessionId, styleId, prompt);
     } catch (err) {
-      if (err instanceof JobActiveError) {
-        setJobBlocked(true);
-      }
       setError(err instanceof Error ? err.message : String(err));
     }
   };

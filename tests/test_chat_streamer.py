@@ -17,31 +17,41 @@ def _run(coro):
 
 
 def _make_session(tmp_path: Path) -> ChatSession:
+    from joryu.chat.session import ChatSessionConfig, ChatSessionState
+
     preset = StylePreset(style_id="prose", label="散文", instruction="散文で。")
     col = ChatColumn(style_id="prose", label="散文")
-    return ChatSession(
+    config = ChatSessionConfig(
+        base_system_prompt="base",
+        model_name="test-model",
+        config_hash="hash",
+        tools=(),
+        tool_ids=(),
+        out_path=tmp_path / "out.jsonl",
+        style_presets={"prose": preset},
+    )
+    state = ChatSessionState(
         session_id="sess-1",
         columns={"prose": col},
         created_at=0.0,
         expires_at=999999.0,
-        base_system_prompt="base",
-        model_name="test-model",
-        config_hash="hash",
-        tools=[],
-        tool_ids=[],
-        out_path=tmp_path / "out.jsonl",
-        style_presets={"prose": preset},
-        executor=StubToolExecutor({"calc": "2"}),
     )
+    return ChatSession(config=config, state=state)
+
+
+def _stub_executor():
+    return StubToolExecutor({"calc": "2"})
 
 
 async def _collect(session, column, prompt, client, **kwargs):
     events = []
+    executor = kwargs.pop("executor", _stub_executor())
     async for event in stream_column_turn(
         session,
         column,
         prompt,
         client=client,
+        executor=executor,
         sampling={"temperature": 0.7, "top_p": 0.9},
         **kwargs,
     ):

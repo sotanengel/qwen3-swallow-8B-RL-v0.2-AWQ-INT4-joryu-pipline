@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import ChatPage from "./page";
@@ -29,6 +29,7 @@ vi.mock("@/lib/useJobFastPoll", () => ({
 }));
 
 afterEach(() => {
+  cleanup();
   vi.clearAllMocks();
   mockDistillFastPoll.mockReturnValue(false);
   mockCurateFastPoll.mockReturnValue(false);
@@ -62,6 +63,24 @@ describe("ChatPage", () => {
       expect(screen.getByRole("alert").textContent).toContain(
         "ジョブ実行中のためチャットを停止しています",
       );
+    });
+  });
+
+  it("clears job-active banner when fast poll becomes inactive", async () => {
+    mockDistillFastPoll.mockReturnValue(true);
+    mockCreateSession.mockResolvedValue({
+      session_id: "sess-1",
+      columns: [{ style_id: "prose", label: "散文", messages: [], turn_index: 0 }],
+    });
+    const { unmount } = render(<ChatPage />);
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toBeTruthy();
+    });
+    mockDistillFastPoll.mockReturnValue(false);
+    unmount();
+    render(<ChatPage />);
+    await waitFor(() => {
+      expect(screen.queryByRole("alert")).toBeNull();
     });
   });
 });

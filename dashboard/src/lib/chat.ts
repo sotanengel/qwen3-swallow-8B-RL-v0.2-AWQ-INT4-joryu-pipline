@@ -1,7 +1,9 @@
 import { parseSseBuffer, type ChatEvent } from "./sse-parse";
+import { checkResponse, JobActiveError } from "./api/errors";
 
 export type { ChatEvent } from "./sse-parse";
 export { parseSseBuffer, parseSseText } from "./sse-parse";
+export { JobActiveError } from "./api/errors";
 
 export type ChatStyle = {
   style_id: string;
@@ -30,25 +32,12 @@ export type ChatSessionState = {
 
 const CHAT_BASE = "/api/chat";
 
-export class JobActiveError extends Error {
-  constructor() {
-    super("job_active");
-    this.name = "JobActiveError";
-  }
-}
-
 async function chatFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${CHAT_BASE}${path}`, {
     ...init,
     cache: "no-store",
   });
-  if (!res.ok) {
-    if (res.status === 409) {
-      throw new JobActiveError();
-    }
-    const text = await res.text().catch(() => "");
-    throw new Error(`chat API ${res.status}: ${text}`);
-  }
+  await checkResponse(res);
   return res.json() as Promise<T>;
 }
 
@@ -75,12 +64,7 @@ async function consumeSse(
     body: JSON.stringify(body),
     cache: "no-store",
   });
-  if (!res.ok) {
-    if (res.status === 409) {
-      throw new JobActiveError();
-    }
-    throw new Error(`chat stream ${res.status}`);
-  }
+  await checkResponse(res);
   const reader = res.body?.getReader();
   if (!reader) {
     throw new Error("no response body");

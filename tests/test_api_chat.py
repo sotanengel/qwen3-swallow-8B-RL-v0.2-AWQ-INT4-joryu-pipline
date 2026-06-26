@@ -156,7 +156,7 @@ def test_session_ttl_expiry(client: TestClient) -> None:
     store = client.app.state.chat_sessions
     session = store.get(session_id)
     assert session is not None
-    session.expires_at = time.monotonic() - 1
+    session.state.expires_at = time.monotonic() - 1
     assert client.get(f"/api/chat/sessions/{session_id}").status_code == 404
 
 
@@ -185,7 +185,8 @@ def test_probe_rejects_when_running_id_set(client: TestClient) -> None:
             runner._running_id = None
 
 
-def test_probe_rejects_when_queued_job_exists(client: TestClient) -> None:
+def test_probe_allows_when_queued_job_exists_in_store_only(client: TestClient) -> None:
+    """store に QUEUED のみ (runner idle) なら probe は 200。"""
     created = client.post("/api/chat/sessions").json()
     session_id = created["session_id"]
     store = client.app.state.job_store
@@ -193,8 +194,35 @@ def test_probe_rejects_when_queued_job_exists(client: TestClient) -> None:
     record.status = JobStatus.QUEUED
     store.save(record)
     resp = client.post(f"/api/chat/sessions/{session_id}/_probe")
-    assert resp.status_code == 409
-    assert resp.json()["detail"]["error"] == "job_active"
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "idle_ok"
+
+
+def test_probe_ok_with_stale_running_record_after_reconcile(
+    repo_root: Path,
+) -> None:
+    """stale RUNNING 記録 → create_app (reconcile) → probe 200。"""
+    from joryu.jobs.store import JobStore
+
+    jobs_dir = repo_root / "data" / "jobs"
+    jobs_dir.mkdir(parents=True, exist_ok=True)
+    record = JobRecord.create(DistillJobSpec(count=1))
+    record.status = JobStatus.RUNNING
+    JobStore(jobs_dir).save(record)
+
+    app = create_app(repo_root=repo_root)
+    app.state.chat_client = FakeVllmClient(answer="テスト応答", thinking=None)
+    client = TestClient(app)
+
+    created = client.post("/api/chat/sessions").json()
+    session_id = created["session_id"]
+    resp = client.post(f"/api/chat/sessions/{session_id}/_probe")
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "idle_ok"
+
+    reconciled = app.state.job_store.load(record.id)
+    assert reconciled.status == JobStatus.FAILED
+    assert reconciled.error == "recovered on api start"
 
 
 def test_purge_expired_on_create(client: TestClient) -> None:
@@ -212,7 +240,7 @@ def test_purge_expired_on_create(client: TestClient) -> None:
         out_path=client.app.state.repo_root / "data" / "distilled" / "responses.jsonl",
         executor=StubToolExecutor(),
     )
-    old.expires_at = time.monotonic() - 1
+    old.state.expires_at = time.monotonic() - 1
     store._sessions[old.session_id] = old
     client.post("/api/chat/sessions")
     assert store.get(old.session_id) is None
