@@ -10,9 +10,11 @@ import pytest
 from joryu.readiness import (
     API_HEALTH_URL,
     VLLM_HEALTH_URL,
+    vllm_health_body_ready,
     wait_for_api,
     wait_for_http_ok,
     wait_for_vllm_daemon,
+    wait_for_vllm_health,
 )
 
 
@@ -55,6 +57,32 @@ def test_wait_for_http_ok_returns_false_on_timeout() -> None:
             timeout_s=0.01,
         )
         is False
+    )
+
+
+def test_vllm_health_body_ready_accepts_empty_body() -> None:
+    assert vllm_health_body_ready(b"") is True
+    assert vllm_health_body_ready(b"  \n") is True
+
+
+def test_vllm_health_body_ready_accepts_joryu_json() -> None:
+    assert vllm_health_body_ready(json.dumps({"status": "ok", "model_loaded": True}).encode())
+
+
+def test_wait_for_vllm_health_accepts_empty_200_body() -> None:
+    calls = {"n": 0}
+
+    def _urlopen(url: str, timeout: int = 0) -> _FakeResponse:
+        calls["n"] += 1
+        if calls["n"] < 2:
+            raise urllib.error.URLError("refused")
+        return _FakeResponse(200, b"")
+
+    assert wait_for_vllm_health(
+        "http://example/health",
+        urlopen_fn=_urlopen,
+        poll_interval_s=0,
+        timeout_s=1,
     )
 
 
@@ -109,11 +137,11 @@ def test_wait_for_dashboard_accepts_custom_url(monkeypatch: pytest.MonkeyPatch) 
 def test_wait_for_vllm_daemon_uses_default_url(monkeypatch: pytest.MonkeyPatch) -> None:
     seen: list[str] = []
 
-    def _wait(url: str, _predicate: object, **kwargs: object) -> bool:
-        del _predicate, kwargs
+    def _wait(url: str, **kwargs: object) -> bool:
+        del kwargs
         seen.append(url)
         return True
 
-    monkeypatch.setattr("joryu.readiness.wait_for_http_json", _wait)
+    monkeypatch.setattr("joryu.readiness.wait_for_vllm_health", _wait)
     wait_for_vllm_daemon()
     assert seen == [VLLM_HEALTH_URL]
