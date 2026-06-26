@@ -18,10 +18,11 @@ tools.yaml ───┤
    variants.py (style × temperature × top_p × mode の直積)
               │
               ▼
-   distill.py ─── chat_via_template ───▶ vllm_client.py ──┬──▶ vLLM (GPU, in-process)
-              │         ▲                      │          └──▶ joryu-llm-serve :8100 (HTTP)
+   distill.py ─── chat_via_template ───▶ resolve_chat_client() ──┬──▶ VllmServeClient → vllm serve :8100/v1 (既定)
+              │         ▲                      │                 ├──▶ VllmHttpClient → joryu-llm-serve :8100/v1/chat
+              │         │                      │                 └──▶ VllmClient (in-process GPU)
               │         └── tool_loop 時: tool_executor.py (Stub/Registry)
-              │   ◄── enable_thinking で <think> 切替 (auto は kwargs 省略) ──┘
+              │   ◄── enable_thinking で <think> 切替 ──┘
               │
               ▼
    writer.py (resume-safe JSONL append, ensure_ascii=False)
@@ -64,12 +65,14 @@ tools.yaml ───┤
                                     ▼
                           jobs/runner → distill (JORYU_VLLM_URL 時は api 内 subprocess)
                                     │
-                                    ▼ HTTP /v1/chat
-                          joryu-llm-serve (vLLM 常駐) :8100
+                                    ▼ HTTP /v1/chat/completions (OpenAI 互換)
+                          vllm serve (常駐) :8100
                                     │
                                     ▼
                           data/jobs/*.json (状態・ログ)
 ```
+
+補足: 旧 `joryu-llm-serve` (FastAPI `/v1/chat`) はコード・CLI を残しており、`vllm.backend: joryu-llm-serve` で手動切替可能。
 
 ## レイヤーごとの責務
 
@@ -78,7 +81,7 @@ tools.yaml ───┤
 | 設定 | config.yaml / styles.yaml | dataclass | config.py / styles.py |
 | プロンプト読込 | JSONL | `PromptRow[]` | prompt_bank.py |
 | バリアント展開 | row + 直積引数 | `DistillVariant[]` | variants.py |
-| 推論 | messages + sampling | `(thinking, answer)` | vllm_client.py |
+| 推論 | messages + sampling | `(thinking, answer)` | vllm_client.py / vllm_serve_client.py |
 | ループ制御 | variants, deadline, count | 書き込んだ件数 | distill.py |
 | 進捗 | iteration ごと | stderr 表示 | progress_reporter.py |
 | 出力 | record dict | JSONL 1 行 | writer.py |
@@ -88,7 +91,7 @@ tools.yaml ───┤
 | Docker 委譲 | Windows ネイティブ呼び出し | `docker run` 実行 | docker_delegate.py |
 | ジョブ API | HTTP POST ジョブ spec | queued/running 状態 + ログ | jobs/ + api/ |
 | ジョブ実行 | spec | 蒸留 subprocess (daemon 経由 or GPU docker run) | jobs/runner.py |
-| vLLM 常駐 | config.yaml | HTTP `/health`, `/v1/chat` | llm_server.py, cli/llm_serve.py |
+| vLLM 常駐 | config.yaml | HTTP `/health`, OpenAI `/v1/*` | docker-compose (`vllm serve`); 旧: llm_server.py |
 
 ## CLI 構成
 
@@ -99,7 +102,7 @@ tools.yaml ───┤
 | `joryu-stats` | dashboard JSON 生成 (`--curation <run_dir>` で curation.json も) |
 | `joryu-curate` | 蒸留 JSONL から高品質サブセットを抽出 |
 | `joryu-api` | 蒸留ジョブ REST API (FastAPI, :8000) |
-| `joryu-llm-serve` | vLLM 常駐デーモン (FastAPI, :8100) |
+| `joryu-llm-serve` | 旧 vLLM 常駐デーモン (FastAPI, :8100 `/v1/chat`) — 手動起動用 |
 | `joryu-up` | git 差分 → `compose build` → `compose up` (既定: dashboard + api + joryu)。`--detach` 時 ready 待ち |
 | `joryu-up --full` | 上記と同義 (後方互換) |
 | `joryu-up --force` | ディスク preflight をスキップ |
