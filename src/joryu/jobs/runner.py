@@ -386,6 +386,19 @@ class JobRunner:
     def running_id(self) -> str | None:
         return self._running_id
 
+    def reconcile_stale_jobs(self) -> int:
+        """API 再起動時に orphaned な QUEUED/RUNNING 記録を終端状態へ回収する。"""
+        count = 0
+        for job in self.store.list_all():
+            if job.status not in (JobStatus.QUEUED, JobStatus.RUNNING):
+                continue
+            job.status = JobStatus.FAILED
+            job.finished_at = datetime.now(UTC).isoformat()
+            job.error = "recovered on api start"
+            self.store.save(job)
+            count += 1
+        return count
+
     def enqueue(self, record: JobRecord) -> None:
         with self._lock:
             self._queue.append(record.id)

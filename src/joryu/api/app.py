@@ -25,6 +25,7 @@ def create_app(*, repo_root: Path | None = None) -> FastAPI:
     root = repo_root or repo_root_from_env()
     store = JobStore(default_jobs_dir(root))
     runner = JobRunner(store, root)
+    runner.reconcile_stale_jobs()
 
     app = FastAPI(title="joryu API", version="0.1.0")
     app.add_middleware(

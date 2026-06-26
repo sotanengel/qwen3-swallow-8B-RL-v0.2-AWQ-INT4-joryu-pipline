@@ -20,20 +20,73 @@ class ChatColumn:
     turn_index: int = 0
 
 
+@dataclass(frozen=True)
+class ChatSessionConfig:
+    base_system_prompt: str = ""
+    model_name: str = ""
+    config_hash: str = ""
+    tools: tuple[dict[str, Any], ...] = ()
+    tool_ids: tuple[str, ...] = ()
+    out_path: Path = field(default_factory=lambda: Path("data/distilled/responses.jsonl"))
+    style_presets: dict[str, StylePreset] = field(default_factory=dict)
+
+
 @dataclass
-class ChatSession:
+class ChatSessionState:
     session_id: str
     columns: dict[str, ChatColumn]
     created_at: float
     expires_at: float
-    base_system_prompt: str = ""
-    model_name: str = ""
-    config_hash: str = ""
-    tools: list[dict[str, Any]] = field(default_factory=list)
-    tool_ids: list[str] = field(default_factory=list)
-    out_path: Path = field(default_factory=lambda: Path("data/distilled/responses.jsonl"))
-    style_presets: dict[str, StylePreset] = field(default_factory=dict)
-    executor: ToolExecutor | None = None
+
+
+@dataclass
+class ChatSession:
+    config: ChatSessionConfig
+    state: ChatSessionState
+
+    @property
+    def session_id(self) -> str:
+        return self.state.session_id
+
+    @property
+    def columns(self) -> dict[str, ChatColumn]:
+        return self.state.columns
+
+    @property
+    def created_at(self) -> float:
+        return self.state.created_at
+
+    @property
+    def expires_at(self) -> float:
+        return self.state.expires_at
+
+    @property
+    def base_system_prompt(self) -> str:
+        return self.config.base_system_prompt
+
+    @property
+    def model_name(self) -> str:
+        return self.config.model_name
+
+    @property
+    def config_hash(self) -> str:
+        return self.config.config_hash
+
+    @property
+    def tools(self) -> list[dict[str, Any]]:
+        return list(self.config.tools)
+
+    @property
+    def tool_ids(self) -> list[str]:
+        return list(self.config.tool_ids)
+
+    @property
+    def out_path(self) -> Path:
+        return self.config.out_path
+
+    @property
+    def style_presets(self) -> dict[str, StylePreset]:
+        return self.config.style_presets
 
 
 class ChatSessionStore:
@@ -54,8 +107,9 @@ class ChatSessionStore:
         tools: list[dict[str, Any]],
         tool_ids: list[str],
         out_path: Path,
-        executor: ToolExecutor,
+        executor: ToolExecutor | None = None,
     ) -> ChatSession:
+        del executor  # executor は session に保持しない (DI 経由で渡す)
         self.purge_expired()
         now = time.monotonic()
         session_id = str(uuid.uuid4())
@@ -63,20 +117,22 @@ class ChatSessionStore:
             sid: ChatColumn(style_id=preset.style_id, label=preset.label)
             for sid, preset in sorted(styles.items())
         }
-        session = ChatSession(
+        config = ChatSessionConfig(
+            base_system_prompt=base_system_prompt,
+            model_name=model_name,
+            config_hash=config_hash,
+            tools=tuple(tools),
+            tool_ids=tuple(tool_ids),
+            out_path=out_path,
+            style_presets=dict(styles),
+        )
+        state = ChatSessionState(
             session_id=session_id,
             columns=columns,
             created_at=now,
             expires_at=now + self.TTL_SECONDS,
-            base_system_prompt=base_system_prompt,
-            model_name=model_name,
-            config_hash=config_hash,
-            tools=tools,
-            tool_ids=tool_ids,
-            out_path=out_path,
-            style_presets=dict(styles),
-            executor=executor,
         )
+        session = ChatSession(config=config, state=state)
         self._sessions[session_id] = session
         return session
 
