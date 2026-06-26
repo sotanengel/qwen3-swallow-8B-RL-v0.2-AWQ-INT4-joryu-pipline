@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
 import { OutputsHierarchyView } from "@/components/OutputsHierarchyView";
@@ -34,7 +34,17 @@ function formatStatus(r: DistilledRecord): string {
 }
 
 export default function OutputsPage() {
+  return (
+    <Suspense fallback={<p style={{ color: "var(--muted)" }}>出力一覧を読み込み中…</p>}>
+      <OutputsPageContent />
+    </Suspense>
+  );
+}
+
+function OutputsPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const initialCategory = searchParams.get("category") ?? "";
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -52,7 +62,7 @@ export default function OutputsPage() {
   const [query, setQuery] = useState("");
   const [searchMode, setSearchMode] = useState<SearchMode>("keyword");
   const [mode, setMode] = useState<"all" | "thinking" | "nothinking">("all");
-  const [category, setCategory] = useState("");
+  const [category, setCategory] = useState(initialCategory);
   const [page, setPage] = useState(0);
   const [rankedHits, setRankedHits] = useState<SearchHit[]>([]);
   const [rankedTotal, setRankedTotal] = useState(0);
