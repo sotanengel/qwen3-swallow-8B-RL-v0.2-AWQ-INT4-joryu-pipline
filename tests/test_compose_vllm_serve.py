@@ -21,7 +21,6 @@ VLLM_SERVE_ARGS = {
     "--kv-cache-dtype=fp8",
     "--enable-prefix-caching",
     "--max-num-seqs=1",
-    "--swap-space=4",
     "--enforce-eager",
     "--enable-auto-tool-choice",
     "--tool-call-parser=hermes",
