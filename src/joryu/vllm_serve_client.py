@@ -36,21 +36,23 @@ def build_openai_chat_request(
     tool_choice: dict[str, Any] | str | None = None,
     **sampling_overrides: Any,
 ) -> dict[str, Any]:
-    """OpenAI ``/v1/chat/completions`` 用リクエスト body を組み立てる。"""
-    extra_body: dict[str, Any] = {
-        "chat_template_kwargs": {"enable_thinking": enable_thinking},
-    }
+    """OpenAI ``/v1/chat/completions`` 用リクエスト body を組み立てる。
+
+    生 HTTP で送るため ``extra_body`` ラッパは使わない。
+    vllm serve は ``chat_template_kwargs`` / ``top_k`` / ``repetition_penalty`` を
+    リクエストボディの **トップレベル** で直接受け付ける (OpenAI 拡張)。
+    """
     payload: dict[str, Any] = {
         "model": model,
         "messages": messages,
+        "chat_template_kwargs": {"enable_thinking": enable_thinking},
     }
     for key in ("temperature", "top_p", "max_tokens"):
         if key in sampling_overrides:
             payload[key] = sampling_overrides[key]
     for key in ("top_k", "repetition_penalty"):
         if key in sampling_overrides:
-            extra_body[key] = sampling_overrides[key]
-    payload["extra_body"] = extra_body
+            payload[key] = sampling_overrides[key]
     if tools:
         payload["tools"] = tools
     if tool_choice is not None:
@@ -91,6 +93,15 @@ def _reconstruct_raw_completion(
     return content
 
 
+def _extract_reasoning_from_message(message: dict[str, Any]) -> str | None:
+    """OpenAI / vllm serve の reasoning フィールドを thinking 文字列として取り出す。"""
+    for key in ("reasoning_content", "reasoning"):
+        value = message.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
+
+
 def openai_response_to_chat_result(
     data: dict[str, Any],
     *,
@@ -107,8 +118,7 @@ def openai_response_to_chat_result(
     if not isinstance(content, str):
         content = str(content)
 
-    reasoning = message.get("reasoning_content")
-    reasoning_str = reasoning.strip() if isinstance(reasoning, str) and reasoning.strip() else None
+    reasoning_str = _extract_reasoning_from_message(message)
 
     openai_tool_calls = message.get("tool_calls") or []
     parsed_from_openai: list[ParsedToolCall] = []

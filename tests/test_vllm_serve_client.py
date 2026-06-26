@@ -68,8 +68,8 @@ def test_vllm_serve_client_posts_openai_chat_completions(openai_server: str) -> 
     assert _OpenAIHandler.last_body["messages"][0]["content"] == "hi"
     assert _OpenAIHandler.last_body["temperature"] == 0.2
     assert _OpenAIHandler.last_body["max_tokens"] == 128
-    extra = _OpenAIHandler.last_body.get("extra_body") or {}
-    assert extra.get("chat_template_kwargs") == {"enable_thinking": False}
+    assert _OpenAIHandler.last_body["chat_template_kwargs"] == {"enable_thinking": False}
+    assert "extra_body" not in _OpenAIHandler.last_body
 
 
 def test_vllm_serve_client_sends_tool_choice_and_tools(openai_server: str) -> None:
@@ -91,18 +91,60 @@ def test_vllm_serve_client_sends_tool_choice_and_tools(openai_server: str) -> No
     assert _OpenAIHandler.last_body["tool_choice"] == tool_choice
 
 
-def test_vllm_serve_client_sends_top_k_and_repetition_penalty_in_extra_body(
+def test_vllm_serve_client_sends_top_k_and_repetition_penalty_top_level(
     openai_server: str,
 ) -> None:
+    """vllm serve は OpenAI 拡張パラメータをトップレベルで受け付ける。"""
     client = VllmServeClient(openai_server, model="m")
     client.chat_via_template(
         [{"role": "user", "content": "q"}],
         top_k=20,
         repetition_penalty=1.0,
     )
-    extra = (_OpenAIHandler.last_body or {}).get("extra_body") or {}
-    assert extra.get("top_k") == 20
-    assert extra.get("repetition_penalty") == 1.0
+    body = _OpenAIHandler.last_body or {}
+    assert body.get("top_k") == 20
+    assert body.get("repetition_penalty") == 1.0
+    assert "extra_body" not in body
+
+
+def test_openai_response_to_chat_result_parses_reasoning_field() -> None:
+    """vllm serve (--reasoning-parser=qwen3) は reasoning_content ではなく reasoning を返す。"""
+    data = {
+        "choices": [
+            {
+                "message": {
+                    "role": "assistant",
+                    "content": "answer text",
+                    "reasoning": "qwen3 internal reasoning",
+                },
+                "finish_reason": "stop",
+            }
+        ],
+        "usage": {"prompt_tokens": 3, "completion_tokens": 2},
+    }
+    result = openai_response_to_chat_result(data, effective_max_tokens=64)
+    assert result.thinking == "qwen3 internal reasoning"
+    assert result.answer == "answer text"
+    assert "qwen3 internal reasoning" in (result.raw_completion or "")
+
+
+def test_openai_response_to_chat_result_prefers_reasoning_content() -> None:
+    data = {
+        "choices": [
+            {
+                "message": {
+                    "role": "assistant",
+                    "content": "answer",
+                    "reasoning_content": "preferred",
+                    "reasoning": "fallback",
+                },
+                "finish_reason": "stop",
+            }
+        ],
+        "usage": {},
+    }
+    result = openai_response_to_chat_result(data, effective_max_tokens=32)
+    assert result.thinking == "preferred"
 
 
 def test_openai_response_to_chat_result_parses_reasoning_content() -> None:
