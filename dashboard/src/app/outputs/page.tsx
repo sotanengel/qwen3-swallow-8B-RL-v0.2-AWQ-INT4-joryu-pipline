@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
 import { OutputsHierarchyView } from "@/components/OutputsHierarchyView";
 import { deleteAllOutputs, deleteOutput } from "@/lib/outputs";
@@ -281,11 +281,17 @@ export default function OutputsPage() {
       )}
 
       {loaded && !isSearchActive ? (
-        <OutputsHierarchyView
-          records={modeFiltered}
-          deletingId={deletingId}
-          onDeleteRecord={(record) => void onDeleteOne(record)}
-        />
+        <Suspense
+          fallback={
+            <p style={{ color: "var(--muted)", fontSize: "0.9rem" }}>フォルダ階層を読み込み中…</p>
+          }
+        >
+          <OutputsHierarchyView
+            records={modeFiltered}
+            deletingId={deletingId}
+            onDeleteRecord={(record) => void onDeleteOne(record)}
+          />
+        </Suspense>
       ) : null}
 
       {loaded && isSearchActive ? (

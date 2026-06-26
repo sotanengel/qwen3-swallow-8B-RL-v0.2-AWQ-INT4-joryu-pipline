@@ -1,14 +1,19 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useMemo } from "react";
 
 import { DistilledRecord, recordId, recordLooksTruncated, truncateText } from "@/lib/jsonl";
+import {
+  BROWSE_PAGE_SIZE,
+  buildBrowsePath,
+  browsePathsEqual,
+  parseBrowseParams,
+  resolveBrowseState,
+} from "@/lib/outputs-browse-url";
 import { buildOutputsTree } from "@/lib/outputs-tree";
 
-export const HIERARCHY_PAGE_SIZE = 25;
-
-export type BrowseLevel = "categories" | "styles" | "records";
+export { BROWSE_PAGE_SIZE as HIERARCHY_PAGE_SIZE };
 
 function formatTokens(r: DistilledRecord): string {
   const p = r.prompt_tokens;
@@ -39,63 +44,54 @@ export function OutputsHierarchyView({
   onDeleteRecord,
 }: OutputsHierarchyViewProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const tree = useMemo(() => buildOutputsTree(records), [records]);
-  const [level, setLevel] = useState<BrowseLevel>("categories");
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [selectedStyleId, setSelectedStyleId] = useState<string | null>(null);
-  const [page, setPage] = useState(0);
 
-  const selectedCatNode = tree.find((c) => c.category === selectedCategory);
-  const selectedStyleNode = selectedCatNode?.styles.find((s) => s.styleId === selectedStyleId);
+  const requested = useMemo(
+    () => parseBrowseParams(searchParams),
+    [searchParams],
+  );
 
-  useEffect(() => {
-    if (tree.length === 0) {
-      setLevel("categories");
-      setSelectedCategory(null);
-      setSelectedStyleId(null);
-      return;
-    }
-    if (level === "styles" || level === "records") {
-      if (!selectedCatNode) {
-        setLevel("categories");
-        setSelectedCategory(null);
-        setSelectedStyleId(null);
-        return;
-      }
-    }
-    if (level === "records" && !selectedStyleNode) {
-      setLevel("styles");
-      setSelectedStyleId(null);
-    }
-  }, [tree, level, selectedCatNode, selectedStyleNode]);
+  const resolved = useMemo(
+    () => resolveBrowseState(tree, requested),
+    [tree, requested],
+  );
 
-  const folderRecords = selectedStyleNode?.records ?? [];
-  const totalPages = Math.max(1, Math.ceil(folderRecords.length / HIERARCHY_PAGE_SIZE));
-  const pageRecords = folderRecords.slice(
-    page * HIERARCHY_PAGE_SIZE,
-    (page + 1) * HIERARCHY_PAGE_SIZE,
+  const { level, category: selectedCategory, styleId: selectedStyleId, page } = resolved;
+
+  const navigateBrowse = useCallback(
+    (state: { category: string | null; styleId: string | null; page: number }) => {
+      router.push(buildBrowsePath(state, searchParams));
+    },
+    [router, searchParams],
   );
 
   useEffect(() => {
-    setPage(0);
-  }, [level, selectedCategory, selectedStyleId]);
+    if (tree.length === 0) return;
+    if (!browsePathsEqual(requested, resolved.canonical)) {
+      router.replace(buildBrowsePath(resolved.canonical, searchParams));
+    }
+  }, [tree, requested, resolved, router, searchParams]);
+
+  const selectedCatNode = tree.find((c) => c.category === selectedCategory);
+  const selectedStyleNode = selectedCatNode?.styles.find((s) => s.styleId === selectedStyleId);
+  const folderRecords = selectedStyleNode?.records ?? [];
+  const totalPages = Math.max(1, Math.ceil(folderRecords.length / BROWSE_PAGE_SIZE));
+  const pageRecords = folderRecords.slice(
+    page * BROWSE_PAGE_SIZE,
+    (page + 1) * BROWSE_PAGE_SIZE,
+  );
 
   const goToCategories = () => {
-    setLevel("categories");
-    setSelectedCategory(null);
-    setSelectedStyleId(null);
+    navigateBrowse({ category: null, styleId: null, page: 0 });
   };
 
   const goToStyles = (category: string) => {
-    setLevel("styles");
-    setSelectedCategory(category);
-    setSelectedStyleId(null);
+    navigateBrowse({ category, styleId: null, page: 0 });
   };
 
   const goToRecords = (category: string, styleId: string) => {
-    setLevel("records");
-    setSelectedCategory(category);
-    setSelectedStyleId(styleId);
+    navigateBrowse({ category, styleId, page: 0 });
   };
 
   if (tree.length === 0) {
@@ -269,16 +265,31 @@ export function OutputsHierarchyView({
         ) : null}
       </div>
 
-      {level === "records" && selectedStyleNode && folderRecords.length > HIERARCHY_PAGE_SIZE ? (
+      {level === "records" && selectedStyleNode && folderRecords.length > BROWSE_PAGE_SIZE ? (
         <div style={{ display: "flex", gap: "0.5rem", marginTop: "1rem" }}>
-          <button onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0}>
+          <button
+            onClick={() =>
+              navigateBrowse({
+                category: selectedCategory!,
+                styleId: selectedStyleId!,
+                page: Math.max(0, page - 1),
+              })
+            }
+            disabled={page === 0}
+          >
             ‹ 前へ
           </button>
           <span style={{ color: "var(--muted)", fontSize: "0.9rem", alignSelf: "center" }}>
             ページ {page + 1} / {totalPages}
           </span>
           <button
-            onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+            onClick={() =>
+              navigateBrowse({
+                category: selectedCategory!,
+                styleId: selectedStyleId!,
+                page: Math.min(totalPages - 1, page + 1),
+              })
+            }
             disabled={page >= totalPages - 1}
           >
             次へ ›
