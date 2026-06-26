@@ -5,7 +5,11 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from joryu.tool_calls import ParsedToolCall
+from joryu.tool_calls import (
+    ParsedToolCall,
+    is_skipped_empty_tool_call_hint,
+    raw_has_recoverable_unparsed_tool_call,
+)
 from joryu.vllm_client import ChatResult
 
 TOOL_INTENT_RE = re.compile(
@@ -68,9 +72,20 @@ def needs_tool_call_recovery(
     )
     if thinking_plans_tool_use(combined):
         return True
-    if chat.suspected_unparsed_tool_calls:
+    recoverable_suspected = [
+        hint
+        for hint in chat.suspected_unparsed_tool_calls
+        if not is_skipped_empty_tool_call_hint(hint)
+    ]
+    if recoverable_suspected:
         return True
-    if raw_has_unparsed_tool_call(chat.raw_completion):
+    from joryu.vllm_client import extract_known_tool_names
+
+    known = extract_known_tool_names(tools)
+    if raw_has_recoverable_unparsed_tool_call(
+        chat.raw_completion,
+        known_tool_names=known or None,
+    ):
         return True
     return False
 

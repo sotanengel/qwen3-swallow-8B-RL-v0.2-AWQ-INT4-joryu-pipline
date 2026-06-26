@@ -206,6 +206,31 @@ def test_tool_loop_turn_persists_raw_completion(tmp_path: Path) -> None:
         assert "raw_completion" in turn
 
 
+def test_tool_loop_skips_empty_tool_call_tag(tmp_path: Path) -> None:
+    """空 <tool_call>{}</tool_call> は tool_call として扱わずループを終了する。"""
+    bank = tmp_path / "bank.jsonl"
+    _write_bank(bank, [{"prompt": "P", "tool_ids": ["search"]}])
+    out = tmp_path / "out.jsonl"
+    cfg = Config()
+    cfg.distill.tool_loop = True
+    turn1 = "<tool_call>{}</tool_call>\nあとがき"
+    client = FakeVllmClient(answer=turn1, thinking=None)
+    executor = StubToolExecutor({"search": "ok"})
+    run_distill(
+        cfg,
+        bank_path=bank,
+        out_path=out,
+        client=client,
+        executor=executor,
+        tool_loop=True,
+    )
+    assert len(client.calls) == 1
+    rec = read_jsonl(out)[0]
+    assert rec["tool_calls"] == []
+    assert rec["turns"][0]["tool_calls"] == []
+    assert rec["answer"] == "あとがき"
+
+
 def test_tool_loop_multiple_tool_calls_one_assistant_message(tmp_path: Path) -> None:
     bank = tmp_path / "bank.jsonl"
     _write_bank(bank, [{"prompt": "調べて計算", "tool_ids": ["search", "calc"]}])

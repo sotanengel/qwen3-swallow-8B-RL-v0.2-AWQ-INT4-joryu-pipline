@@ -28,13 +28,49 @@ def test_extract_two_tool_calls() -> None:
     assert cleaned == ""
 
 
-def test_malformed_json_preserved() -> None:
+def test_malformed_json_not_recorded_as_tool_call() -> None:
+    """parse 失敗の <tool_call> は calls に入れず diagnostics で検出する。"""
     text = "<tool_call>{not json}</tool_call>"
     calls, cleaned = extract_tool_calls(text)
-    assert len(calls) == 1
-    assert calls[0].name == "<malformed>"
-    assert calls[0].arguments == {}
-    assert calls[0].raw == "{not json}"
+    assert calls == []
+    assert cleaned == ""
+    _calls, _cleaned, diagnostics = extract_tool_calls_with_diagnostics(text)
+    hints = diagnostics["suspected_unparsed_tool_calls"]
+    assert len(hints) == 1
+    assert "<tool_call>" in hints[0]
+    assert "{not json}" in hints[0]
+
+
+def test_empty_tool_call_tag_skipped() -> None:
+    text = "<tool_call>{}</tool_call>"
+    calls, cleaned = extract_tool_calls(text)
+    assert calls == []
+    assert cleaned == ""
+    _calls, _cleaned, diagnostics = extract_tool_calls_with_diagnostics(text)
+    hints = diagnostics["suspected_unparsed_tool_calls"]
+    assert len(hints) == 1
+    assert "<tool_call>" in hints[0]
+
+
+def test_tool_call_tag_whitespace_only_skipped() -> None:
+    text = "<tool_call>{\n \n \n}</tool_call>"
+    calls, cleaned = extract_tool_calls(text)
+    assert calls == []
+    assert cleaned == ""
+
+
+def test_tool_call_tag_without_name_field_skipped() -> None:
+    text = '<tool_call>{"foo":"bar"}</tool_call>'
+    calls, cleaned = extract_tool_calls(text)
+    assert calls == []
+    assert cleaned == ""
+
+
+def test_tool_call_tag_with_name_but_no_arguments_skipped() -> None:
+    text = '<tool_call>{"name":"search"}</tool_call>'
+    calls, cleaned = extract_tool_calls(text)
+    assert calls == []
+    assert cleaned == ""
 
 
 def test_text_after_tool_call_remains() -> None:

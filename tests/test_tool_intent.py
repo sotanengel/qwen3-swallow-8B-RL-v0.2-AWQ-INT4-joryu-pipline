@@ -71,3 +71,18 @@ def test_needs_tool_call_recovery_raw_tool_call_tag() -> None:
     )
     tools = [{"type": "function", "function": {"name": "search", "parameters": {}}}]
     assert needs_tool_call_recovery(chat, tools=tools)
+
+
+def test_needs_tool_call_recovery_false_for_empty_tool_call_tag() -> None:
+    chat = ChatResult(
+        thinking=None,
+        answer="あとがき",
+        finish_reason="stop",
+        prompt_tokens=1,
+        completion_tokens=1,
+        tool_calls=(),
+        raw_completion="<tool_call>{}</tool_call>\nあとがき",
+        suspected_unparsed_tool_calls=("<tool_call>{}</tool_call>",),
+    )
+    tools = [{"type": "function", "function": {"name": "search", "parameters": {}}}]
+    assert not needs_tool_call_recovery(chat, tools=tools)
