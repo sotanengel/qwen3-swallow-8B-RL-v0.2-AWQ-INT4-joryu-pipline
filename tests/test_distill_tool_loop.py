@@ -115,7 +115,8 @@ def test_no_tool_call_ends_immediately(tmp_path: Path) -> None:
     assert len(client.calls) == 1
 
 
-def test_tool_loop_second_call_uses_qwen3_message_format(tmp_path: Path) -> None:
+def test_tool_loop_second_call_uses_openai_message_format(tmp_path: Path) -> None:
+    """vllm serve は assistant.tool_calls[].{id,type=function} と tool.tool_call_id を要求する。"""
     bank = tmp_path / "bank.jsonl"
     _write_bank(bank, [{"prompt": "計算", "tool_ids": ["calc"]}])
     out = tmp_path / "out.jsonl"
@@ -140,10 +141,14 @@ def test_tool_loop_second_call_uses_qwen3_message_format(tmp_path: Path) -> None
     assert len(assistant_msgs) == 1
     tool_turn_assistant = assistant_msgs[0]
     assert "tool_calls" in tool_turn_assistant
-    assert tool_turn_assistant["tool_calls"][0]["function"]["name"] == "calc"
+    tc = tool_turn_assistant["tool_calls"][0]
+    assert tc["type"] == "function"
+    assert tc["function"]["name"] == "calc"
+    assert isinstance(tc.get("id"), str) and tc["id"].startswith("call_")
     assert len(tool_msgs) == 1
     assert tool_msgs[0]["name"] == "calc"
     assert tool_msgs[0]["content"] == "5"
+    assert tool_msgs[0]["tool_call_id"] == tc["id"]
 
 
 def test_tool_loop_runs_bare_json_tool_call(tmp_path: Path) -> None:
@@ -226,7 +231,13 @@ def test_tool_loop_multiple_tool_calls_one_assistant_message(tmp_path: Path) -> 
         m for m in second_msgs if m.get("role") == "assistant" and m.get("tool_calls")
     ]
     assert len(assistant_with_tools) == 1
-    assert len(assistant_with_tools[0]["tool_calls"]) == 2
+    tool_calls = assistant_with_tools[0]["tool_calls"]
+    assert len(tool_calls) == 2
+    for tc in tool_calls:
+        assert tc["type"] == "function"
+        assert isinstance(tc["id"], str) and tc["id"].startswith("call_")
     tool_msgs = [m for m in second_msgs if m.get("role") == "tool"]
     assert len(tool_msgs) == 2
     assert {m["name"] for m in tool_msgs} == {"search", "calc"}
+    expected_ids = {tc["id"] for tc in tool_calls}
+    assert {m["tool_call_id"] for m in tool_msgs} == expected_ids

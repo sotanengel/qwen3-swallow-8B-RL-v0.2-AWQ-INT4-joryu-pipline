@@ -10,6 +10,7 @@ import json
 import logging
 import sys
 import time
+import uuid
 from collections.abc import Callable
 from dataclasses import asdict, replace
 from datetime import UTC, datetime
@@ -126,16 +127,33 @@ def _record_from_chat(
     )
 
 
-def _tool_calls_to_openai(tool_calls: tuple[ParsedToolCall, ...]) -> list[dict[str, Any]]:
-    """Qwen3 chat_template 互換の assistant.tool_calls 配列を組み立てる。"""
+def _generate_tool_call_id() -> str:
+    """OpenAI 仕様の tool_call id (``call_<hex>``)。"""
+    return f"call_{uuid.uuid4().hex[:24]}"
+
+
+def _tool_calls_to_openai(
+    tool_calls: tuple[ParsedToolCall, ...],
+    *,
+    ids: list[str] | None = None,
+) -> list[dict[str, Any]]:
+    """OpenAI 仕様の assistant.tool_calls 配列を組み立てる。
+
+    vllm serve の OpenAI 互換サーバは ``id`` / ``type=function`` を必須とする
+    (Pydantic validation で 400 を返す)。
+    """
+    if ids is None:
+        ids = [_generate_tool_call_id() for _ in tool_calls]
     return [
         {
+            "id": call_id,
+            "type": "function",
             "function": {
                 "name": call.name,
                 "arguments": json.dumps(call.arguments, ensure_ascii=False),
-            }
+            },
         }
-        for call in tool_calls
+        for call_id, call in zip(ids, tool_calls, strict=True)
     ]
 
 
@@ -146,17 +164,28 @@ def _append_tool_turn_messages(
     tool_calls: tuple[ParsedToolCall, ...],
     tool_results: list[tuple[str, str]],
 ) -> list[dict[str, Any]]:
-    """assistant (tool_calls 付き) + tool 応答を working_messages に追記する。"""
+    """assistant (tool_calls 付き) + tool 応答を working_messages に追記する。
+
+    OpenAI 仕様: ``tool`` role には対応する ``tool_call_id`` が必須。
+    """
+    ids = [_generate_tool_call_id() for _ in tool_calls]
     updated: list[dict[str, Any]] = [
         *working_messages,
         {
             "role": "assistant",
             "content": assistant_content,
-            "tool_calls": _tool_calls_to_openai(tool_calls),
+            "tool_calls": _tool_calls_to_openai(tool_calls, ids=ids),
         },
     ]
-    for name, content in tool_results:
-        updated.append({"role": "tool", "content": content, "name": name})
+    for call_id, (name, content) in zip(ids, tool_results, strict=True):
+        updated.append(
+            {
+                "role": "tool",
+                "tool_call_id": call_id,
+                "name": name,
+                "content": content,
+            }
+        )
     return updated
 
 

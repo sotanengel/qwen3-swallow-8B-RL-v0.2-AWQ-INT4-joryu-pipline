@@ -36,21 +36,23 @@ def build_openai_chat_request(
     tool_choice: dict[str, Any] | str | None = None,
     **sampling_overrides: Any,
 ) -> dict[str, Any]:
-    """OpenAI ``/v1/chat/completions`` 用リクエスト body を組み立てる。"""
-    extra_body: dict[str, Any] = {
-        "chat_template_kwargs": {"enable_thinking": enable_thinking},
-    }
+    """OpenAI ``/v1/chat/completions`` 用リクエスト body を組み立てる。
+
+    生 HTTP で送るため ``extra_body`` ラッパは使わない。
+    vllm serve は ``chat_template_kwargs`` / ``top_k`` / ``repetition_penalty`` を
+    リクエストボディの **トップレベル** で直接受け付ける (OpenAI 拡張)。
+    """
     payload: dict[str, Any] = {
         "model": model,
         "messages": messages,
+        "chat_template_kwargs": {"enable_thinking": enable_thinking},
     }
     for key in ("temperature", "top_p", "max_tokens"):
         if key in sampling_overrides:
             payload[key] = sampling_overrides[key]
     for key in ("top_k", "repetition_penalty"):
         if key in sampling_overrides:
-            extra_body[key] = sampling_overrides[key]
-    payload["extra_body"] = extra_body
+            payload[key] = sampling_overrides[key]
     if tools:
         payload["tools"] = tools
     if tool_choice is not None:
