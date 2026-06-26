@@ -70,5 +70,6 @@ def test_resolve_vllm_serve_url_prefers_env(monkeypatch: pytest.MonkeyPatch) -> 
 
 def test_resolve_chat_client_uses_http_when_url_set(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("JORYU_VLLM_URL", "http://localhost:8100")
-    client = resolve_chat_client(ModelConfig(), VllmConfig())
+    cfg = VllmConfig(backend="joryu-llm-serve")
+    client = resolve_chat_client(ModelConfig(), cfg)
     assert isinstance(client, VllmHttpClient)

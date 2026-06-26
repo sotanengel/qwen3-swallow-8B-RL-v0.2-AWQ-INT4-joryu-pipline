@@ -33,6 +33,8 @@ __all__ = [
     "VllmClient",
     "VllmError",
     "VllmHttpClient",
+    "DEFAULT_LOCAL_JORYU_URL",
+    "DEFAULT_LOCAL_VLLM_URL",
     "build_chat_template_kwargs",
     "compute_effective_max_tokens",
     "extract_known_tool_names",
@@ -45,6 +47,9 @@ logger = logging.getLogger(__name__)
 _THINK_RE = re.compile(r"<think>(.*?)</think>", re.DOTALL)
 _PROMPT_TOKEN_MARGIN = 32
 _MIN_EFFECTIVE_MAX_TOKENS = 64
+
+DEFAULT_LOCAL_VLLM_URL = "http://localhost:8100"
+DEFAULT_LOCAL_JORYU_URL = "http://localhost:8100"
 
 os.environ.setdefault("VLLM_USE_DEEP_GEMM", "0")
 os.environ.setdefault("VLLM_DEEP_GEMM_WARMUP", "skip")
@@ -411,11 +416,19 @@ def resolve_vllm_serve_url(vllm_cfg: VllmConfig) -> str | None:
 
 
 def resolve_chat_client(model_cfg: ModelConfig, vllm_cfg: VllmConfig) -> SupportsChat:
-    """HTTP デーモン URL があれば VllmHttpClient、未設定なら in-process VllmClient。"""
+    """backend 設定に応じて HTTP / in-process クライアントを返す。"""
+    backend = vllm_cfg.backend
+    if backend == "inproc":
+        return VllmClient.from_config(model_cfg, vllm_cfg)
+
     url = resolve_vllm_serve_url(vllm_cfg)
-    if url:
-        return VllmHttpClient(url)
-    return VllmClient.from_config(model_cfg, vllm_cfg)
+    if backend == "vllm-serve":
+        from joryu.vllm_serve_client import VllmServeClient
+
+        return VllmServeClient(url or DEFAULT_LOCAL_VLLM_URL, model=model_cfg.name)
+    if backend == "joryu-llm-serve":
+        return VllmHttpClient(url or DEFAULT_LOCAL_JORYU_URL)
+    raise VllmError(f"unknown vllm.backend: {backend!r}")
 
 
 class VllmHttpClient:

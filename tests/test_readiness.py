@@ -58,14 +58,23 @@ def test_wait_for_http_ok_returns_false_on_timeout() -> None:
     )
 
 
-def test_wait_for_vllm_daemon_checks_model_loaded() -> None:
+def test_wait_for_vllm_daemon_accepts_status_ok_without_model_loaded() -> None:
     calls = {"n": 0}
 
     def _urlopen(url: str, timeout: int = 0) -> _FakeResponse:
         calls["n"] += 1
         if calls["n"] < 2:
-            return _FakeResponse(503, json.dumps({"model_loaded": False}).encode())
-        return _FakeResponse(200, json.dumps({"status": "ok", "model_loaded": True}).encode())
+            return _FakeResponse(503, json.dumps({"status": "loading"}).encode())
+        return _FakeResponse(200, json.dumps({"status": "ok"}).encode())
+
+    assert wait_for_vllm_daemon(urlopen_fn=_urlopen, poll_interval_s=0, timeout_s=1)
+
+
+def test_wait_for_vllm_daemon_accepts_joryu_model_loaded_response() -> None:
+    body = json.dumps({"status": "ok", "model_loaded": True}).encode()
+
+    def _urlopen(url: str, timeout: int = 0) -> _FakeResponse:
+        return _FakeResponse(200, body)
 
     assert wait_for_vllm_daemon(urlopen_fn=_urlopen, poll_interval_s=0, timeout_s=1)
 
