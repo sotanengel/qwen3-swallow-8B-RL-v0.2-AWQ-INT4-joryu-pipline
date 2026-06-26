@@ -47,8 +47,8 @@ services:
       - --gpu-memory-utilization=0.85
       - --kv-cache-dtype=fp8
       - --enable-prefix-caching
+      # swap_space は in-process (VllmClient) / config.yaml のみ。vllm serve CLI 非対応。
       - --max-num-seqs=1
-      - --swap-space=4
       - --enforce-eager
       - --enable-auto-tool-choice
       - --tool-call-parser=hermes
