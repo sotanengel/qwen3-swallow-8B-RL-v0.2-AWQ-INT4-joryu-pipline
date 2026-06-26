@@ -50,6 +50,11 @@ class VllmConfig:
     # 常駐 LLM デーモンの HTTP ポート / クライアント接続 URL。
     serve_port: int = 8100
     serve_url: str = ""
+    # 推論バックエンド:
+    #   "vllm-serve"      : 本物 vllm serve (OpenAI 互換 /v1) — 既定
+    #   "joryu-llm-serve" : 独自 FastAPI ラッパ (/v1/chat) — 後方互換
+    #   "inproc"          : in-process LLM.chat() (vllm 直 import)
+    backend: Literal["vllm-serve", "joryu-llm-serve", "inproc"] = "vllm-serve"
 
 
 # config_hash (下流 SFT 再現性) から除外する vllm キー。

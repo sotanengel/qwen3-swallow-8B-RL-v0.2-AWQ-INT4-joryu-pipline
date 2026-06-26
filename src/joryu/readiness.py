@@ -79,7 +79,7 @@ def wait_for_vllm_daemon(**kwargs: Any) -> bool:
     kwargs.setdefault("timeout_s", VLLM_READY_TIMEOUT_S)
     return wait_for_http_json(
         VLLM_HEALTH_URL,
-        lambda data: data.get("status") == "ok" and data.get("model_loaded") is True,
+        lambda data: data.get("status") == "ok",
         **kwargs,
     )
 
@@ -102,12 +102,12 @@ def resolve_vllm_health_url() -> str:
 
 
 def is_vllm_daemon_ready(**kwargs: Any) -> bool:
-    """vLLM デーモンが model_loaded まで完了しているか (1 回 GET)。"""
+    """vLLM デーモンが ready か (1 回 GET)。vllm serve / joryu-llm-serve 両対応。"""
     url = kwargs.pop("url", None) or resolve_vllm_health_url()
     urlopen_fn = kwargs.pop("urlopen_fn", None)
 
     def _check(data: dict[str, Any]) -> bool:
-        return data.get("status") == "ok" and data.get("model_loaded") is True
+        return data.get("status") == "ok"
 
     try:
         opener = urlopen_fn or urllib.request.urlopen
