@@ -31,10 +31,9 @@ vllm:
   max_num_seqs: 1
   # KV を CPU 側にスピルさせる退避領域 (GiB)。0 で無効。
   swap_space_gib: 4
-  # 常駐 LLM デーモン。Compose では api に JORYU_VLLM_URL を注入。
-  # backend: 推論クライアント種別 (vllm-serve | joryu-llm-serve | inproc)
-  #   既定は vllm-serve。compose が joryu-llm-serve の間は下記で明示。
-  backend: "joryu-llm-serve"
+  # 常駐 LLM デーモン (vllm serve OpenAI 互換)。Compose では api に JORYU_VLLM_URL を注入。
+  # backend: vllm-serve (既定) | joryu-llm-serve (独自ラッパ) | inproc
+  backend: "vllm-serve"
   serve_port: 8100
   serve_url: ""
 
