@@ -8,6 +8,8 @@ import { buildOutputsTree } from "@/lib/outputs-tree";
 
 export const HIERARCHY_PAGE_SIZE = 25;
 
+export type BrowseLevel = "categories" | "styles" | "records";
+
 function formatTokens(r: DistilledRecord): string {
   const p = r.prompt_tokens;
   const c = r.completion_tokens;
@@ -38,32 +40,35 @@ export function OutputsHierarchyView({
 }: OutputsHierarchyViewProps) {
   const router = useRouter();
   const tree = useMemo(() => buildOutputsTree(records), [records]);
+  const [level, setLevel] = useState<BrowseLevel>("categories");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedStyleId, setSelectedStyleId] = useState<string | null>(null);
   const [page, setPage] = useState(0);
 
+  const selectedCatNode = tree.find((c) => c.category === selectedCategory);
+  const selectedStyleNode = selectedCatNode?.styles.find((s) => s.styleId === selectedStyleId);
+
   useEffect(() => {
     if (tree.length === 0) {
+      setLevel("categories");
       setSelectedCategory(null);
       setSelectedStyleId(null);
       return;
     }
-    const catExists = tree.some((c) => c.category === selectedCategory);
-    const category = catExists ? selectedCategory! : tree[0].category;
-    if (category !== selectedCategory) setSelectedCategory(category);
-
-    const catNode = tree.find((c) => c.category === category);
-    if (!catNode || catNode.styles.length === 0) {
-      setSelectedStyleId(null);
-      return;
+    if (level === "styles" || level === "records") {
+      if (!selectedCatNode) {
+        setLevel("categories");
+        setSelectedCategory(null);
+        setSelectedStyleId(null);
+        return;
+      }
     }
-    const styleExists = catNode.styles.some((s) => s.styleId === selectedStyleId);
-    const styleId = styleExists ? selectedStyleId! : catNode.styles[0].styleId;
-    if (styleId !== selectedStyleId) setSelectedStyleId(styleId);
-  }, [tree, selectedCategory, selectedStyleId]);
+    if (level === "records" && !selectedStyleNode) {
+      setLevel("styles");
+      setSelectedStyleId(null);
+    }
+  }, [tree, level, selectedCatNode, selectedStyleNode]);
 
-  const selectedCatNode = tree.find((c) => c.category === selectedCategory);
-  const selectedStyleNode = selectedCatNode?.styles.find((s) => s.styleId === selectedStyleId);
   const folderRecords = selectedStyleNode?.records ?? [];
   const totalPages = Math.max(1, Math.ceil(folderRecords.length / HIERARCHY_PAGE_SIZE));
   const pageRecords = folderRecords.slice(
@@ -73,51 +78,104 @@ export function OutputsHierarchyView({
 
   useEffect(() => {
     setPage(0);
-  }, [selectedCategory, selectedStyleId]);
+  }, [level, selectedCategory, selectedStyleId]);
+
+  const goToCategories = () => {
+    setLevel("categories");
+    setSelectedCategory(null);
+    setSelectedStyleId(null);
+  };
+
+  const goToStyles = (category: string) => {
+    setLevel("styles");
+    setSelectedCategory(category);
+    setSelectedStyleId(null);
+  };
+
+  const goToRecords = (category: string, styleId: string) => {
+    setLevel("records");
+    setSelectedCategory(category);
+    setSelectedStyleId(styleId);
+  };
 
   if (tree.length === 0) {
-    return (
-      <p style={{ color: "var(--muted)" }}>表示する出力がありません。</p>
-    );
+    return <p style={{ color: "var(--muted)" }}>表示する出力がありません。</p>;
   }
 
   return (
     <>
-      <div className="outputs-hierarchy">
-        <div className="outputs-hierarchy-col">
-          <div className="outputs-hierarchy-col-header">category</div>
-          <table>
-            <thead>
-              <tr>
-                <th>名前</th>
-                <th>件数</th>
-                <th>最新</th>
-                <th>trunc</th>
-              </tr>
-            </thead>
-            <tbody>
-              {tree.map((cat) => (
-                <tr
-                  key={cat.category}
-                  className={`outputs-hierarchy-row${cat.category === selectedCategory ? " row-selected" : ""}`}
-                  onClick={() => setSelectedCategory(cat.category)}
-                >
-                  <td>
-                    <span className="outputs-hierarchy-folder-icon" aria-hidden="true" />
-                    {cat.category}
-                  </td>
-                  <td>{cat.count}</td>
-                  <td>{formatLatest(cat.latestCreatedAt)}</td>
-                  <td>{cat.truncatedCount > 0 ? cat.truncatedCount : "-"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      <nav className="outputs-breadcrumb" aria-label="フォルダ階層">
+        <button type="button" className="outputs-breadcrumb-link" onClick={goToCategories}>
+          出力一覧
+        </button>
+        {selectedCategory ? (
+          <>
+            <span className="outputs-breadcrumb-sep" aria-hidden="true">
+              ›
+            </span>
+            <button
+              type="button"
+              className={`outputs-breadcrumb-link${level === "styles" ? " is-current" : ""}`}
+              onClick={() => goToStyles(selectedCategory)}
+              aria-current={level === "styles" ? "page" : undefined}
+            >
+              {selectedCategory}
+            </button>
+          </>
+        ) : null}
+        {selectedCategory && selectedStyleId ? (
+          <>
+            <span className="outputs-breadcrumb-sep" aria-hidden="true">
+              ›
+            </span>
+            <span className="outputs-breadcrumb-current" aria-current="page">
+              {selectedStyleId}
+            </span>
+          </>
+        ) : null}
+      </nav>
+
+      <div className="outputs-folder-panel">
+        <div className="outputs-folder-header">
+          {level === "categories" ? "category" : null}
+          {level === "styles" ? "style_id" : null}
+          {level === "records" ? "records" : null}
         </div>
 
-        <div className="outputs-hierarchy-col">
-          <div className="outputs-hierarchy-col-header">style_id</div>
-          {selectedCatNode ? (
+        {level === "categories" ? (
+          <div className="outputs-table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>名前</th>
+                  <th>件数</th>
+                  <th>最新</th>
+                  <th>trunc</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tree.map((cat) => (
+                  <tr
+                    key={cat.category}
+                    className="outputs-hierarchy-row"
+                    onClick={() => goToStyles(cat.category)}
+                  >
+                    <td>
+                      <span className="outputs-hierarchy-folder-icon" aria-hidden="true" />
+                      {cat.category}
+                    </td>
+                    <td>{cat.count}</td>
+                    <td>{formatLatest(cat.latestCreatedAt)}</td>
+                    <td>{cat.truncatedCount > 0 ? cat.truncatedCount : "-"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
+
+        {level === "styles" && selectedCatNode ? (
+          <div className="outputs-table-wrap">
             <table>
               <thead>
                 <tr>
@@ -131,8 +189,8 @@ export function OutputsHierarchyView({
                 {selectedCatNode.styles.map((style) => (
                   <tr
                     key={style.styleId}
-                    className={`outputs-hierarchy-row${style.styleId === selectedStyleId ? " row-selected" : ""}`}
-                    onClick={() => setSelectedStyleId(style.styleId)}
+                    className="outputs-hierarchy-row"
+                    onClick={() => goToRecords(selectedCategory!, style.styleId)}
                   >
                     <td>
                       <span className="outputs-hierarchy-folder-icon" aria-hidden="true" />
@@ -145,87 +203,73 @@ export function OutputsHierarchyView({
                 ))}
               </tbody>
             </table>
-          ) : (
-            <p className="outputs-hierarchy-empty">category を選択してください</p>
-          )}
-        </div>
-
-        <div className="outputs-hierarchy-col outputs-hierarchy-col-records">
-          <div className="outputs-hierarchy-col-header">
-            records
-            {selectedStyleNode ? (
-              <span className="outputs-hierarchy-col-sub">
-                {selectedCategory} / {selectedStyleNode.styleId} — {folderRecords.length} 件
-              </span>
-            ) : null}
           </div>
-          {selectedStyleNode ? (
-            <div className="outputs-table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>mode</th>
-                    <th>model</th>
-                    <th>prompt</th>
-                    <th>answer</th>
-                    <th>tokens</th>
-                    <th>status</th>
-                    <th>created_at</th>
-                    <th>操作</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {pageRecords.map((r) => {
-                    const id = recordId(r);
-                    return (
-                      <tr
-                        key={id}
-                        className="output-list-row"
-                        onClick={() => router.push(`/outputs/${id}`)}
-                      >
-                        <td style={{ verticalAlign: "top" }}>{r.mode ?? ""}</td>
-                        <td style={{ verticalAlign: "top" }}>{r.model ?? "-"}</td>
-                        <td>{truncateText(r.prompt, 80)}</td>
-                        <td>{truncateText(r.answer, 60)}</td>
-                        <td style={{ verticalAlign: "top", whiteSpace: "nowrap" }}>
-                          {formatTokens(r)}
-                        </td>
-                        <td style={{ verticalAlign: "top" }}>
-                          {formatStatus(r) === "truncated" ? (
-                            <span className="badge-truncated">truncated</span>
-                          ) : (
-                            formatStatus(r)
-                          )}
-                        </td>
-                        <td style={{ verticalAlign: "top", whiteSpace: "nowrap" }}>
-                          {r.created_at ?? "-"}
-                        </td>
-                        <td style={{ verticalAlign: "top" }}>
-                          <button
-                            type="button"
-                            className="danger-btn"
-                            disabled={deletingId === id}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              onDeleteRecord(r);
-                            }}
-                          >
-                            {deletingId === id ? "削除中…" : "削除"}
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <p className="outputs-hierarchy-empty">style_id を選択してください</p>
-          )}
-        </div>
+        ) : null}
+
+        {level === "records" && selectedStyleNode ? (
+          <div className="outputs-table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>mode</th>
+                  <th>model</th>
+                  <th>prompt</th>
+                  <th>answer</th>
+                  <th>tokens</th>
+                  <th>status</th>
+                  <th>created_at</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pageRecords.map((r) => {
+                  const id = recordId(r);
+                  return (
+                    <tr
+                      key={id}
+                      className="output-list-row"
+                      onClick={() => router.push(`/outputs/${id}`)}
+                    >
+                      <td style={{ verticalAlign: "top" }}>{r.mode ?? ""}</td>
+                      <td style={{ verticalAlign: "top" }}>{r.model ?? "-"}</td>
+                      <td>{truncateText(r.prompt, 80)}</td>
+                      <td>{truncateText(r.answer, 60)}</td>
+                      <td style={{ verticalAlign: "top", whiteSpace: "nowrap" }}>
+                        {formatTokens(r)}
+                      </td>
+                      <td style={{ verticalAlign: "top" }}>
+                        {formatStatus(r) === "truncated" ? (
+                          <span className="badge-truncated">truncated</span>
+                        ) : (
+                          formatStatus(r)
+                        )}
+                      </td>
+                      <td style={{ verticalAlign: "top", whiteSpace: "nowrap" }}>
+                        {r.created_at ?? "-"}
+                      </td>
+                      <td style={{ verticalAlign: "top" }}>
+                        <button
+                          type="button"
+                          className="danger-btn"
+                          disabled={deletingId === id}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onDeleteRecord(r);
+                          }}
+                        >
+                          {deletingId === id ? "削除中…" : "削除"}
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
       </div>
 
-      {selectedStyleNode && folderRecords.length > HIERARCHY_PAGE_SIZE ? (
+      {level === "records" && selectedStyleNode && folderRecords.length > HIERARCHY_PAGE_SIZE ? (
         <div style={{ display: "flex", gap: "0.5rem", marginTop: "1rem" }}>
           <button onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0}>
             ‹ 前へ

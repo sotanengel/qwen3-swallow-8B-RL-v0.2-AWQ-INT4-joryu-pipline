@@ -276,7 +276,7 @@ export default function OutputsPage() {
         </p>
       ) : (
         <p style={{ color: "var(--muted)", fontSize: "0.9rem" }}>
-          全 {modeFiltered.length.toLocaleString()} 件 — category → style_id → records
+          全 {modeFiltered.length.toLocaleString()} 件 — フォルダを開いて閲覧
         </p>
       )}
 

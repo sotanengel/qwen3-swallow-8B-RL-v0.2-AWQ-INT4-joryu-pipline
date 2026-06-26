@@ -428,34 +428,14 @@ pre.snippet {
   color: var(--accent);
 }
 
-.outputs-hierarchy {
-  display: flex;
-  gap: 0;
+.outputs-folder-panel {
   border: 1px solid var(--border);
   border-radius: 8px;
-  overflow-x: auto;
   background: var(--surface);
-  min-height: 320px;
+  overflow: hidden;
 }
 
-.outputs-hierarchy-col {
-  flex: 0 0 280px;
-  min-width: 240px;
-  border-right: 1px solid var(--border);
-  overflow-y: auto;
-  max-height: 70vh;
-}
-
-.outputs-hierarchy-col-records {
-  flex: 1 1 480px;
-  min-width: 360px;
-}
-
-.outputs-hierarchy-col:last-child {
-  border-right: none;
-}
-
-.outputs-hierarchy-col-header {
+.outputs-folder-header {
   padding: 0.6rem 0.75rem;
   font-size: 0.8rem;
   font-weight: 600;
@@ -464,18 +444,53 @@ pre.snippet {
   letter-spacing: 0.04em;
   border-bottom: 1px solid var(--border);
   background: var(--bg);
-  position: sticky;
-  top: 0;
-  z-index: 1;
 }
 
-.outputs-hierarchy-col-sub {
-  display: block;
-  font-weight: 400;
-  text-transform: none;
-  letter-spacing: normal;
-  margin-top: 0.25rem;
-  font-size: 0.75rem;
+.outputs-breadcrumb {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.9rem;
+}
+
+.outputs-breadcrumb-link {
+  background: none;
+  border: none;
+  padding: 0.15rem 0.35rem;
+  color: var(--accent);
+  cursor: pointer;
+  border-radius: 4px;
+  font: inherit;
+}
+
+.outputs-breadcrumb-link:hover {
+  background: var(--accent-soft);
+  text-decoration: underline;
+}
+
+.outputs-breadcrumb-link.is-current {
+  color: var(--text);
+  font-weight: 600;
+  cursor: default;
+  text-decoration: none;
+}
+
+.outputs-breadcrumb-link.is-current:hover {
+  background: none;
+  text-decoration: none;
+}
+
+.outputs-breadcrumb-sep {
+  color: var(--muted);
+  user-select: none;
+}
+
+.outputs-breadcrumb-current {
+  padding: 0.15rem 0.35rem;
+  color: var(--text);
+  font-weight: 600;
 }
 
 .outputs-hierarchy-row {
@@ -506,11 +521,4 @@ pre.snippet {
   height: 3px;
   background: var(--muted);
   border-radius: 1px 1px 0 0;
-}
-
-.outputs-hierarchy-empty {
-  padding: 1rem 0.75rem;
-  color: var(--muted);
-  font-size: 0.9rem;
-  margin: 0;
 }
