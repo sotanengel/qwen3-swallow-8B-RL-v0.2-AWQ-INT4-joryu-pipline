@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { useMemo } from "react";
 
 import { MarkdownView } from "@/components/MarkdownView";
+import { ToolEventTimeline } from "@/components/ToolEventTimeline";
 import {
   DistilledRecord,
   findRecordById,
@@ -13,6 +14,7 @@ import {
   loadJsonl,
   recordLooksTruncated,
 } from "@/lib/jsonl";
+import { extractToolEvents } from "@/lib/tool-events";
 import { useIntervalPoll } from "@/lib/useIntervalPoll";
 
 export default function OutputDetailPage() {
@@ -28,6 +30,10 @@ export default function OutputDetailPage() {
   const record = useMemo(() => findRecordById(records, id), [records, id]);
   const markdown = useMemo(
     () => (record ? formatRecordMarkdown(record) : ""),
+    [record],
+  );
+  const toolEvents = useMemo(
+    () => (record ? extractToolEvents(record) : []),
     [record],
   );
 
@@ -52,6 +58,7 @@ export default function OutputDetailPage() {
               {record.finish_reason ?? "不明"}）
             </p>
           ) : null}
+          <ToolEventTimeline events={toolEvents} />
           <MarkdownView source={markdown} />
         </div>
       )}
