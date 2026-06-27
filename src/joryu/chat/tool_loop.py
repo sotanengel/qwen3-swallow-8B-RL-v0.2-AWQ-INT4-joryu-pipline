@@ -16,17 +16,31 @@ from joryu.tool_executor import ToolExecutor, ToolUpstreamError
 from joryu.tool_pipeline.decision import ToolLoopDecisionMaker
 from joryu.tool_pipeline.pipeline import (
     append_tool_turn_messages,
+    normalize_tool_arguments,
     tool_call_dedupe_key,
 )
 from joryu.vllm_client import ChatResult, SupportsChat, SupportsChatStream
 
 DEFAULT_MAX_TURNS = 4
+_MAX_REPEAT_TOOL_ERROR = 2
 _FINISH_REASON_ERROR = "error"
 _TOOL_EXECUTION_TIMEOUT_SEC = 15.0
 
 
 def _generate_tool_call_id() -> str:
     return f"call_{uuid.uuid4().hex[:24]}"
+
+
+def _normalize_tool_call(call: ParsedToolCall) -> ParsedToolCall:
+    return ParsedToolCall(
+        name=call.name,
+        arguments=normalize_tool_arguments(call.arguments),
+        raw=call.raw,
+    )
+
+
+def _tool_error_fingerprint(name: str, result: str) -> tuple[str, str]:
+    return (name, result)
 
 
 def _error_chat_result() -> ChatResult:
@@ -146,12 +160,17 @@ class ToolLoopRunner:
         final_chat: ChatResult | None = None
         exhausted = False
         executed_cache: dict[tuple[str, str], str] = {}
+        error_fingerprint_counts: dict[tuple[str, str], int] = {}
+        abort_tool_loop = False
         tools_arg = tools or None
         tool_loop_done_emitted = False
         error_emitted = False
 
         try:
             for turn_index in range(self._max_turns):
+                if abort_tool_loop:
+                    exhausted = True
+                    break
                 yield {
                     "type": "turn_start",
                     "column": column_id,
@@ -225,15 +244,26 @@ class ToolLoopRunner:
                     tool_results: list[tuple[str, str]] = []
                     call_ids = [_generate_tool_call_id() for _ in chat.tool_calls]
                     for call_id, call in zip(call_ids, chat.tool_calls, strict=True):
-                        key = tool_call_dedupe_key(call)
+                        normalized_call = _normalize_tool_call(call)
+                        key = tool_call_dedupe_key(normalized_call)
                         tool_error: dict[str, Any] | None = None
+                        repeated_error_result: str | None = None
+                        for (tool_name, err_result), count in error_fingerprint_counts.items():
+                            if (
+                                tool_name == normalized_call.name
+                                and count >= _MAX_REPEAT_TOOL_ERROR
+                            ):
+                                repeated_error_result = err_result
+                                break
                         if self._tool_loop_dedupe and key in executed_cache:
                             result = executed_cache[key]
+                        elif repeated_error_result is not None:
+                            result = repeated_error_result
                         else:
                             try:
                                 result = await _execute_tool_call(
                                     executor,
-                                    call,
+                                    normalized_call,
                                     cancel_event=cancel_event,
                                 )
                             except asyncio.CancelledError:
@@ -244,7 +274,7 @@ class ToolLoopRunner:
                                     "type": "tool_error",
                                     "column": column_id,
                                     "call_id": call_id,
-                                    "name": call.name,
+                                    "name": normalized_call.name,
                                     "message": str(exc),
                                     "status": exc.status,
                                     "body": exc.body,
@@ -255,17 +285,30 @@ class ToolLoopRunner:
                                     "type": "tool_error",
                                     "column": column_id,
                                     "call_id": call_id,
-                                    "name": call.name,
+                                    "name": normalized_call.name,
                                     "message": str(exc),
                                 }
                             if self._tool_loop_dedupe:
                                 executed_cache[key] = result
+                        if result.startswith("error:"):
+                            if tool_error is None:
+                                tool_error = {
+                                    "type": "tool_error",
+                                    "column": column_id,
+                                    "call_id": call_id,
+                                    "name": normalized_call.name,
+                                    "message": result.removeprefix("error: "),
+                                }
+                            fp = _tool_error_fingerprint(normalized_call.name, result)
+                            error_fingerprint_counts[fp] = error_fingerprint_counts.get(fp, 0) + 1
+                            if error_fingerprint_counts[fp] >= _MAX_REPEAT_TOOL_ERROR:
+                                abort_tool_loop = True
                         yield {
                             "type": "tool_call",
                             "column": column_id,
                             "call_id": call_id,
-                            "name": call.name,
-                            "arguments": call.arguments,
+                            "name": normalized_call.name,
+                            "arguments": normalized_call.arguments,
                         }
                         if tool_error is not None:
                             yield tool_error

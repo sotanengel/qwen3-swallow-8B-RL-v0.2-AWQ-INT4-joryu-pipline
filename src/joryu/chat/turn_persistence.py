@@ -59,6 +59,9 @@ class TurnPersistence:
         )
         with JsonlAppendWriter(session.out_path) as writer:
             writer.write(record)
+        from joryu.preflight import sync_dashboard_responses_copy
+
+        sync_dashboard_responses_copy(session.repo_root)
         if guard is not None:
             guard.record(prompt=user_text, style_id=style_id)
         return record, record_id(record)

@@ -69,10 +69,24 @@ def append_tool_turn_messages(
 
 
 def tool_call_dedupe_key(call: ParsedToolCall) -> tuple[str, str]:
+    args = normalize_tool_arguments(call.arguments)
     return (
         call.name,
-        json.dumps(call.arguments, sort_keys=True, ensure_ascii=False),
+        json.dumps(args, sort_keys=True, ensure_ascii=False),
     )
+
+
+def normalize_tool_arguments(arguments: dict[str, Any]) -> dict[str, Any]:
+    """dedupe / circuit breaker 用に tool 引数を正規化する。"""
+    normalized: dict[str, Any] = {}
+    for key, value in arguments.items():
+        if isinstance(value, str):
+            stripped = value.strip()
+            if stripped:
+                normalized[key] = stripped
+        elif value is not None:
+            normalized[key] = value
+    return normalized
 
 
 def aggregate_tool_calls_from_turns(turns: list[dict[str, Any]]) -> list[dict[str, Any]]:

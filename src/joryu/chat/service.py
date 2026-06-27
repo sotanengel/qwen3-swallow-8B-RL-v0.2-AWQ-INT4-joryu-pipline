@@ -78,6 +78,7 @@ class ChatService:
             tool_ids=tool_ids,
             tool_definitions=tool_definitions,
             out_path=out_path,
+            repo_root=self._repo_root,
         )
 
     def get_session(self, session_id: str) -> ChatSession | None:

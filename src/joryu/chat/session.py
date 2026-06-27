@@ -46,6 +46,7 @@ class ChatSessionStore:
         tools: list[dict[str, Any]],
         tool_ids: list[str],
         out_path: Path,
+        repo_root: Path | None = None,
         tool_definitions: list[dict[str, Any]] | None = None,
         executor: ToolExecutor | None = None,
     ) -> ChatSession:
@@ -64,6 +65,7 @@ class ChatSessionStore:
             tool_ids=tuple(tool_ids),
             tool_definitions=tuple(tool_definitions or []),
             out_path=out_path,
+            repo_root=repo_root or out_path.parent.parent.parent,
             style_presets=dict(styles),
         )
         state = ChatSessionState(
