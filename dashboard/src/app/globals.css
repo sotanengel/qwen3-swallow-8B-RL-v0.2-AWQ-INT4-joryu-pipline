@@ -428,6 +428,38 @@ pre.snippet {
   color: var(--accent);
 }
 
+.chat-message-markdown .markdown-body {
+  font-size: inherit;
+  line-height: 1.55;
+}
+
+.chat-message-markdown .markdown-body > :first-child {
+  margin-top: 0;
+}
+
+.chat-message-markdown .markdown-body > :last-child {
+  margin-bottom: 0;
+}
+
+.chat-message-markdown .markdown-body h2 {
+  font-size: 1rem;
+  margin: 0.75rem 0 0.35rem;
+}
+
+.chat-message-markdown .markdown-body h3 {
+  font-size: 0.95rem;
+  margin: 0.65rem 0 0.3rem;
+}
+
+.chat-message-markdown .markdown-body p,
+.chat-message-markdown .markdown-body ul,
+.chat-message-markdown .markdown-body ol,
+.chat-message-markdown .markdown-body pre,
+.chat-message-markdown .markdown-body blockquote,
+.chat-message-markdown .markdown-body table {
+  margin: 0.35rem 0;
+}
+
 .outputs-folder-panel {
   border: 1px solid var(--border);
   border-radius: 8px;

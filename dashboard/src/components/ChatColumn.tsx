@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from "react";
 
+import { MarkdownView } from "@/components/MarkdownView";
 import type { ChatColumnState, ChatEvent } from "@/lib/chat";
 
 export type ToolCallDisplay = {
@@ -71,13 +72,14 @@ export function ChatColumn({ column, showInput, disabled, onSend }: ChatColumnPr
               background: msg.role === "user" ? "var(--accent-soft)" : "transparent",
               border: msg.role === "assistant" ? "1px solid var(--border)" : "none",
               fontSize: "0.9rem",
-              whiteSpace: "pre-wrap",
             }}
           >
             <div style={{ color: "var(--muted)", fontSize: "0.7rem", marginBottom: "0.25rem" }}>
               {msg.role}
             </div>
-            {msg.content}
+            <div className="chat-message-markdown">
+              <MarkdownView source={msg.content} />
+            </div>
           </div>
         ))}
         {column.isStreaming ? (
@@ -87,11 +89,12 @@ export function ChatColumn({ column, showInput, disabled, onSend }: ChatColumnPr
               border: "1px dashed var(--border)",
               borderRadius: "6px",
               fontSize: "0.9rem",
-              whiteSpace: "pre-wrap",
             }}
           >
             {column.streamingText ? (
-              column.streamingText
+              <div className="chat-message-markdown">
+                <MarkdownView source={column.streamingText} />
+              </div>
             ) : (
               <span style={{ color: "var(--muted)" }}>考え中…</span>
             )}
