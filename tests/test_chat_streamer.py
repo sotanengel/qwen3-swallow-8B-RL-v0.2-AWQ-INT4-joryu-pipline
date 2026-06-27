@@ -159,3 +159,37 @@ def test_stream_emits_column_done_when_final_chat_none(tmp_path: Path, monkeypat
     events = _run(_collect(session, column, "hi", client))
     assert events[-1]["type"] == "column_done"
     assert events[-1]["finish_reason"] == "error"
+
+
+def test_stream_system_prompt_contains_today_date(tmp_path: Path, monkeypatch) -> None:
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    from joryu import datetime_context as dt_ctx
+    from joryu.chat.session import ChatSessionConfig, ChatSessionState
+
+    fixed = datetime(2026, 6, 27, 8, 0, tzinfo=ZoneInfo("Asia/Tokyo"))
+    date_line = dt_ctx.format_date_context_ja(fixed)
+    preset = StylePreset(style_id="prose", label="散文", instruction="散文で。")
+    col = ChatColumn(style_id="prose", label="散文")
+    config = ChatSessionConfig(
+        base_system_prompt=f"{date_line}\n\nbase",
+        model_name="test-model",
+        config_hash="hash",
+        tools=(),
+        tool_ids=(),
+        out_path=tmp_path / "out.jsonl",
+        style_presets={"prose": preset},
+    )
+    state = ChatSessionState(
+        session_id="sess-1",
+        columns={"prose": col},
+        created_at=0.0,
+        expires_at=999999.0,
+    )
+    session = ChatSession(config=config, state=state)
+    column = session.columns["prose"]
+    client = FakeVllmClient(answer="ok", thinking=None)
+    _run(_collect(session, column, "hi", client))
+    system_msg = client.calls[0]["messages"][0]["content"]
+    assert "2026年06月27日" in system_msg

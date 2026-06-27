@@ -8,6 +8,7 @@ license = { text = "Apache-2.0" }
 dependencies = [
     "datasketch>=1.6",
     "pyyaml>=6.0",
+    "tzdata>=2024.1",
     "zstandard>=0.22",
 ]
 
