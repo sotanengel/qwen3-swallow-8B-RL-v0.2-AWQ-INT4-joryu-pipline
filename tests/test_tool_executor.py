@@ -29,17 +29,32 @@ def test_registry_unknown_tool_raises() -> None:
         ex.run(ParsedToolCall(name="missing", arguments={}, raw=""))
 
 
-def test_default_executor_search_returns_query_specific_stub() -> None:
+def test_default_executor_search_returns_query_specific_stub(monkeypatch) -> None:
+    monkeypatch.delenv("TAVILY_API_KEY", raising=False)
+    monkeypatch.setenv("JORYU_SEARCH_PROVIDER", "stub")
     ex = build_default_executor()
     out = ex.run(
         ParsedToolCall(name="search", arguments={"query": "日本の再犯率", "top_k": 3}, raw="")
     )
     assert "日本の再犯率" in out
-    assert "snippet" in out.lower() or "スニペット" in out or "result" in out.lower()
+    assert "stub" in out.lower() or "snippet" in out.lower()
 
 
-def test_default_executor_fetch_url_returns_url_specific_stub() -> None:
+def test_default_executor_fetch_url_returns_url_specific_stub(monkeypatch) -> None:
+    import respx
+    from httpx import Response
+
+    monkeypatch.setenv("JORYU_FETCH_TIMEOUT", "5")
+    with respx.mock:
+        respx.get("https://example.com/stats").mock(
+            return_value=Response(200, text="<html><title>T</title><body>Hello</body></html>")
+        )
+        ex = build_default_executor()
+        url = "https://example.com/stats"
+        out = ex.run(ParsedToolCall(name="fetch_url", arguments={"url": url}, raw=""))
+    assert url in out or "Hello" in out
+
+
+def test_build_default_executor_registers_weather() -> None:
     ex = build_default_executor()
-    url = "https://example.com/stats"
-    out = ex.run(ParsedToolCall(name="fetch_url", arguments={"url": url}, raw=""))
-    assert url in out
+    assert "weather" in ex._fns

@@ -37,3 +37,18 @@ tools:
           type: string
           format: uri
       required: [url]
+
+  weather:
+    description: "指定した地点の現在天気と当日予報を返す。"
+    invocation_rule: "ユーザが特定地点の天気/気温/降水を尋ねたら必ず呼ぶ。"
+    parameters:
+      type: object
+      properties:
+        location:
+          type: string
+          description: "都市名 (例: 東京, Tokyo) または lat,lon"
+        date:
+          type: string
+          format: date
+          description: "ISO 日付 (省略時は今日 JST)"
+      required: [location]

@@ -11,7 +11,7 @@ from joryu.chat.session import ChatSessionStore
 from joryu.config import load_config
 from joryu.jobs.runner import JobRunner
 from joryu.jobs.store import JobStore
-from joryu.tool_executor import ToolExecutor, build_default_executor
+from joryu.tool_executor import McpToolExecutor, ToolExecutor, build_default_executor
 from joryu.tools import load_tools, merge_tools
 from joryu.vllm_client import (
     SupportsChat,
@@ -73,6 +73,9 @@ def get_executor(request: Request) -> ToolExecutor:
     override = getattr(request.app.state, "chat_executor", None)
     if override is not None:
         return override
+    _repo_root, cfg = _load_repo_config(request)
+    if cfg.mcp.enabled:
+        return McpToolExecutor(url=cfg.mcp.url)
     return build_default_executor()
 
 

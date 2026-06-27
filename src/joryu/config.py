@@ -162,6 +162,12 @@ class CurateConfig:
 
 
 @dataclass
+class McpConfig:
+    enabled: bool = False
+    url: str = ""
+
+
+@dataclass
 class Config:
     model: ModelConfig = field(default_factory=ModelConfig)
     vllm: VllmConfig = field(default_factory=VllmConfig)
@@ -169,6 +175,7 @@ class Config:
     export: ExportConfig = field(default_factory=ExportConfig)
     curate: CurateConfig = field(default_factory=CurateConfig)
     search: SearchConfig = field(default_factory=SearchConfig)
+    mcp: McpConfig = field(default_factory=McpConfig)
 
     def fingerprint(self) -> str:
         """設定の SHA256 ハッシュ。出力レコードの再現性記録に使う。
@@ -250,4 +257,5 @@ def load_config(path: str | Path) -> Config:
     if isinstance(thresholds_raw, dict):
         cfg.curate.thresholds = _merge_section(cfg.curate.thresholds, thresholds_raw)
     cfg.search = _merge_section(cfg.search, raw.get("search"))
+    cfg.mcp = _merge_section(cfg.mcp, raw.get("mcp"))
     return cfg
