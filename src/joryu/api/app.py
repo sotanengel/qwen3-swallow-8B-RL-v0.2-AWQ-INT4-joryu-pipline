@@ -13,6 +13,7 @@ from joryu.chat.session import ChatSessionStore
 from joryu.config import load_config
 from joryu.jobs.runner import JobRunner, default_jobs_dir
 from joryu.jobs.store import JobStore
+from joryu.mcp_runtime import probe_mcp_health
 from joryu.tools_impl.weather import apply_weather_config
 
 
@@ -53,6 +54,14 @@ def create_app(*, repo_root: Path | None = None) -> FastAPI:
             timeout=cfg.tools.weather.timeout,
             provider=cfg.tools.weather.provider,
         )
+        app.state.mcp_runtime = probe_mcp_health(
+            url=cfg.mcp.url,
+            enabled=cfg.mcp.enabled,
+        )
+    else:
+        from joryu.mcp_runtime import McpRuntimeState
+
+        app.state.mcp_runtime = McpRuntimeState(enabled=False, state="down")
 
     @app.get("/api/health")
     def health() -> dict[str, str]:
