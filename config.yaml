@@ -115,3 +115,17 @@ curate:
     samp_out_z_min: -2.0
     samp_out_min_bucket_size: 5
     style_adh_default_min: 0.3
+
+  # 健全性スクリーニング (--screening, Epic #305)
+  screening:
+    weights_rule: 0.4
+    weights_llm: 0.6
+    max_review_rate: 0.3
+    llm_health_enabled: true
+    thresholds:
+      ok_min: 0.75
+      review_min: 0.40
+    judge:
+      provider: llama_cpp
+      model: Llama-3.1-Swallow-8B-Instruct-v0.5
+      base_url: http://localhost:8080

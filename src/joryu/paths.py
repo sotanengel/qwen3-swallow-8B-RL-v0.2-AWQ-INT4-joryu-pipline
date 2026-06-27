@@ -11,6 +11,7 @@ DEFAULT_CONFIG = "config.yaml"
 DASHBOARD_PUBLIC_DIR = "dashboard/public"
 STATS_JSON_REL = f"{DASHBOARD_PUBLIC_DIR}/stats.json"
 CURATION_JSON_REL = f"{DASHBOARD_PUBLIC_DIR}/curation.json"
+SCREENING_JSON_REL = f"{DASHBOARD_PUBLIC_DIR}/screening.json"
 RESPONSES_JSONL_REL = f"{DASHBOARD_PUBLIC_DIR}/responses.jsonl"
 
 

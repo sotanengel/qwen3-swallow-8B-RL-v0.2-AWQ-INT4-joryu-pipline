@@ -17,6 +17,7 @@ from joryu.curate.minhash_index import GlobalDuplicateIndex
 from joryu.curate.style_presets import DEFAULT_STYLE_RULES, StyleRule
 
 from . import Signal, SignalResult
+from .health import CtrlChar, EndWell, SyntaxBreak, TemplateLeak
 from .quality import FactualHallucination, StyleFormat, ToolLeak, VirtualData
 from .tool_use import ActionClaimWithoutCall, ToolPlannedNotCalled
 
@@ -352,6 +353,28 @@ def _annotate_samp_version(composite: Any) -> None:
         versions[SAMP_OUT_CODE] = SAMP_OUT_VERSION
 
 
+def build_screening_stat_signals(
+    th: CurateSignalThresholds,
+) -> list[Signal]:
+    """健全性スクリーニング用の統計シグナル群 (Epic #305 Phase 1)。
+
+    学習価値向けシグナル (TOOL-*, FACT-HALL 等) は含めない。
+    """
+    return [
+        LenAnswer(th=th),
+        LenThinking(th=th),
+        ThinkTag(),
+        Truncated(),
+        EndWell(),
+        RepeatNGram(th=th),
+        RepeatChar(th=th),
+        CtrlChar(),
+        LangJapanese(th=th),
+        TemplateLeak(),
+        SyntaxBreak(),
+    ]
+
+
 def build_default_stat_signals(
     th: CurateSignalThresholds,
     *,
@@ -398,4 +421,5 @@ __all__ = [
     "Truncated",
     "apply_samp_out_filter",
     "build_default_stat_signals",
+    "build_screening_stat_signals",
 ]

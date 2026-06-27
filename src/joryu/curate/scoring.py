@@ -10,8 +10,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Literal
 
 from joryu.curate.signals import SignalResult
+
+ScreeningLabel = Literal["OK", "REVIEW", "NG"]
 
 
 @dataclass
@@ -148,12 +151,73 @@ def select_by_threshold(
     return out
 
 
+def screening_label(
+    final_score: float,
+    *,
+    ok_min: float,
+    review_min: float,
+) -> ScreeningLabel:
+    """3 段階健全性ラベル (要件 §6.2)。"""
+    if final_score >= ok_min:
+        return "OK"
+    if final_score >= review_min:
+        return "REVIEW"
+    return "NG"
+
+
+def apply_max_review_rate(
+    labels: list[ScreeningLabel],
+    scores: list[float],
+    *,
+    max_rate: float,
+) -> list[ScreeningLabel]:
+    """REVIEW 件数が max_rate を超える場合、低スコア REVIEW を NG に降格。"""
+    if not labels:
+        return labels
+    n = len(labels)
+    max_review = int(max_rate * n)
+    review_idxs = [i for i, lbl in enumerate(labels) if lbl == "REVIEW"]
+    if len(review_idxs) <= max_review:
+        return labels
+    excess = len(review_idxs) - max_review
+    # スコアが低い REVIEW から NG に降格
+    sorted_review = sorted(review_idxs, key=lambda i: scores[i])
+    demote = set(sorted_review[:excess])
+    out: list[ScreeningLabel] = list(labels)
+    for i in demote:
+        out[i] = "NG"
+    return out
+
+
+def label_screening_batch(
+    composites: list[CompositeScore],
+    *,
+    ok_min: float,
+    review_min: float,
+    max_review_rate: float,
+) -> list[ScreeningLabel]:
+    """CompositeScore 群から screening ラベル列を生成。"""
+    labels: list[ScreeningLabel] = []
+    scores: list[float] = []
+    for comp in composites:
+        if comp.hard_rejected:
+            labels.append("NG")
+        else:
+            labels.append(screening_label(comp.final_score, ok_min=ok_min, review_min=review_min))
+        scores.append(comp.final_score)
+    return apply_max_review_rate(labels, scores, max_rate=max_review_rate)
+
+
 __all__ = [
     "CompositeScore",
+    "ScreeningLabel",
     "SelectionResult",
+    "apply_max_review_rate",
     "build_composite",
     "compose_score",
     "f_llm",
     "f_stat",
+    "label_screening_batch",
+    "screening_label",
     "select_by_threshold",
 ]

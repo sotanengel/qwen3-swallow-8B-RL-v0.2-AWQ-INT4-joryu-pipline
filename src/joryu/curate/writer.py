@@ -86,3 +86,113 @@ class CurateWriter:
             out["rejected_by"] = rejected_by
             out["final_score"] = final_score
             self._rej.write(out)
+
+
+class ScreeningWriter:
+    """健全性スクリーニング用 3 段階出力 + scores.jsonl + 後方互換 high_quality/rejected。"""
+
+    OK = "screening.ok.jsonl"
+    REVIEW = "screening.review.jsonl"
+    NG = "screening.ng.jsonl"
+    SCORES = "scores.jsonl"
+    HIGH_QUALITY = CurateWriter.HIGH_QUALITY
+    REJECTED = CurateWriter.REJECTED
+
+    def __init__(self, dst_dir: str | Path) -> None:
+        self._dst = Path(dst_dir)
+        self._ok: JsonlAppendWriter | None = None
+        self._review: JsonlAppendWriter | None = None
+        self._ng: JsonlAppendWriter | None = None
+        self._high: JsonlAppendWriter | None = None
+        self._rej: JsonlAppendWriter | None = None
+        self._scores: JsonlAppendWriter | None = None
+        self.ok_count = 0
+        self.review_count = 0
+        self.ng_count = 0
+        self.kept = 0
+        self.rejected = 0
+        self.total = 0
+
+    def __enter__(self) -> ScreeningWriter:
+        self._dst.mkdir(parents=True, exist_ok=True)
+        self._ok = JsonlAppendWriter(self._dst / self.OK).__enter__()
+        self._review = JsonlAppendWriter(self._dst / self.REVIEW).__enter__()
+        self._ng = JsonlAppendWriter(self._dst / self.NG).__enter__()
+        self._high = JsonlAppendWriter(self._dst / self.HIGH_QUALITY).__enter__()
+        self._rej = JsonlAppendWriter(self._dst / self.REJECTED).__enter__()
+        self._scores = JsonlAppendWriter(self._dst / self.SCORES).__enter__()
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> None:
+        for w in (self._ok, self._review, self._ng, self._high, self._rej, self._scores):
+            if w is not None:
+                w.__exit__(exc_type, exc, tb)
+
+    def write(
+        self,
+        record: dict[str, Any],
+        *,
+        screening_label: str,
+        final_score: float,
+        rejected_by: list[str],
+        signal_versions: dict[str, str],
+        signal_scores: dict[str, float],
+        signal_raw: dict[str, object],
+        record_hash: str,
+        eval_version: str,
+        evaluator_model: str,
+    ) -> None:
+        assert (
+            self._ok is not None
+            and self._review is not None
+            and self._ng is not None
+            and self._high is not None
+            and self._rej is not None
+            and self._scores is not None
+        )
+        self.total += 1
+        accepted = screening_label == "OK"
+        score_row = {
+            "record_hash": record_hash,
+            "prompt": record.get("prompt"),
+            "config_hash": record.get("config_hash"),
+            "mode": record.get("mode"),
+            "style_id": record.get("style_id"),
+            "category": record.get("category"),
+            "sampling": record.get("sampling"),
+            "final_score": final_score,
+            "accepted": accepted,
+            "screening_label": screening_label,
+            "rejected_by": rejected_by,
+            "signal_versions": signal_versions,
+            "signal_scores": signal_scores,
+            "signal_raw": signal_raw,
+            "eval_version": eval_version,
+            "evaluator_model": evaluator_model,
+        }
+        self._scores.write(score_row)
+        if screening_label == "OK":
+            self.ok_count += 1
+            self.kept += 1
+            self._ok.write(record)
+            self._high.write(record)
+        elif screening_label == "REVIEW":
+            self.review_count += 1
+            out = dict(record)
+            out["screening_label"] = screening_label
+            out["final_score"] = final_score
+            self._review.write(out)
+        else:
+            self.ng_count += 1
+            self.rejected += 1
+            out = dict(record)
+            out["screening_label"] = screening_label
+            out["rejected_by"] = rejected_by
+            out["final_score"] = final_score
+            self._ng.write(out)
+            self._rej.write(out)

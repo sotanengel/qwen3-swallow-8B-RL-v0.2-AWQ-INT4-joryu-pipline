@@ -132,6 +132,36 @@ class CurateSignalThresholds:
 
 
 @dataclass
+class ScreeningThresholds:
+    """健全性スクリーニング 3 段階ラベルの閾値 (要件 §6.2)。"""
+
+    ok_min: float = 0.75
+    review_min: float = 0.40
+
+
+@dataclass
+class ScreeningJudgeConfig:
+    """健全性スクリーニング用 Judge (既定 Llama-Swallow)。"""
+
+    provider: str = "llama_cpp"  # llama_cpp | openai_compat | vllm
+    model: str = "Llama-3.1-Swallow-8B-Instruct-v0.5"
+    base_url: str = "http://localhost:8080"
+    api_key: str | None = None
+
+
+@dataclass
+class ScreeningConfig:
+    """健全性スクリーニング (`--screening`) 設定。"""
+
+    weights_rule: float = 0.4
+    weights_llm: float = 0.6
+    thresholds: ScreeningThresholds = field(default_factory=ScreeningThresholds)
+    max_review_rate: float = 0.3
+    judge: ScreeningJudgeConfig = field(default_factory=ScreeningJudgeConfig)
+    llm_health_enabled: bool = True
+
+
+@dataclass
 class SearchConfig:
     """ダッシュボード BM25 検索設定。"""
 
@@ -157,6 +187,7 @@ class CurateConfig:
     judge_mode: Mode = "nothinking"
     skip_llm: bool = False
     thresholds: CurateSignalThresholds = field(default_factory=CurateSignalThresholds)
+    screening: ScreeningConfig = field(default_factory=ScreeningConfig)
     out_dir: str = "data/curated"
 
     def __post_init__(self) -> None:
@@ -277,9 +308,20 @@ def load_config(path: str | Path) -> Config:
     cfg.export = _merge_section(cfg.export, raw.get("export"))
     curate_raw = raw.get("curate") or {}
     thresholds_raw = curate_raw.pop("thresholds", None) if isinstance(curate_raw, dict) else None
+    screening_raw = curate_raw.pop("screening", None) if isinstance(curate_raw, dict) else None
     cfg.curate = _merge_section(cfg.curate, curate_raw if isinstance(curate_raw, dict) else None)
     if isinstance(thresholds_raw, dict):
         cfg.curate.thresholds = _merge_section(cfg.curate.thresholds, thresholds_raw)
+    if isinstance(screening_raw, dict):
+        judge_raw = screening_raw.pop("judge", None)
+        screening_th_raw = screening_raw.pop("thresholds", None)
+        cfg.curate.screening = _merge_section(cfg.curate.screening, screening_raw)
+        if isinstance(judge_raw, dict):
+            cfg.curate.screening.judge = _merge_section(cfg.curate.screening.judge, judge_raw)
+        if isinstance(screening_th_raw, dict):
+            cfg.curate.screening.thresholds = _merge_section(
+                cfg.curate.screening.thresholds, screening_th_raw
+            )
     cfg.search = _merge_section(cfg.search, raw.get("search"))
     mcp_raw = raw.get("mcp") or {}
     timeout_raw = mcp_raw.pop("timeout", None) if isinstance(mcp_raw, dict) else None
