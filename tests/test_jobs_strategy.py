@@ -2,7 +2,14 @@
 
 from __future__ import annotations
 
-from joryu.jobs.models import DistillJobSpec, JobKind, JobRecord, JobStatus
+from joryu.jobs.models import (
+    CurateJobSpec,
+    DistillJobSpec,
+    JobKind,
+    JobRecord,
+    JobStatus,
+    SeedGenJobSpec,
+)
 from joryu.jobs.strategy import (
     ComposeRunnerStrategy,
     LocalRunnerStrategy,
@@ -34,3 +41,25 @@ def test_factory_build_job_command_distill(tmp_path, monkeypatch) -> None:
     )
     cmd = RunnerStrategyFactory.build_job_command(tmp_path, record)
     assert "joryu.cli.distill" in " ".join(cmd) or "distill" in cmd[-1]
+
+
+def test_factory_build_job_command_seed_gen(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("JORYU_VLLM_URL", "http://localhost:8100")
+    record = JobRecord(
+        id="job-seed",
+        kind=JobKind.SEED_GEN,
+        status=JobStatus.QUEUED,
+        spec=SeedGenJobSpec(fake_llm=True, domain="math"),
+        created_at="2026-01-01T00:00:00Z",
+    )
+    cmd = RunnerStrategyFactory.build_job_command(tmp_path, record)
+    assert "joryu.seed_gen.cli" in " ".join(cmd)
+    assert "--fake-llm" in cmd
+
+
+def test_curate_spec_screening_argv() -> None:
+    spec = CurateJobSpec(screening=True, prompt_bank=True, src="data/prompts/b.jsonl")
+    argv = spec.to_curate_argv()
+    assert "--screening" in argv
+    assert "--prompt-bank" in argv
+    assert "--src" in argv

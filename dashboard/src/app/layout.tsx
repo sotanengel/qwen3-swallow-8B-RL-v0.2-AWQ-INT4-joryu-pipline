@@ -26,6 +26,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <Link href="/outputs">出力一覧</Link>
             <Link href="/distributions">分布</Link>
             <Link href="/curation">高品質抽出</Link>
+            <Link href="/prompts">プロンプト作成</Link>
             <Link href="/screening">健全性</Link>
             <Link href="/jobs">ジョブ</Link>
             <Link href="/chat">チャット</Link>

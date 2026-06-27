@@ -16,7 +16,14 @@ from pathlib import Path
 from joryu.distill import STATS_REFRESH_INTERVAL_SEC
 from joryu.docker_paths import map_path_for_docker, resolve_host_repo_root
 from joryu.job_process import terminate_process_tree
-from joryu.jobs.models import CurateJobSpec, DistillJobSpec, JobKind, JobRecord, JobStatus
+from joryu.jobs.models import (
+    CurateJobSpec,
+    DistillJobSpec,
+    JobKind,
+    JobRecord,
+    JobStatus,
+    SeedGenJobSpec,
+)
 from joryu.jobs.store import JobStore
 
 logger = logging.getLogger(__name__)
@@ -72,6 +79,16 @@ def build_local_distill_command(repo_root: Path, spec: DistillJobSpec) -> list[s
         "--config",
         spec.config,
         *spec.to_distill_argv(),
+    ]
+
+
+def build_local_seed_gen_command(repo_root: Path, spec: SeedGenJobSpec) -> list[str]:
+    del repo_root
+    return [
+        sys.executable,
+        "-m",
+        "joryu.seed_gen.cli",
+        *spec.to_seed_gen_argv(),
     ]
 
 
@@ -537,7 +554,13 @@ class JobRunner:
             exit_code = self._run_command(cmd, self.repo_root, log_path, self._set_running_process)
             record.exit_code = exit_code
             if exit_code != 0:
-                label = "curate" if record.kind == JobKind.CURATE else "distill"
+                label = (
+                    "curate"
+                    if record.kind == JobKind.CURATE
+                    else "seed_gen"
+                    if record.kind == JobKind.SEED_GEN
+                    else "distill"
+                )
                 record.error = f"{label} exited with code {exit_code}"
         except OSError as exc:
             record.exit_code = 1

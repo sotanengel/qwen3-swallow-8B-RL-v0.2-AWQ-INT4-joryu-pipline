@@ -6,7 +6,7 @@ from pathlib import Path
 
 from joryu.cli.distill import parse_duration
 from joryu.config import load_config
-from joryu.jobs.models import CurateJobSpec, DistillJobSpec
+from joryu.jobs.models import CurateJobSpec, DistillJobSpec, SeedGenJobSpec
 from joryu.preflight import jsonl_has_content, resolve_distill_jsonl
 from joryu.styles import load_styles, resolve_style_ids
 from joryu.tools import load_tools
@@ -69,7 +69,37 @@ def validate_curate_job_spec(spec: CurateJobSpec, *, repo_root: Path | None = No
     if spec.threshold is not None and not (0.0 <= spec.threshold <= 1.0):
         raise ValueError("threshold must be between 0.0 and 1.0")
 
-    if repo_root is not None:
+    if repo_root is not None and not (spec.screening and spec.prompt_bank):
         jsonl = resolve_distill_jsonl(repo_root)
         if not jsonl_has_content(jsonl):
             raise ValueError(f"distill output is empty or missing: {jsonl}")
+
+    if spec.screening and spec.prompt_bank and not spec.src and repo_root is not None:
+        cfg_path = Path(spec.config)
+        if not cfg_path.is_absolute():
+            cfg_path = repo_root / cfg_path
+        cfg = load_config(cfg_path)
+        bank = repo_root / cfg.distill.prompt_bank
+        if not bank.is_file():
+            raise ValueError(f"prompt bank not found: {bank}")
+
+
+def validate_seed_gen_job_spec(spec: SeedGenJobSpec, *, repo_root: Path | None = None) -> None:
+    """SeedGenJobSpec を検証。失敗時 ValueError。"""
+    if spec.target_total <= 0:
+        raise ValueError("target_total must be positive")
+    if not (0.0 < spec.sim_threshold <= 1.0):
+        raise ValueError("sim_threshold must be in (0, 1]")
+    if spec.batch_size <= 0:
+        raise ValueError("batch_size must be positive")
+    if repo_root is not None and spec.domains_config:
+        path = Path(spec.domains_config)
+        if not path.is_absolute():
+            path = repo_root / path
+        if not path.is_file():
+            from joryu.seed_gen.config import DEFAULT_DOMAINS_REL, resolve_domains_config_path
+
+            try:
+                resolve_domains_config_path(repo_root, spec.domains_config or DEFAULT_DOMAINS_REL)
+            except FileNotFoundError as exc:
+                raise ValueError(str(exc)) from exc

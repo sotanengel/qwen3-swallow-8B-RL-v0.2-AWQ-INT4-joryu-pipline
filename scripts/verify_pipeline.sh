@@ -159,6 +159,17 @@ test -f "$curate_dst/curation_meta.json" || {
 kept=$(uv run python -c "import json,sys; print(json.load(open(sys.argv[1], encoding='utf-8'))['summary']['kept'])" "$curate_dst/curation_meta.json")
 echo "[verify]  -> curate kept=$kept" >&2
 
+echo "[verify] step 4b: joryu-seed-gen fake smoke" >&2
+seed_bank="$work/prompt_bank.jsonl"
+uv run joryu-seed-gen \
+  --bank "$seed_bank" \
+  --fake-llm \
+  --domain general_qa \
+  --target-total 10 \
+  --batch-size 4
+test -s "$seed_bank" || { echo "[verify] FAIL: seed_gen bank empty"; exit 1; }
+echo "[verify]  -> seed_gen bank lines=$(wc -l < "$seed_bank")" >&2
+
 echo "[verify] step 5: joryu-stats --curation" >&2
 uv run joryu-stats --config "$cfg" --input "$out" --output "$stats" \
   --curation "$curate_dst" --curation-output "$work/curation.json"

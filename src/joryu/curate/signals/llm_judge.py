@@ -9,7 +9,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from joryu.curate.judge_client import HEALTH_RUBRIC_KEYS, RUBRIC_KEYS, JudgeClient
+from joryu.curate.judge_client import (
+    HEALTH_RUBRIC_KEYS,
+    PROMPT_HEALTH_RUBRIC_KEYS,
+    RUBRIC_KEYS,
+    JudgeClient,
+)
 
 from . import SignalResult
 
@@ -65,6 +70,27 @@ class LlmHealthRubric:
             health_prompt_template=self.prompt_template,
         )
         valid = [scores.get(k, 3) for k in HEALTH_RUBRIC_KEYS]
+        avg = sum(valid) / len(valid) if valid else 3.0
+        normalized = avg / 5.0
+        return SignalResult(self.code, self.version, normalized, scores, hard_reject=False)
+
+
+@dataclass
+class LlmPromptHealthRubric:
+    """プロンプトバンク専用 LLM rubric (P-01〜P-05)。応答は評価しない。"""
+
+    code: str = "LLM-PROMPT-HEALTH"
+    version: str = "prompt_health_rubric.ja.v1.0"
+    judge: JudgeClient = None  # type: ignore[assignment]
+    prompt_template: str = ""
+
+    def evaluate(self, record: dict[str, Any]) -> SignalResult:
+        prompt = record.get("prompt") or ""
+        scores = self.judge.score_prompt_health_rubric(
+            prompt,
+            health_prompt_template=self.prompt_template,
+        )
+        valid = [scores.get(k, 3) for k in PROMPT_HEALTH_RUBRIC_KEYS]
         avg = sum(valid) / len(valid) if valid else 3.0
         normalized = avg / 5.0
         return SignalResult(self.code, self.version, normalized, scores, hard_reject=False)

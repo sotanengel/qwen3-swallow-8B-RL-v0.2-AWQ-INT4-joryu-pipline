@@ -94,6 +94,13 @@ def test_curate_cli_missing_input_returns_error(tmp_path: Path) -> None:
     assert rc == 2
 
 
+def test_curate_cli_prompt_bank_requires_screening(tmp_path: Path) -> None:
+    bank = tmp_path / "bank.jsonl"
+    bank.write_text('{"prompt":"p"}\n', encoding="utf-8")
+    rc = cli.main(["--prompt-bank", "--src", str(bank), "--dst", str(tmp_path / "out")])
+    assert rc == 2
+
+
 def test_curate_cli_schema_rejected_records_counted(tmp_path: Path) -> None:
     src = tmp_path / "responses.jsonl"
     src.write_text(

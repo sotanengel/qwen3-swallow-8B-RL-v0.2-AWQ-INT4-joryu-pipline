@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from joryu.curate.prompt_loader import load_health_rubric
+from joryu.curate.prompt_loader import load_health_rubric, load_prompt_health_rubric
 
 
 def test_load_health_rubric_default():
@@ -30,6 +30,13 @@ def test_load_health_rubric_from_path(tmp_path: Path):
 def test_load_health_rubric_missing_file(tmp_path: Path):
     with pytest.raises(FileNotFoundError):
         load_health_rubric(tmp_path / "missing.txt")
+
+
+def test_load_prompt_health_rubric_default():
+    loaded = load_prompt_health_rubric()
+    assert loaded.eval_version == "prompt_health_rubric.ja.v1.0"
+    assert "P-01" in loaded.text
+    assert "{instruction}" in loaded.text
 
 
 def test_load_health_rubric_missing_eval_version(tmp_path: Path):

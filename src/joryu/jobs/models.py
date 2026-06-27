@@ -23,6 +23,7 @@ class JobStatus(StrEnum):
 class JobKind(StrEnum):
     DISTILL = "distill"
     CURATE = "curate"
+    SEED_GEN = "seed_gen"
 
 
 @dataclass
@@ -116,6 +117,9 @@ class CurateJobSpec:
     config: str = DEFAULT_CONFIG
     skip_llm: bool = False
     threshold: float | None = None
+    screening: bool = False
+    prompt_bank: bool = False
+    src: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)
@@ -128,6 +132,9 @@ class CurateJobSpec:
             config=str(data.get("config") or DEFAULT_CONFIG),
             skip_llm=bool(data.get("skip_llm", False)),
             threshold=float(threshold) if threshold is not None else None,
+            screening=bool(data.get("screening", False)),
+            prompt_bank=bool(data.get("prompt_bank", False)),
+            src=str(data.get("src") or ""),
         )
 
     def to_curate_argv(self) -> list[str]:
@@ -137,6 +144,65 @@ class CurateJobSpec:
             argv.append("--skip-llm")
         if self.threshold is not None:
             argv.extend(["--threshold", str(self.threshold)])
+        if self.screening:
+            argv.append("--screening")
+        if self.prompt_bank:
+            argv.append("--prompt-bank")
+        if self.src:
+            argv.extend(["--src", self.src])
+        return argv
+
+
+@dataclass
+class SeedGenJobSpec:
+    """joryu-seed-gen と同等のジョブ仕様。"""
+
+    config: str = DEFAULT_CONFIG
+    bank: str = ""
+    domains_config: str = ""
+    domain: str = ""
+    target_total: int = 230000
+    fake_llm: bool = False
+    dry_run: bool = False
+    resume: bool = False
+    sim_threshold: float = 0.85
+    batch_size: int = 8
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> SeedGenJobSpec:
+        return cls(
+            config=str(data.get("config") or DEFAULT_CONFIG),
+            bank=str(data.get("bank") or ""),
+            domains_config=str(data.get("domains_config") or ""),
+            domain=str(data.get("domain") or ""),
+            target_total=int(data.get("target_total", 230000)),
+            fake_llm=bool(data.get("fake_llm", False)),
+            dry_run=bool(data.get("dry_run", False)),
+            resume=bool(data.get("resume", False)),
+            sim_threshold=float(data.get("sim_threshold", 0.85)),
+            batch_size=int(data.get("batch_size", 8)),
+        )
+
+    def to_seed_gen_argv(self) -> list[str]:
+        argv: list[str] = []
+        if self.bank:
+            argv.extend(["--bank", self.bank])
+        if self.domains_config:
+            argv.extend(["--domains-config", self.domains_config])
+        if self.domain:
+            argv.extend(["--domain", self.domain])
+        argv.extend(["--target-total", str(self.target_total)])
+        argv.extend(["--sim-threshold", str(self.sim_threshold)])
+        argv.extend(["--batch-size", str(self.batch_size)])
+        if self.fake_llm:
+            argv.append("--fake-llm")
+        if self.dry_run:
+            argv.append("--dry-run")
+        if self.resume:
+            argv.append("--resume")
         return argv
 
 
@@ -146,7 +212,7 @@ class JobRecord:
 
     id: str
     kind: JobKind
-    spec: DistillJobSpec | CurateJobSpec
+    spec: DistillJobSpec | CurateJobSpec | SeedGenJobSpec
     status: JobStatus
     created_at: str
     started_at: str | None = None
@@ -172,7 +238,11 @@ class JobRecord:
         kind = JobKind(data.get("kind", JobKind.DISTILL.value))
         spec_data = data.get("spec") or {}
         if kind == JobKind.CURATE:
-            spec: DistillJobSpec | CurateJobSpec = CurateJobSpec.from_dict(spec_data)
+            spec: DistillJobSpec | CurateJobSpec | SeedGenJobSpec = CurateJobSpec.from_dict(
+                spec_data
+            )
+        elif kind == JobKind.SEED_GEN:
+            spec = SeedGenJobSpec.from_dict(spec_data)
         else:
             spec = DistillJobSpec.from_dict(spec_data)
         return cls(
@@ -190,12 +260,17 @@ class JobRecord:
     @classmethod
     def create(
         cls,
-        spec: DistillJobSpec | CurateJobSpec,
+        spec: DistillJobSpec | CurateJobSpec | SeedGenJobSpec,
         *,
         kind: JobKind | None = None,
     ) -> JobRecord:
         if kind is None:
-            kind = JobKind.CURATE if isinstance(spec, CurateJobSpec) else JobKind.DISTILL
+            if isinstance(spec, CurateJobSpec):
+                kind = JobKind.CURATE
+            elif isinstance(spec, SeedGenJobSpec):
+                kind = JobKind.SEED_GEN
+            else:
+                kind = JobKind.DISTILL
         return cls(
             id=str(uuid.uuid4()),
             kind=kind,

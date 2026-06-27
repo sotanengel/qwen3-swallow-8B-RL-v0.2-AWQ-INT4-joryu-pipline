@@ -70,3 +70,17 @@ uv run python scripts/judge_bias_check.py --scores data/curated/<run>/scores.jso
 - think テキストは評価時に冒頭/末尾各 500 字に truncate
 - `max_tokens` は judge クライアントで 256 に制限
 - 最大長サンプルで事前に 1 件試行してからバッチ実行
+
+## プロンプトバンク (Epic #313)
+
+プロンプトシード (`training_prompts.jsonl`) を **LLM 単体**でスクリーニングする。
+ルールシグナル (CTRL-CHAR / END-WELL 等) は適用しない。
+
+```bash
+JORYU_CURATE_FAKE_JUDGE=1 uv run joryu-curate \
+  --screening --prompt-bank \
+  --src data/prompts/training_prompts.jsonl \
+  --dst data/curated/prompt_screening
+```
+
+詳細: [seed_gen.md](seed_gen.md)

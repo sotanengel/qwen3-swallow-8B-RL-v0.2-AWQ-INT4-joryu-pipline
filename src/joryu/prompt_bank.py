@@ -30,6 +30,8 @@ class PromptRow(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     prompt: str
+    id: str | None = None
+    domain: str | None = None
     category: str | None = None
     style_id: str | None = None
     system_prompt: str | None = None
