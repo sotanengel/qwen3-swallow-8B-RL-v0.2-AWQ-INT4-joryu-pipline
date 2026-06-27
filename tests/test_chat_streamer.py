@@ -34,7 +34,7 @@ def _make_session(tmp_path: Path) -> ChatSession:
         session_id="sess-1",
         columns={"prose": col},
         created_at=0.0,
-        expires_at=999999.0,
+        last_updated_at=0.0,
     )
     return ChatSession(config=config, state=state)
 
@@ -185,7 +185,7 @@ def test_stream_system_prompt_contains_today_date(tmp_path: Path, monkeypatch) -
         session_id="sess-1",
         columns={"prose": col},
         created_at=0.0,
-        expires_at=999999.0,
+        last_updated_at=0.0,
     )
     session = ChatSession(config=config, state=state)
     column = session.columns["prose"]

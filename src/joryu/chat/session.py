@@ -1,101 +1,40 @@
-"""インメモリチャットセッション管理。"""
+"""チャットセッション管理（SQLite 永続化）。"""
 
 from __future__ import annotations
 
 import time
 import uuid
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from joryu.chat.session_db import SessionDatabase
+from joryu.chat.session_models import (
+    TITLE_MAX_LEN,
+    ChatColumn,
+    ChatSession,
+    ChatSessionConfig,
+    ChatSessionState,
+    SessionListItem,
+)
 from joryu.styles import StylePreset
 from joryu.tool_executor import ToolExecutor
 
-
-@dataclass
-class ChatColumn:
-    style_id: str
-    label: str
-    messages: list[dict[str, Any]] = field(default_factory=list)
-    turn_index: int = 0
-
-
-@dataclass(frozen=True)
-class ChatSessionConfig:
-    base_system_prompt: str = ""
-    model_name: str = ""
-    config_hash: str = ""
-    tools: tuple[dict[str, Any], ...] = ()
-    tool_ids: tuple[str, ...] = ()
-    out_path: Path = field(default_factory=lambda: Path("data/distilled/responses.jsonl"))
-    style_presets: dict[str, StylePreset] = field(default_factory=dict)
-
-
-@dataclass
-class ChatSessionState:
-    session_id: str
-    columns: dict[str, ChatColumn]
-    created_at: float
-    expires_at: float
-
-
-@dataclass
-class ChatSession:
-    config: ChatSessionConfig
-    state: ChatSessionState
-
-    @property
-    def session_id(self) -> str:
-        return self.state.session_id
-
-    @property
-    def columns(self) -> dict[str, ChatColumn]:
-        return self.state.columns
-
-    @property
-    def created_at(self) -> float:
-        return self.state.created_at
-
-    @property
-    def expires_at(self) -> float:
-        return self.state.expires_at
-
-    @property
-    def base_system_prompt(self) -> str:
-        return self.config.base_system_prompt
-
-    @property
-    def model_name(self) -> str:
-        return self.config.model_name
-
-    @property
-    def config_hash(self) -> str:
-        return self.config.config_hash
-
-    @property
-    def tools(self) -> list[dict[str, Any]]:
-        return list(self.config.tools)
-
-    @property
-    def tool_ids(self) -> list[str]:
-        return list(self.config.tool_ids)
-
-    @property
-    def out_path(self) -> Path:
-        return self.config.out_path
-
-    @property
-    def style_presets(self) -> dict[str, StylePreset]:
-        return self.config.style_presets
+__all__ = [
+    "TITLE_MAX_LEN",
+    "ChatColumn",
+    "ChatSession",
+    "ChatSessionConfig",
+    "ChatSessionState",
+    "ChatSessionStore",
+    "SessionListItem",
+]
 
 
 class ChatSessionStore:
-    """TTL 付きインメモリセッションストア。"""
+    """SQLite 永続化セッションストア。"""
 
-    TTL_SECONDS = 1800  # 30 分
-
-    def __init__(self) -> None:
-        self._sessions: dict[str, ChatSession] = {}
+    def __init__(self, *, db_path: Path) -> None:
+        self._db = SessionDatabase(db_path)
 
     def create(
         self,
@@ -110,8 +49,7 @@ class ChatSessionStore:
         executor: ToolExecutor | None = None,
     ) -> ChatSession:
         del executor  # executor は session に保持しない (DI 経由で渡す)
-        self.purge_expired()
-        now = time.monotonic()
+        now = time.time()
         session_id = str(uuid.uuid4())
         columns = {
             sid: ChatColumn(style_id=preset.style_id, label=preset.label)
@@ -130,30 +68,43 @@ class ChatSessionStore:
             session_id=session_id,
             columns=columns,
             created_at=now,
-            expires_at=now + self.TTL_SECONDS,
+            last_updated_at=now,
         )
         session = ChatSession(config=config, state=state)
-        self._sessions[session_id] = session
+        self._db.upsert(session)
         return session
 
     def get(self, session_id: str) -> ChatSession | None:
-        self.purge_expired()
-        session = self._sessions.get(session_id)
-        if session is None:
-            return None
-        if time.monotonic() > session.expires_at:
-            del self._sessions[session_id]
-            return None
-        return session
+        return self._db.load(session_id)
+
+    def save(self, session: ChatSession) -> None:
+        session.state.last_updated_at = time.time()
+        self._db.upsert(session)
 
     def delete(self, session_id: str) -> bool:
-        if session_id in self._sessions:
-            del self._sessions[session_id]
-            return True
-        return False
+        return self._db.delete(session_id)
 
-    def purge_expired(self) -> None:
-        now = time.monotonic()
-        expired = [sid for sid, s in self._sessions.items() if now > s.expires_at]
-        for sid in expired:
-            del self._sessions[sid]
+    def list_sessions(
+        self,
+        *,
+        limit: int = 20,
+        cursor: str | None = None,
+    ) -> tuple[list[SessionListItem], str | None]:
+        return self._db.list_sessions(limit=limit, cursor=cursor)
+
+    def set_title_if_empty(self, session: ChatSession, prompt: str) -> None:
+        if session.title is not None:
+            return
+        text = prompt.strip()
+        if not text:
+            return
+        session.state.title = text[:TITLE_MAX_LEN]
+        self.save(session)
+
+    def update_title(self, session_id: str, title: str) -> bool:
+        session = self.get(session_id)
+        if session is None:
+            return False
+        session.state.title = title.strip() or None
+        self.save(session)
+        return True

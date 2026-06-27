@@ -85,7 +85,9 @@ def test_sse_service_emits_heartbeats_during_slow_tool(
     executor = _SlowExecutor()
     service = ChatService(
         repo_root=repo_root,
-        session_store=ChatSessionStore(),
+        session_store=ChatSessionStore(
+            db_path=repo_root / "data" / "chat" / "sessions.db",
+        ),
         chat_client=chat_client,
         executor=executor,
     )
