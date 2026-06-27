@@ -73,7 +73,7 @@ async def monitor_client_disconnect(
     request: Any,
     cancel_event: asyncio.Event,
     *,
-    poll_interval: float = 0.5,
+    poll_interval: float = 0.05,
 ) -> None:
     """クライアント切断を検知して cancel_event を set する。"""
     is_disconnected = getattr(request, "is_disconnected", None)
