@@ -71,6 +71,27 @@ tools.yaml ───┤
                           data/jobs/*.json (状態・ログ)
 ```
 
+## レイヤー再設計 (#249)
+
+```
+Entry (cli/*, api/routes/*)
+        │
+        ▼
+DependencyContainer (container.py + config_resolver.py)
+        │
+        ├── DistillPipeline (distill/ Stage 連結)
+        │        └── ToolCallPipeline (tool_pipeline/)
+        ├── CuratePipeline (curate/pipeline.py + CurateStage)
+        └── RunnerStrategyFactory (jobs/strategy.py)
+
+Infrastructure
+  ├── joryu.vllm/     HttpVllmBase, ChatClient Protocol, ToolCallParser
+  ├── joryu.streaming/ SSEEncoder / SSEDecoder
+  └── joryu.schema/   Pydantic version 付き YAML 検証
+
+Dashboard: npm run gen:types → dashboard/src/types/api.ts (OpenAPI 同期)
+```
+
 ## レイヤーごとの責務
 
 | レイヤー | 入力 | 出力 | 主モジュール |
@@ -78,8 +99,9 @@ tools.yaml ───┤
 | 設定 | config.yaml / styles.yaml | dataclass | config.py / styles.py |
 | プロンプト読込 | JSONL | `PromptRow[]` | prompt_bank.py |
 | バリアント展開 | row + 直積引数 | `DistillVariant[]` | variants.py |
-| 推論 | messages + sampling | `(thinking, answer)` | vllm_client.py / vllm_serve_client.py |
-| ループ制御 | variants, deadline, count | 書き込んだ件数 | distill.py |
+| 推論 | messages + sampling | `(thinking, answer)` | joryu.vllm/ (shim: vllm_client.py) |
+| ループ制御 | variants, deadline, count | 書き込んだ件数 | distill/pipeline.py (DistillPipeline) |
+| tool loop | messages + tools | ChatResult + turns | tool_pipeline/pipeline.py |
 | 進捗 | iteration ごと | stderr 表示 | progress_reporter.py |
 | 出力 | record dict | JSONL 1 行 | writer.py |
 | 再開 | 既存 JSONL | 処理済 run キー集合 | progress.py |
@@ -87,7 +109,7 @@ tools.yaml ───┤
 | 統計 | JSONL | dashboard 用 JSON | stats.py |
 | Docker 委譲 | Windows ネイティブ呼び出し | `docker run` 実行 | docker_delegate.py |
 | ジョブ API | HTTP POST ジョブ spec | queued/running 状態 + ログ | jobs/ + api/ |
-| ジョブ実行 | spec | 蒸留 subprocess (daemon 経由 or GPU docker run) | jobs/runner.py |
+| ジョブ実行 | spec | 蒸留 subprocess (daemon 経由 or GPU docker run) | jobs/runner.py + jobs/strategy.py |
 | vLLM 常駐 | config.yaml | HTTP `/health`, OpenAI `/v1/*` | docker-compose (`vllm serve`) |
 
 ## CLI 構成

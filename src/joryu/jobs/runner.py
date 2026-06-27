@@ -175,11 +175,9 @@ def _curate_argv_with_dst(spec: CurateJobSpec, job_id: str) -> list[str]:
 
 
 def build_job_command(repo_root: Path, record: JobRecord) -> list[str]:
-    if record.kind == JobKind.CURATE:
-        assert isinstance(record.spec, CurateJobSpec)
-        return build_curate_command(repo_root, record.spec, job_id=record.id)
-    assert isinstance(record.spec, DistillJobSpec)
-    return build_distill_command(repo_root, record.spec)
+    from joryu.jobs.strategy import RunnerStrategyFactory
+
+    return RunnerStrategyFactory.build_job_command(repo_root, record)
 
 
 def build_distill_command(repo_root: Path, spec: DistillJobSpec) -> list[str]:
