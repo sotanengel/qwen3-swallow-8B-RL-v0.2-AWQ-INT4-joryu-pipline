@@ -16,6 +16,13 @@ export interface DistilledRecord {
   finish_reason?: string | null;
   prompt_tokens?: number | null;
   completion_tokens?: number | null;
+  tool_calls?: Array<{ name?: string; arguments?: unknown }>;
+  turns?: Array<{
+    role?: string;
+    name?: string;
+    content?: string;
+    tool_calls?: Array<{ name?: string; arguments?: unknown }>;
+  }>;
 }
 
 export function parseJsonl(text: string): DistilledRecord[] {
