@@ -622,6 +622,28 @@ def test_serve_alias_still_works(monkeypatch: pytest.MonkeyPatch) -> None:
     assert calls[1] == ["docker", "compose", "up", "dashboard"]
 
 
+def test_up_compose_failure_runs_rollback(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = _patch_runner(monkeypatch)
+
+    class _FailUp:
+        returncode = 1
+
+    def _fake_run(cmd: list[str], *args: Any, **kwargs: Any) -> Any:
+        if kwargs.get("capture_output"):
+            return type("R", (), {"returncode": 0, "stdout": "test-head\n"})()
+        calls.append(cmd)
+        if len(cmd) >= 3 and cmd[0:3] == ["docker", "compose", "up"]:
+            return _FailUp()
+        return type("R", (), {"returncode": 0})()
+
+    monkeypatch.setattr("joryu.compose.subprocess.run", _fake_run)
+    monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: set())
+    monkeypatch.setattr("joryu.preflight.joryu_container_running", lambda **_: False)
+    rc = cli_up.main(["--detach"])
+    assert rc == 1
+    assert any(cmd[0:3] == ["docker", "compose", "down"] for cmd in calls)
+
+
 def test_up_includes_mcp_when_config_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
     calls = _patch_runner(monkeypatch)
     monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: set())
