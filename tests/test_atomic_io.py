@@ -12,6 +12,11 @@ from joryu.chat.session_db import SessionDatabase
 from joryu.vllm_limits import VllmLimits, write_probe_limits
 
 
+def test_concurrency_write_probe_limits_parallel_writes(tmp_path: Path) -> None:
+    """#272: concurrency 命名規則（write_probe_limits 並行）。"""
+    test_write_probe_limits_concurrent_writes(tmp_path)
+
+
 def test_write_probe_limits_concurrent_writes(tmp_path: Path) -> None:
     path = tmp_path / "vllm_limits.json"
     limits = VllmLimits(num_ctx=2048, num_predict=512)
