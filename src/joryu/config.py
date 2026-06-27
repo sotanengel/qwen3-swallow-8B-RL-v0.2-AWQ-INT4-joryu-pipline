@@ -175,6 +175,17 @@ class McpConfig:
 
 
 @dataclass
+class WeatherToolsConfig:
+    timeout: float = 5.0
+    provider: str = "open_meteo"
+
+
+@dataclass
+class ToolsConfig:
+    weather: WeatherToolsConfig = field(default_factory=WeatherToolsConfig)
+
+
+@dataclass
 class Config:
     model: ModelConfig = field(default_factory=ModelConfig)
     vllm: VllmConfig = field(default_factory=VllmConfig)
@@ -183,6 +194,7 @@ class Config:
     curate: CurateConfig = field(default_factory=CurateConfig)
     search: SearchConfig = field(default_factory=SearchConfig)
     mcp: McpConfig = field(default_factory=McpConfig)
+    tools: ToolsConfig = field(default_factory=ToolsConfig)
 
     def fingerprint(self) -> str:
         """設定の SHA256 ハッシュ。出力レコードの再現性記録に使う。
@@ -269,4 +281,9 @@ def load_config(path: str | Path) -> Config:
     cfg.mcp = _merge_section(cfg.mcp, mcp_raw if isinstance(mcp_raw, dict) else None)
     if isinstance(timeout_raw, dict):
         cfg.mcp.timeout = _merge_section(cfg.mcp.timeout, timeout_raw)
+    tools_raw = raw.get("tools") or {}
+    weather_raw = tools_raw.pop("weather", None) if isinstance(tools_raw, dict) else None
+    cfg.tools = _merge_section(cfg.tools, tools_raw if isinstance(tools_raw, dict) else None)
+    if isinstance(weather_raw, dict):
+        cfg.tools.weather = _merge_section(cfg.tools.weather, weather_raw)
     return cfg

@@ -10,8 +10,10 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from joryu.api.routes import chat, curate, dashboard, jobs, search
 from joryu.chat.session import ChatSessionStore
+from joryu.config import load_config
 from joryu.jobs.runner import JobRunner, default_jobs_dir
 from joryu.jobs.store import JobStore
+from joryu.tools_impl.weather import apply_weather_config
 
 
 def repo_root_from_env() -> Path:
@@ -43,6 +45,14 @@ def create_app(*, repo_root: Path | None = None) -> FastAPI:
     app.state.job_runner = runner
     app.state.search_indexes = {}
     app.state.chat_sessions = ChatSessionStore()
+
+    cfg_path = root / "config.yaml"
+    if cfg_path.exists():
+        cfg = load_config(cfg_path)
+        apply_weather_config(
+            timeout=cfg.tools.weather.timeout,
+            provider=cfg.tools.weather.provider,
+        )
 
     @app.get("/api/health")
     def health() -> dict[str, str]:
