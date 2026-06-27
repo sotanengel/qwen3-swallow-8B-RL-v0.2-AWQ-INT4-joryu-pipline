@@ -14,9 +14,11 @@ from joryu.chat.sse import (
     sse_single_column,
     with_heartbeat,
 )
+from joryu.chat.turn_persistence import TurnPersistence
 from joryu.config import load_config
 from joryu.datetime_context import format_date_context_ja, now_jst
 from joryu.styles import StylePreset, load_styles
+from joryu.system_prompt import build_system_prompt
 from joryu.tool_executor import ToolExecutor
 from joryu.vllm_client import SupportsChat, SupportsChatStream
 
@@ -39,6 +41,9 @@ class ChatService:
         self._executor = executor
         self._stream_client = stream_client
         self._cfg = load_config(repo_root / "config.yaml")
+        TurnPersistence.configure_dedup(
+            max_per_key=self._cfg.distill.max_records_per_prompt_style,
+        )
 
     def load_styles(self) -> dict[str, StylePreset]:
         styles_path = self._repo_root / self._cfg.distill.styles_file
@@ -49,10 +54,21 @@ class ChatService:
 
         tools_map = load_tools(self._repo_root / self._cfg.distill.tools_file)
         tool_ids = sorted(tools_map.keys())
-        tools_schema = merge_tools([t.to_openai_schema() for t in tools_map.values()], [])
+        tool_defs_list = [t for t in tools_map.values()]
+        tools_schema = merge_tools([t.to_openai_schema() for t in tool_defs_list], [])
         out_path = self._repo_root / self._cfg.distill.out_dir / self._cfg.distill.out_file
         date_context = format_date_context_ja(now_jst())
-        base_prompt = f"{date_context}\n\n{self._cfg.distill.system_prompt.rstrip()}"
+        base_core = f"{date_context}\n\n{self._cfg.distill.system_prompt.rstrip()}"
+        base_prompt = build_system_prompt(base=base_core, factual_guard=True)
+        tool_definitions = [
+            {
+                "name": t.name,
+                "description": t.description,
+                "parameters": t.parameters,
+                "invocation_rule": t.invocation_rule,
+            }
+            for t in tool_defs_list
+        ]
         return self._session_store.create(
             styles,
             base_system_prompt=base_prompt,
@@ -60,6 +76,7 @@ class ChatService:
             config_hash=self._cfg.fingerprint(),
             tools=tools_schema,
             tool_ids=tool_ids,
+            tool_definitions=tool_definitions,
             out_path=out_path,
         )
 

@@ -227,3 +227,5 @@ print("[verify]  -> chat SSE order OK", file=sys.stderr)
 PY
 
 echo "[verify] OK: end-to-end smoke passed" >&2
+
+bash scripts/verify_distill_quality.sh

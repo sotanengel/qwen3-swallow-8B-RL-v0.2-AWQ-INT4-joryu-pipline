@@ -62,6 +62,7 @@ def _config_to_dict(config: ChatSessionConfig) -> dict[str, Any]:
         "config_hash": config.config_hash,
         "tools": list(config.tools),
         "tool_ids": list(config.tool_ids),
+        "tool_definitions": list(config.tool_definitions),
         "out_path": str(config.out_path),
         "style_presets": {sid: _style_preset_to_dict(p) for sid, p in config.style_presets.items()},
     }
@@ -75,6 +76,7 @@ def _config_from_dict(data: dict[str, Any]) -> ChatSessionConfig:
         config_hash=str(data["config_hash"]),
         tools=tuple(data.get("tools") or []),
         tool_ids=tuple(data.get("tool_ids") or []),
+        tool_definitions=tuple(data.get("tool_definitions") or []),
         out_path=Path(str(data["out_path"])),
         style_presets={sid: _style_preset_from_dict(body) for sid, body in presets_raw.items()},
     )

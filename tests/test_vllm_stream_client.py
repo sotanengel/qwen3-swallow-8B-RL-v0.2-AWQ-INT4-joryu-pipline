@@ -12,6 +12,7 @@ from joryu.vllm_stream_client import (
     StreamChunk,
     ToolCallStreamAccumulator,
     VllmServeStreamClient,
+    _assemble_chat_result,
     openai_sse_data_to_chunks,
     parse_openai_sse_data,
 )
@@ -87,6 +88,29 @@ async def _collect_stream(client: VllmServeStreamClient) -> list[StreamChunk]:
     ):
         chunks.append(chunk)
     return chunks
+
+
+def test_assemble_chat_result_extracts_bare_json_weather() -> None:
+    """失敗 A: streaming で OpenAI tool_calls 空 + bare JSON content → 抽出。"""
+    bare = '{"name": "weather", "arguments": {"location": "Tokyo", "date": "2026-06-27"}}'
+    tools = [
+        {
+            "type": "function",
+            "function": {"name": "weather", "description": "d", "parameters": {}},
+        }
+    ]
+    result = _assemble_chat_result(
+        content=bare,
+        thinking=None,
+        finish_reason="stop",
+        tool_calls=(),
+        known_tool_names={"weather"},
+        effective_max_tokens=512,
+        tools=tools,
+    )
+    assert len(result.tool_calls) == 1
+    assert result.tool_calls[0].name == "weather"
+    assert '"name"' not in (result.answer or "")
 
 
 def test_chat_stream_yields_content_and_done(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -97,6 +97,8 @@ class DistillConfig:
     truncation_retry_max_tokens: int | None = None
     # 打ち切り再試行の上限回数 (到達時は最後のレコードを採用)
     truncation_retry_max_attempts: int | None = None
+    # 同一 (prompt, style_id) の JSONL 追記上限 (#235)
+    max_records_per_prompt_style: int = 5
 
 
 @dataclass

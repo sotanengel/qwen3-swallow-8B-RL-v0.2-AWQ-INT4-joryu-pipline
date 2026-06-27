@@ -125,12 +125,9 @@ def merge_with_defaults(
         resolved_tools = [t.to_openai_schema() for t in resolved_tool_defs]
     if row.tools:
         resolved_tools = merge_tools(resolved_tools, row.tools)
-    if resolved_tools:
-        base = system_prompt.rstrip()
-        hint = format_tool_usage_hint(resolved_tool_defs)
-        system_prompt = f"{base}\n\n{hint}" if base else hint
-        if "repetition_penalty" not in row.sampling:
-            sampling["repetition_penalty"] = cfg.distill.tools_repetition_penalty
+    if resolved_tools and "repetition_penalty" not in row.sampling:
+        sampling["repetition_penalty"] = cfg.distill.tools_repetition_penalty
+    # tool hint は variants.expand_variants → build_system_prompt で style より前に付与
     return EffectiveSampling(
         system_prompt=system_prompt,
         sampling=sampling,

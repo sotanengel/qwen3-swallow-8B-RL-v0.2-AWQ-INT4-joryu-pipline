@@ -46,6 +46,7 @@ class ChatSessionStore:
         tools: list[dict[str, Any]],
         tool_ids: list[str],
         out_path: Path,
+        tool_definitions: list[dict[str, Any]] | None = None,
         executor: ToolExecutor | None = None,
     ) -> ChatSession:
         del executor  # executor は session に保持しない (DI 経由で渡す)
@@ -61,6 +62,7 @@ class ChatSessionStore:
             config_hash=config_hash,
             tools=tuple(tools),
             tool_ids=tuple(tool_ids),
+            tool_definitions=tuple(tool_definitions or []),
             out_path=out_path,
             style_presets=dict(styles),
         )

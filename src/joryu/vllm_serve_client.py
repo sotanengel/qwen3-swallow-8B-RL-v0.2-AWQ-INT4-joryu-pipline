@@ -8,9 +8,9 @@ import urllib.error
 import urllib.request
 from typing import Any
 
+from joryu.completion_normalize import normalize_chat_result
 from joryu.tool_calls import (
     ParsedToolCall,
-    extract_tool_calls_with_diagnostics,
 )
 from joryu.vllm_client import ChatResult, VllmError, extract_known_tool_names, extract_thinking
 
@@ -138,35 +138,26 @@ def openai_response_to_chat_result(
         reasoning_content=reasoning_str,
     )
 
-    if parsed_from_openai:
-        tool_calls = tuple(parsed_from_openai)
-        _, cleaned_answer, diagnostics = extract_tool_calls_with_diagnostics(
-            answer,
-            known_tool_names=known_tool_names or None,
-        )
-        answer = cleaned_answer
-        suspected = tuple(diagnostics.get("suspected_unparsed_tool_calls", []))
-    else:
-        tool_calls, answer, diagnostics = extract_tool_calls_with_diagnostics(
-            answer,
-            known_tool_names=known_tool_names or None,
-        )
-        suspected = tuple(diagnostics.get("suspected_unparsed_tool_calls", []))
-
     usage = data.get("usage") or {}
     prompt_tokens = usage.get("prompt_tokens")
     completion_tokens = usage.get("completion_tokens")
-    return ChatResult(
+
+    preliminary = ChatResult(
         thinking=thinking,
         answer=answer,
         finish_reason=choice.get("finish_reason"),
         prompt_tokens=prompt_tokens if isinstance(prompt_tokens, int) else None,
         completion_tokens=completion_tokens if isinstance(completion_tokens, int) else None,
         effective_max_tokens=effective_max_tokens,
-        tool_calls=tuple(tool_calls),
+        tool_calls=tuple(parsed_from_openai),
         raw_completion=raw_completion or None,
-        suspected_unparsed_tool_calls=suspected,
+        suspected_unparsed_tool_calls=(),
     )
+    known_list = list(known_tool_names) if known_tool_names else None
+    tools_arg = None
+    if known_list:
+        tools_arg = [{"type": "function", "function": {"name": n}} for n in known_list]
+    return normalize_chat_result(preliminary, tools=tools_arg)
 
 
 class VllmServeClient:

@@ -150,3 +150,42 @@ responses.high_quality.jsonl              ← SFT 教師データ
 
 **判断閾値**: curate 通過率が 40% 未満なら教師変更を優先。stats の
 `tool_planned_but_not_called_rate` / `no_think_fallback_rescued_count` で A/B 計測する。
+
+## データ品質ガード (#220)
+
+`data/distilled/responses.jsonl` レビューで観測された失敗パターン A〜I と、各レイヤでの抑止策。
+
+| ID | 失敗パターン | 抑止レイヤ | 実装 |
+|---|---|---|---|
+| A | answer に raw JSON tool_call 漏出 | 出力パーサ | [`completion_normalize.py`](../src/joryu/completion_normalize.py), [`vllm_stream_client.py`](../src/joryu/vllm_stream_client.py) — [#229](https://github.com/sotanengel/qwen3-swallow-8B-RL-v0.2-AWQ-INT4-joryu-pipline/issues/229) |
+| B | ツール未呼び出しで温度等を捏造 | system プロンプト + R-10 | [`system_prompt.py`](../src/joryu/system_prompt.py), R-10 `FACT-HALL` — [#231](https://github.com/sotanengel/qwen3-swallow-8B-RL-v0.2-AWQ-INT4-joryu-pipline/issues/231) |
+| C | 「仮想データ」と明示しつつ表を捏造 | system プロンプト + R-10 | factual guard, R-10 `VIRT-DATA` — [#231](https://github.com/sotanengel/qwen3-swallow-8B-RL-v0.2-AWQ-INT4-joryu-pipline/issues/231) |
+| D | thinking に英語メタ命令断片 | 出力パーサ | `sanitize_thinking_trace()` — [#229](https://github.com/sotanengel/qwen3-swallow-8B-RL-v0.2-AWQ-INT4-joryu-pipline/issues/229) |
+| E | answer 空 / thinking 途中打切り | チャット再生成 | [`chat/generate_retry.py`](../src/joryu/chat/generate_retry.py) — [#232](https://github.com/sotanengel/qwen3-swallow-8B-RL-v0.2-AWQ-INT4-joryu-pipline/issues/232) |
+| F | 2 周目以降 JSON 再生成で tool ループ不入 | tool ループ + パーサ | [`tool_loop.py`](../src/joryu/chat/tool_loop.py) + `normalize_chat_result` — [#233](https://github.com/sotanengel/qwen3-swallow-8B-RL-v0.2-AWQ-INT4-joryu-pipline/issues/233) |
+| G | 同一プロンプトの過剰重複 | JSONL 追記前 | [`prompt_dedup.py`](../src/joryu/prompt_dedup.py) — [#235](https://github.com/sotanengel/qwen3-swallow-8B-RL-v0.2-AWQ-INT4-joryu-pipline/issues/235) |
+| H | `suspected_unparsed_tool_calls` 常に空 | 診断 + R-10 | `normalize_chat_result`, R-10 `TOOL-LEAK` — [#230](https://github.com/sotanengel/qwen3-swallow-8B-RL-v0.2-AWQ-INT4-joryu-pipline/issues/230) |
+| I | prose 指示でも JSON / 箇条書き | system プロンプト順 + R-10 | style を最後に配置, R-10 `STYLE-FMT` — [#234](https://github.com/sotanengel/qwen3-swallow-8B-RL-v0.2-AWQ-INT4-joryu-pipline/issues/234) |
+
+### レイヤ別責務マトリクス
+
+| レイヤ | 検出 (reject) | 修正 (rewrite) |
+|---|---|---|
+| system プロンプト合成 | — | factual guard, tool hint, style 末尾配置 |
+| chat_template / vLLM | — | （モデル出力形式はパーサ側で救済） |
+| 出力パーサ (`completion_normalize`) | suspected hints | bare JSON → tool_calls, thinking サニタイズ |
+| tool ループ | — | 各ターン normalize + recovery |
+| チャット retry | 空 answer 時 JSONL 非追記 | 最大 2 回再生成 |
+| R-10 stat | TOOL-LEAK, FACT-HALL, VIRT-DATA, STYLE-FMT | — |
+| R-11 LLM judge | 既存 rubric | — |
+
+### 追加 R-10 ルール
+
+| Code | hard_reject 条件 |
+|---|---|
+| `TOOL-LEAK` | `suspected_unparsed_tool_calls` 非空 |
+| `FACT-HALL` | tools あり & tool_calls 空 & answer に `\d+℃` 等 |
+| `VIRT-DATA` | answer に `仮想データ` / `架空` / `推測値` / `（例）` |
+| `STYLE-FMT` | prose/qa_short/dialog で markdown 記号・箇条書き |
+
+CI 検証: [`scripts/verify_distill_quality.sh`](../scripts/verify_distill_quality.sh)（[`verify_pipeline.sh`](../scripts/verify_pipeline.sh) から呼び出し）。回帰テスト: [`tests/test_distill_quality_regression.py`](../tests/test_distill_quality_regression.py) — [#237](https://github.com/sotanengel/qwen3-swallow-8B-RL-v0.2-AWQ-INT4-joryu-pipline/issues/237).

@@ -113,32 +113,38 @@ def test_load_missing_file(tmp_path: Path) -> None:
 
 def test_merge_with_defaults_appends_tool_hint_when_tools_resolved() -> None:
     from joryu.tools import load_tools
+    from joryu.variants import expand_variants
 
     cfg = Config()
     row = PromptRow(prompt="p", tool_ids=["search"])
     eff = merge_with_defaults(row, cfg, tools_registry=load_tools("tools.yaml"))
-    assert "ツール" in eff.system_prompt
-    assert "架空" in eff.system_prompt
     assert len(eff.tools) == 1
+    variant = expand_variants([row], cfg, tools_registry=load_tools("tools.yaml"))[0]
+    assert "ツール" in variant.eff.system_prompt
+    assert "架空" in variant.eff.system_prompt
 
 
 def test_merge_with_defaults_uses_invocation_rules_in_hint() -> None:
     from joryu.prompt_bank import format_tool_usage_hint
     from joryu.tools import load_tools
+    from joryu.variants import expand_variants
 
     cfg = Config()
     row = PromptRow(prompt="p", tool_ids=["search"])
     reg = load_tools("tools.yaml")
     eff = merge_with_defaults(row, cfg, tools_registry=reg)
-    assert "利用可能なツール:" in eff.system_prompt
-    assert "- search:" in eff.system_prompt
-    assert reg["search"].invocation_rule in eff.system_prompt
+    assert len(eff.tools) == 1
+    variant = expand_variants([row], cfg, tools_registry=reg)[0]
+    assert "利用可能なツール:" in variant.eff.system_prompt
+    assert "- search:" in variant.eff.system_prompt
+    assert reg["search"].invocation_rule in variant.eff.system_prompt
     hint = format_tool_usage_hint([reg["search"]])
     assert "事実・最新情報" in hint
 
 
 def test_merge_with_defaults_legacy_hint_without_invocation_rules(tmp_path: Path) -> None:
     from joryu.tools import load_tools
+    from joryu.variants import expand_variants
 
     p = tmp_path / "tools.yaml"
     p.write_text(
@@ -148,9 +154,12 @@ def test_merge_with_defaults_legacy_hint_without_invocation_rules(tmp_path: Path
     )
     cfg = Config()
     row = PromptRow(prompt="p", tool_ids=["search"])
-    eff = merge_with_defaults(row, cfg, tools_registry=load_tools(p))
-    assert "利用可能なツールが提供されています。" in eff.system_prompt
-    assert "利用可能なツール:" not in eff.system_prompt
+    reg = load_tools(p)
+    eff = merge_with_defaults(row, cfg, tools_registry=reg)
+    assert len(eff.tools) == 1
+    variant = expand_variants([row], cfg, tools_registry=reg)[0]
+    assert "利用可能なツールが提供されています。" in variant.eff.system_prompt
+    assert "利用可能なツール:" not in variant.eff.system_prompt
 
 
 def test_merge_with_defaults_no_tool_hint_without_tools() -> None:
