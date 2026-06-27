@@ -131,8 +131,16 @@ _MCP_TOOL_NAMES = frozenset({"search", "weather", "fetch_url"})
 class McpToolExecutor:
     """MCP 経由 (または同一実装への in-process bridge) のツール実行。"""
 
-    def __init__(self, *, url: str = "") -> None:
+    def __init__(
+        self,
+        *,
+        url: str = "",
+        connect_timeout: float = 3.0,
+        read_timeout: float = 8.0,
+    ) -> None:
         self._url = url.rstrip("/")
+        self._connect_timeout = connect_timeout
+        self._read_timeout = read_timeout
         self._local = build_default_executor()
 
     def run(self, call: ParsedToolCall) -> str:
@@ -148,7 +156,13 @@ class McpToolExecutor:
         import httpx
 
         mcp_tool = "web_search" if call.name == "search" else call.name
-        with httpx.Client(timeout=httpx.Timeout(30.0)) as client:
+        timeout = httpx.Timeout(
+            connect=self._connect_timeout,
+            read=self._read_timeout,
+            write=5.0,
+            pool=5.0,
+        )
+        with httpx.Client(timeout=timeout) as client:
             resp = client.post(
                 f"{self._url}/tools/{mcp_tool}",
                 json=call.arguments,

@@ -33,3 +33,18 @@ def test_mcp_tool_executor_calc_stays_local() -> None:
     ex = McpToolExecutor()
     out = ex.run(ParsedToolCall(name="calc", arguments={"expression": "2+2"}, raw=""))
     assert out == "4"
+
+
+@respx.mock
+def test_mcp_tool_executor_uses_configurable_timeout() -> None:
+    route = respx.post("http://localhost:8200/tools/weather").mock(
+        side_effect=httpx.TimeoutException("timeout"),
+    )
+    ex = McpToolExecutor(
+        url="http://localhost:8200",
+        connect_timeout=0.1,
+        read_timeout=0.1,
+    )
+    with pytest.raises(httpx.TimeoutException):
+        ex.run(ParsedToolCall(name="weather", arguments={"location": "東京"}, raw=""))
+    assert route.called

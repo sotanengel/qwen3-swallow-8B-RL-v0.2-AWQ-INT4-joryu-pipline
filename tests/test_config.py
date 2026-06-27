@@ -143,3 +143,23 @@ def test_fingerprint_unchanged_when_vllm_serve_port_changes() -> None:
     alt = Config()
     alt.vllm.serve_port = 9999
     assert base.fingerprint() == alt.fingerprint()
+
+
+def test_load_config_mcp_timeout(tmp_path: Path) -> None:
+    path = tmp_path / "mcp.yaml"
+    path.write_text(
+        """
+mcp:
+  enabled: true
+  url: "http://localhost:8200"
+  timeout:
+    connect: 1.5
+    read: 6.0
+""".strip(),
+        encoding="utf-8",
+    )
+    cfg = load_config(path)
+    assert cfg.mcp.enabled is True
+    assert cfg.mcp.url == "http://localhost:8200"
+    assert cfg.mcp.timeout.connect == pytest.approx(1.5)
+    assert cfg.mcp.timeout.read == pytest.approx(6.0)

@@ -162,9 +162,16 @@ class CurateConfig:
 
 
 @dataclass
+class McpTimeoutConfig:
+    connect: float = 3.0
+    read: float = 8.0
+
+
+@dataclass
 class McpConfig:
     enabled: bool = False
     url: str = ""
+    timeout: McpTimeoutConfig = field(default_factory=McpTimeoutConfig)
 
 
 @dataclass
@@ -257,5 +264,9 @@ def load_config(path: str | Path) -> Config:
     if isinstance(thresholds_raw, dict):
         cfg.curate.thresholds = _merge_section(cfg.curate.thresholds, thresholds_raw)
     cfg.search = _merge_section(cfg.search, raw.get("search"))
-    cfg.mcp = _merge_section(cfg.mcp, raw.get("mcp"))
+    mcp_raw = raw.get("mcp") or {}
+    timeout_raw = mcp_raw.pop("timeout", None) if isinstance(mcp_raw, dict) else None
+    cfg.mcp = _merge_section(cfg.mcp, mcp_raw if isinstance(mcp_raw, dict) else None)
+    if isinstance(timeout_raw, dict):
+        cfg.mcp.timeout = _merge_section(cfg.mcp.timeout, timeout_raw)
     return cfg

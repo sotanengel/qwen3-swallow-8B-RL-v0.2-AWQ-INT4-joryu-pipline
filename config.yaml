@@ -63,6 +63,9 @@ search:
 mcp:
   enabled: true
   url: "http://mcp:8200"
+  timeout:
+    connect: 3.0
+    read: 8.0
 
 export:
   out_dir: "exports"
