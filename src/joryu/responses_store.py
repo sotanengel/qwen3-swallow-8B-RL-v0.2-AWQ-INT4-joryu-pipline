@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from joryu.dashboard_json import _atomic_write_text
+from joryu.atomic_io import atomic_write_text
 
 RECORD_KEY_SEP = "\x1e"
 
@@ -68,7 +68,7 @@ def write_records(path: Path, records: list[dict[str, Any]]) -> None:
     text = "\n".join(lines)
     if text:
         text += "\n"
-    _atomic_write_text(path, text)
+    atomic_write_text(path, text)
 
 
 def delete_record(path: Path, target_id: str) -> int:
