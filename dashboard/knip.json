@@ -1,0 +1,12 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "next": {
+    "entry": ["next.config.mjs"]
+  },
+  "vitest": {
+    "entry": ["vitest.config.ts", "src/**/*.test.{ts,tsx}"]
+  },
+  "project": ["src/**/*.{ts,tsx}"],
+  "ignoreDependencies": ["eslint", "eslint-config-next"],
+  "ignoreExportsUsedInFile": true
+}

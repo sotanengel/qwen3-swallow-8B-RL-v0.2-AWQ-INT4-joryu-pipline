@@ -46,19 +46,6 @@ export async function fetchAllLiveJson(urls: readonly string[]): Promise<unknown
   return settled.filter((row): row is unknown => row !== null);
 }
 
-/** @deprecated fetchAllLiveJson を使用 */
-export async function fetchLiveJson(urls: readonly string[]): Promise<Response | null> {
-  for (const url of urls) {
-    try {
-      const r = await fetch(withCacheBust(url), { cache: "no-store" });
-      if (r.ok) return r;
-    } catch {
-      /* try next source */
-    }
-  }
-  return null;
-}
-
 export async function fetchBestLiveText(urls: readonly string[]): Promise<string | null> {
   const settled = await Promise.all(
     urls.map(async (url) => {
@@ -74,9 +61,4 @@ export async function fetchBestLiveText(urls: readonly string[]): Promise<string
   const texts = settled.filter((row): row is string => row !== null);
   if (texts.length === 0) return null;
   return texts.reduce((best, cur) => (cur.length > best.length ? cur : best));
-}
-
-/** @deprecated fetchBestLiveText を使用 */
-export async function fetchLiveText(urls: readonly string[]): Promise<string | null> {
-  return fetchBestLiveText(urls);
 }

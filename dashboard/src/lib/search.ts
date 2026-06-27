@@ -91,33 +91,3 @@ export async function searchRanked(req: SearchRequest): Promise<SearchResponse> 
   }
   return { total: 0, index_status: "unavailable", hits: [] };
 }
-
-export async function fetchSearchStatus(): Promise<{
-  index_status: SearchIndexStatus;
-  record_count: number;
-  stale: boolean;
-}> {
-  const urls = [searchStatusUrl(), `${API_BASE}/api/dashboard/search/status`];
-  for (const url of urls) {
-    try {
-      const res = await fetch(`${url}?t=${Date.now()}`, { cache: "no-store" });
-      if (!res.ok) continue;
-      const data = (await res.json()) as Record<string, unknown>;
-      const status = data.index_status;
-      return {
-        index_status:
-          status === "ready" ||
-          status === "building" ||
-          status === "empty" ||
-          status === "unavailable"
-            ? status
-            : "unavailable",
-        record_count: typeof data.record_count === "number" ? data.record_count : 0,
-        stale: Boolean(data.stale),
-      };
-    } catch {
-      /* try next */
-    }
-  }
-  return { index_status: "unavailable", record_count: 0, stale: false };
-}

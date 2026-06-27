@@ -5,11 +5,6 @@ export type { ChatEvent } from "./sse-parse";
 export { parseSseBuffer, parseSseText } from "./sse-parse";
 export { JobActiveError } from "./api/errors";
 
-export type ChatStyle = {
-  style_id: string;
-  label: string;
-};
-
 export type ChatMessage = {
   role: string;
   content: string;
@@ -54,10 +49,6 @@ async function chatFetch<T>(path: string, init?: RequestInit): Promise<T> {
   });
   await checkResponse(res);
   return res.json() as Promise<T>;
-}
-
-export async function fetchStyles(): Promise<ChatStyle[]> {
-  return chatFetch<ChatStyle[]>("/styles");
 }
 
 export async function createSession(): Promise<ChatSessionState> {
