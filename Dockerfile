@@ -34,9 +34,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=builder /usr/local /usr/local
 COPY --from=builder /app /app
 
-RUN uv pip install torch --python /app/.venv/bin/python \
+RUN uv pip install "torch>=2.12.1" --python /app/.venv/bin/python \
        --index-url https://download.pytorch.org/whl/cu130 && \
-    uv pip install vllm --python /app/.venv/bin/python
+    uv pip install "vllm @ git+https://github.com/vllm-project/vllm@v0.23.1rc0" \
+       --python /app/.venv/bin/python
 
 ENV PATH="/app/.venv/bin:/usr/local/bin:$PATH" \
     PYTHONPATH=/app/src \
