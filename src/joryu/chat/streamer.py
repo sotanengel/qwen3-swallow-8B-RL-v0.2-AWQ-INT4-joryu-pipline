@@ -10,6 +10,7 @@ from joryu.chat.generate_retry import chat_needs_retry, run_tool_loop_with_retry
 from joryu.chat.session import ChatColumn, ChatSession
 from joryu.chat.tool_loop import ToolLoopRunner
 from joryu.chat.turn_persistence import TurnPersistence
+from joryu.styles import StylePreset
 from joryu.system_prompt import build_system_prompt
 from joryu.tool_executor import ToolExecutor
 from joryu.tools import ToolDefinition
@@ -17,6 +18,21 @@ from joryu.vllm_client import SupportsChat, SupportsChatStream
 
 DEFAULT_MAX_TURNS = 4
 _FINISH_REASON_ERROR = "error"
+
+
+def build_column_system_prompt(
+    *,
+    base_system_prompt: str,
+    tool_defs: list[ToolDefinition] | None,
+    style_preset: StylePreset,
+) -> str:
+    """列ごとの system prompt。base には factual guard 済みのため再付与しない。"""
+    return build_system_prompt(
+        base=base_system_prompt,
+        tool_defs=tool_defs or None,
+        style_preset=style_preset,
+        factual_guard=False,
+    )
 
 
 async def stream_column_turn(
@@ -47,8 +63,8 @@ async def stream_column_turn(
             )
             for d in session.config.tool_definitions
         ]
-        system_prompt = build_system_prompt(
-            base=session.base_system_prompt,
+        system_prompt = build_column_system_prompt(
+            base_system_prompt=session.base_system_prompt,
             tool_defs=tool_defs or None,
             style_preset=preset,
         )
