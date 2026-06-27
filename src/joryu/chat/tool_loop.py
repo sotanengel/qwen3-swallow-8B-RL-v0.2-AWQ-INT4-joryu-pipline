@@ -8,6 +8,11 @@ from collections.abc import AsyncIterator
 from dataclasses import asdict
 from typing import Any
 
+from joryu.chat.thinking_guard import (
+    ensure_not_thinking_runaway,
+    register_empty_thinking_delta,
+    strip_empty_thinking_tags,
+)
 from joryu.chat.token_stream import TokenStreamer
 from joryu.completion_normalize import normalize_chat_result
 from joryu.tool_call_recovery import recover_tool_call
@@ -124,6 +129,7 @@ class ToolLoopRunner:
         sampling: dict[str, Any],
     ) -> AsyncIterator[dict[str, Any] | ChatResult]:
         chat: ChatResult | None = None
+        empty_think_streak = 0
         async for chunk in stream_client.chat_stream(
             working_messages,
             enable_thinking=True,
@@ -132,6 +138,13 @@ class ToolLoopRunner:
         ):
             kind = getattr(chunk, "kind", None)
             if kind == "content" and chunk.delta:
+                empty_think_streak = register_empty_thinking_delta(
+                    delta=chunk.delta,
+                    streak=empty_think_streak,
+                )
+                ensure_not_thinking_runaway(empty_think_streak)
+                if empty_think_streak:
+                    continue
                 yield {
                     "type": "token",
                     "column": column_id,
@@ -240,7 +253,7 @@ class ToolLoopRunner:
                         column_messages.append({"role": "assistant", "content": chat.answer or ""})
                         break
 
-                    assistant_content = chat.answer or ""
+                    assistant_content = strip_empty_thinking_tags(chat.answer or "")
                     tool_results: list[tuple[str, str]] = []
                     call_ids = [_generate_tool_call_id() for _ in chat.tool_calls]
                     for call_id, call in zip(call_ids, chat.tool_calls, strict=True):

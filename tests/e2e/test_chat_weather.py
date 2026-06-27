@@ -212,3 +212,48 @@ def test_e2e_chat_weather_mcp_fallback(repo_root: Path, fixed_jst: None) -> None
     assert any(t == "tool_result" for t in types)
     tool_results = [d for t, d in events if t == "tool_result"]
     assert any("東京" in (r.get("content") or "") for r in tool_results)
+
+
+@respx.mock
+def test_e2e_chat_weather_mcp_400_propagates_tool_error_body(
+    repo_root: Path,
+    fixed_jst: None,
+) -> None:
+    cfg = (
+        (repo_root / "config.yaml")
+        .read_text(encoding="utf-8")
+        .replace(
+            "enabled: false",
+            "enabled: true",
+        )
+    )
+    (repo_root / "config.yaml").write_text(cfg, encoding="utf-8")
+    respx.get("http://localhost:8200/health").mock(
+        return_value=httpx.Response(200, json={"status": "ok"}),
+    )
+    respx.post("http://localhost:8200/tools/weather").mock(
+        return_value=httpx.Response(
+            400,
+            json={"missing": ["location"], "hint": "weather requires non-empty location"},
+        )
+    )
+    app = create_app(repo_root=repo_root)
+    app.state.chat_client = FakeVllmClient(
+        answers=[WEATHER_CALL, "天気を取得できませんでした。"],
+        thinking=None,
+    )
+    app.state.chat_executor = McpToolExecutor(
+        url="http://localhost:8200",
+        connect_timeout=0.5,
+        read_timeout=0.5,
+    )
+    client = TestClient(app)
+    events, elapsed = _stream_weather_prompt(client)
+    assert elapsed < 15.0
+    types = [t for t, _ in events]
+    assert types[-1] == "done"
+    tool_errors = [d for t, d in events if t == "tool_error"]
+    assert tool_errors
+    assert tool_errors[0].get("status") == 400
+    assert "missing" in (tool_errors[0].get("body") or "")
+    assert len(tool_errors) <= 2
