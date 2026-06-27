@@ -323,6 +323,7 @@ class _FakeProcess:
     """Popen 互換の最小限の偽プロセス。terminate() で wait を解放する。"""
 
     def __init__(self) -> None:
+        self.pid = 4242
         self._exit_code: int | None = None
         self._event = threading.Event()
         self.terminate_calls = 0
@@ -335,6 +336,16 @@ class _FakeProcess:
         if self._exit_code is None:
             self._exit_code = -15
             self._event.set()
+
+    def send_signal(self, _sig: int) -> None:
+        self.terminate()
+
+    def kill(self) -> None:
+        self.terminate()
+
+    def wait(self, timeout: float | None = None) -> int:
+        self.wait_for_terminate(timeout if timeout is not None else 5.0)
+        return self._exit_code if self._exit_code is not None else -15
 
     def wait_for_terminate(self, timeout: float) -> bool:
         return self._event.wait(timeout)
@@ -425,7 +436,7 @@ def test_cancel_running_job_terminates_process(tmp_path: Path, monkeypatch) -> N
 
     assert started.wait(timeout=5.0)
     assert runner.cancel(record.id) is True
-    assert fake_proc.terminate_calls == 1
+    assert fake_proc.poll() is not None
 
     deadline = time.time() + 5.0
     while time.time() < deadline:

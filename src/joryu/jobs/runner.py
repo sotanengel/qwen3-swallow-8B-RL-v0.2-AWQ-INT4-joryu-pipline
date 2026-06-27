@@ -15,6 +15,7 @@ from pathlib import Path
 
 from joryu.distill import STATS_REFRESH_INTERVAL_SEC
 from joryu.docker_paths import map_path_for_docker, resolve_host_repo_root
+from joryu.job_process import terminate_process_tree
 from joryu.jobs.models import CurateJobSpec, DistillJobSpec, JobKind, JobRecord, JobStatus
 from joryu.jobs.store import JobStore
 
@@ -427,7 +428,7 @@ class JobRunner:
                 container_name = self._running_container_name
                 if proc is not None and proc.poll() is None:
                     try:
-                        proc.terminate()
+                        terminate_process_tree(proc)
                     except OSError:
                         pass
                 if container_name:

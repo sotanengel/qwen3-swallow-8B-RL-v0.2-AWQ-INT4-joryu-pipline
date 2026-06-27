@@ -32,6 +32,7 @@ from pathlib import Path
 from joryu.browser import open_dashboard_when_ready, schedule_open_dashboard
 from joryu.compose import (
     compose_build_command,
+    compose_down_command,
     compose_up_command,
     image_prune_command,
     run,
@@ -222,19 +223,22 @@ def main(argv: list[str] | None = None) -> int:
             "(Ctrl-C to stop; pass --detach to background instead)",
         )
     rc = run(cmd)
-    if rc == 0:
-        if build_services and not open_browser:
-            # compose up --force-recreate 後、旧コンテナ参照が外れた dangling image を回収。
-            run(image_prune_command())
-        head = git_head_at(repo_root)
-        if head:
-            save_up_state(
-                repo_root,
-                head,
-                built_services=build_services if build_services else None,
-            )
     if rc != 0:
+        logger.error("[joryu-up] compose up failed (exit %s); running rollback", rc)
+        rollback_rc = run(compose_down_command(volumes=False))
+        if rollback_rc != 0:
+            logger.error("[joryu-up] compose down rollback failed (exit %s)", rollback_rc)
         return rc
+    if build_services and not open_browser:
+        # compose up --force-recreate 後、旧コンテナ参照が外れた dangling image を回収。
+        run(image_prune_command())
+    head = git_head_at(repo_root)
+    if head:
+        save_up_state(
+            repo_root,
+            head,
+            built_services=build_services if build_services else None,
+        )
 
     if not args.no_wait and args.detach:
         if not wait_for_up_services(up_services):
