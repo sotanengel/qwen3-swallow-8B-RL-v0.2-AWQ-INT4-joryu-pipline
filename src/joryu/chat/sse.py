@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -13,6 +14,10 @@ from joryu.tool_executor import ToolExecutor
 from joryu.vllm_client import SupportsChat, SupportsChatStream
 
 DEFAULT_SAMPLING = {"temperature": 0.7, "top_p": 0.9}
+HEARTBEAT_INTERVAL_SEC = 5.0
+HEARTBEAT_SSE = ": ping\n\n"
+
+logger = logging.getLogger(__name__)
 
 
 def format_sse(event: dict[str, Any]) -> str:
@@ -22,6 +27,64 @@ def format_sse(event: dict[str, Any]) -> str:
 
 def _finalize_done(session_id: str) -> str:
     return format_sse({"type": "done", "session_id": session_id})
+
+
+async def with_heartbeat(
+    stream: AsyncIterator[str],
+    *,
+    interval: float | None = None,
+) -> AsyncIterator[str]:
+    """長時間無音を防ぐ SSE コメント heartbeat を merge する。"""
+    heartbeat_interval = HEARTBEAT_INTERVAL_SEC if interval is None else interval
+    queue: asyncio.Queue[tuple[str, str | None]] = asyncio.Queue()
+    finished = False
+
+    async def pump_events() -> None:
+        nonlocal finished
+        try:
+            async for item in stream:
+                await queue.put(("event", item))
+        finally:
+            finished = True
+            await queue.put(("done", None))
+
+    async def pump_heartbeat() -> None:
+        while not finished:
+            await asyncio.sleep(heartbeat_interval)
+            if not finished:
+                await queue.put(("ping", HEARTBEAT_SSE))
+
+    event_task = asyncio.create_task(pump_events())
+    heartbeat_task = asyncio.create_task(pump_heartbeat())
+    try:
+        while True:
+            kind, payload = await queue.get()
+            if kind == "done":
+                break
+            if payload is not None:
+                yield payload
+    finally:
+        finished = True
+        heartbeat_task.cancel()
+        await asyncio.gather(event_task, heartbeat_task, return_exceptions=True)
+
+
+async def monitor_client_disconnect(
+    request: Any,
+    cancel_event: asyncio.Event,
+    *,
+    poll_interval: float = 0.5,
+) -> None:
+    """クライアント切断を検知して cancel_event を set する。"""
+    is_disconnected = getattr(request, "is_disconnected", None)
+    if not callable(is_disconnected):
+        return
+    while not cancel_event.is_set():
+        if await is_disconnected():
+            logger.info("client disconnected, cancelling tool task")
+            cancel_event.set()
+            return
+        await asyncio.sleep(poll_interval)
 
 
 async def merge_streams(
@@ -68,6 +131,7 @@ async def sse_all_columns(
     executor: ToolExecutor | None,
     stream_client: SupportsChatStream | None = None,
     sampling: dict[str, Any] | None = None,
+    cancel_event: asyncio.Event | None = None,
 ) -> AsyncIterator[str]:
     samp = sampling or DEFAULT_SAMPLING
     done_emitted = False
@@ -83,6 +147,7 @@ async def sse_all_columns(
                     executor=executor,
                     stream_client=stream_client,
                     sampling=samp,
+                    cancel_event=cancel_event,
                 ),
             )
             for col in session.columns.values()
@@ -105,6 +170,7 @@ async def sse_single_column(
     executor: ToolExecutor | None,
     stream_client: SupportsChatStream | None = None,
     sampling: dict[str, Any] | None = None,
+    cancel_event: asyncio.Event | None = None,
 ) -> AsyncIterator[str]:
     if style_id not in session.columns:
         yield format_sse({"type": "error", "message": f"unknown column: {style_id}"})
@@ -122,6 +188,7 @@ async def sse_single_column(
             executor=executor,
             stream_client=stream_client,
             sampling=samp,
+            cancel_event=cancel_event,
         ):
             yield format_sse(dict(event))
         yield _finalize_done(session.session_id)

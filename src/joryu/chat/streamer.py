@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -27,6 +28,7 @@ async def stream_column_turn(
     stream_client: SupportsChatStream | None = None,
     max_turns: int = DEFAULT_MAX_TURNS,
     tool_loop_dedupe: bool = True,
+    cancel_event: asyncio.Event | None = None,
 ) -> AsyncIterator[dict[str, Any]]:
     """1 列 1 ターン分をストリーム。完了時に JSONL へ 1 行追記。"""
     column_id = column.style_id
@@ -57,6 +59,7 @@ async def stream_column_turn(
             client=client,
             stream_client=stream_client,
             sampling=sampling,
+            cancel_event=cancel_event,
         ):
             if event.get("type") == "_tool_loop_done":
                 final_chat = event["final_chat"]

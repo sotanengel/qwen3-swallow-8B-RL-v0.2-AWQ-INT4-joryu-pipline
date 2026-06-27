@@ -78,6 +78,24 @@ describe("applyChatEvent", () => {
     expect(cols[0]?.toolCalls?.[0]?.result).toBe("result");
   });
 
+  it("records tool_error on matching call_id", () => {
+    let cols = applyChatEvent([baseColumn()], {
+      type: "tool_call",
+      column: "prose",
+      call_id: "c1",
+      name: "weather",
+      arguments: { location: "東京" },
+    });
+    cols = applyChatEvent(cols, {
+      type: "tool_error",
+      column: "prose",
+      call_id: "c1",
+      name: "weather",
+      message: "weather upstream timeout",
+    });
+    expect(cols[0]?.toolCalls?.[0]?.error).toBe("weather upstream timeout");
+  });
+
   it("finalizes column on column_done", () => {
     let cols = applyChatEvent([baseColumn()], {
       type: "token",

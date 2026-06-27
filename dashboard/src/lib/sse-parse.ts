@@ -6,6 +6,8 @@ export type ChatEvent =
   | { type: "token"; column: string; delta: string }
   | { type: "tool_call"; column: string; call_id: string; name: string; arguments: unknown }
   | { type: "tool_result"; column: string; call_id: string; content: string }
+  | { type: "tool_error"; column: string; call_id: string; name: string; message: string }
+  | { type: "tool_warning"; column: string; call_id: string; name: string; message: string }
   | { type: "column_done"; column: string; finish_reason: string; record_id: string }
   | { type: "done"; session_id: string }
   | { type: "error"; column?: string; message: string };

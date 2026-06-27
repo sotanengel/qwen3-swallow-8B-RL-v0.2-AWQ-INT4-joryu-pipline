@@ -9,6 +9,7 @@ export type ToolCallDisplay = {
   name: string;
   arguments: unknown;
   result?: string;
+  error?: string;
 };
 
 export type ColumnUiState = ChatColumnState & {
@@ -108,11 +109,20 @@ export function ChatColumn({ column, showInput, disabled, onSend }: ChatColumnPr
           >
             <summary>
               tool: {tc.name}
-              {tc.result !== undefined ? " (done)" : " (running…)"}
+              {tc.error
+                ? " (error)"
+                : tc.result !== undefined
+                  ? " (done)"
+                  : " (running…)"}
             </summary>
             <pre style={{ overflow: "auto", margin: "0.5rem 0 0" }}>
               {JSON.stringify(tc.arguments, null, 2)}
             </pre>
+            {tc.error ? (
+              <pre style={{ overflow: "auto", margin: "0.5rem 0 0", color: "var(--error, #c62828)" }}>
+                {tc.error}
+              </pre>
+            ) : null}
             {tc.result !== undefined ? (
               <pre style={{ overflow: "auto", margin: "0.5rem 0 0" }}>{tc.result}</pre>
             ) : null}
@@ -227,6 +237,12 @@ export function applyChatEvent(
       case "tool_result": {
         const toolCalls = (col.toolCalls ?? []).map((tc) =>
           tc.call_id === event.call_id ? { ...tc, result: event.content } : tc,
+        );
+        return { ...col, toolCalls };
+      }
+      case "tool_error": {
+        const toolCalls = (col.toolCalls ?? []).map((tc) =>
+          tc.call_id === event.call_id ? { ...tc, error: event.message } : tc,
         );
         return { ...col, toolCalls };
       }

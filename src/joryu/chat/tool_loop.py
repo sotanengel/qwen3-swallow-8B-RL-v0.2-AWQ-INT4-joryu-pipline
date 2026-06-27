@@ -17,6 +17,7 @@ from joryu.vllm_client import ChatResult, SupportsChat, SupportsChatStream
 
 DEFAULT_MAX_TURNS = 4
 _FINISH_REASON_ERROR = "error"
+_TOOL_EXECUTION_TIMEOUT_SEC = 15.0
 
 
 def _generate_tool_call_id() -> str:
@@ -92,6 +93,32 @@ def _error_chat_result() -> ChatResult:
     )
 
 
+async def _execute_tool_call(
+    executor: ToolExecutor,
+    call: ParsedToolCall,
+    *,
+    cancel_event: asyncio.Event | None,
+    timeout: float = _TOOL_EXECUTION_TIMEOUT_SEC,
+) -> str:
+    if cancel_event and cancel_event.is_set():
+        raise asyncio.CancelledError("client disconnected, cancelling tool task")
+
+    async def _run() -> str:
+        task = asyncio.create_task(asyncio.to_thread(executor.run, call))
+        try:
+            while not task.done():
+                if cancel_event and cancel_event.is_set():
+                    task.cancel()
+                    raise asyncio.CancelledError("client disconnected, cancelling tool task")
+                await asyncio.wait({task}, timeout=0.25)
+            return task.result()
+        finally:
+            if not task.done():
+                task.cancel()
+
+    return await asyncio.wait_for(_run(), timeout=timeout)
+
+
 class ToolLoopRunner:
     """tool loop 制御と ChatResult の積み上げ。"""
 
@@ -162,6 +189,7 @@ class ToolLoopRunner:
         client: SupportsChat,
         stream_client: SupportsChatStream | None = None,
         sampling: dict[str, Any],
+        cancel_event: asyncio.Event | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         turns: list[dict[str, Any]] = []
         final_chat: ChatResult | None = None
@@ -246,7 +274,13 @@ class ToolLoopRunner:
                             result = executed_cache[key]
                         else:
                             try:
-                                result = await asyncio.to_thread(executor.run, call)
+                                result = await _execute_tool_call(
+                                    executor,
+                                    call,
+                                    cancel_event=cancel_event,
+                                )
+                            except asyncio.CancelledError:
+                                raise
                             except Exception as exc:
                                 result = f"error: {exc}"
                                 tool_error = {
@@ -292,6 +326,14 @@ class ToolLoopRunner:
                         tool_calls=chat.tool_calls,
                         tool_results=tool_results,
                     )
+                except asyncio.CancelledError:
+                    yield {
+                        "type": "error",
+                        "column": column_id,
+                        "message": "client disconnected, cancelling tool task",
+                    }
+                    error_emitted = True
+                    break
                 except Exception as exc:
                     yield {"type": "error", "column": column_id, "message": str(exc)}
                     error_emitted = True

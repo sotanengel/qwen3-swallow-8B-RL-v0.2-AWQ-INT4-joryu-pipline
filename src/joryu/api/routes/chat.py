@@ -122,6 +122,7 @@ _SSE_HEADERS = {
 def post_all_messages(
     session_id: str,
     body: MessageRequest,
+    request: Request,
     service: ChatServiceDep,
 ) -> StreamingResponse:
     """初回専用: 全列に同一 prompt を並列 SSE 配信。"""
@@ -134,7 +135,7 @@ def post_all_messages(
             detail="initial broadcast requires all columns at turn_index 0",
         )
     return StreamingResponse(
-        service.stream_all_columns(session, body.prompt),
+        service.stream_all_columns(session, body.prompt, request=request),
         media_type="text/event-stream",
         headers=_SSE_HEADERS,
     )
@@ -148,6 +149,7 @@ def post_column_message(
     session_id: str,
     style_id: str,
     body: MessageRequest,
+    request: Request,
     service: ChatServiceDep,
 ) -> StreamingResponse:
     """2 ターン目以降: 指定列のみ SSE 配信。"""
@@ -157,7 +159,7 @@ def post_column_message(
     if style_id not in session.columns:
         raise HTTPException(status_code=404, detail="column not found")
     return StreamingResponse(
-        service.stream_single_column(session, style_id, body.prompt),
+        service.stream_single_column(session, style_id, body.prompt, request=request),
         media_type="text/event-stream",
         headers=_SSE_HEADERS,
     )
