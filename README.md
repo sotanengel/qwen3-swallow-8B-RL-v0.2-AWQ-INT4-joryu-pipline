@@ -64,7 +64,6 @@ uv run joryu-up --detach
 
 ```powershell
 uv run joryu-up                  # dashboard + api + joryu (vLLM 常駐, git 差分に応じて build+up)
-uv run joryu-up --full           # 上記と同義 (後方互換)
 uv run joryu-up --detach         # バックグラウンド起動 + API/vLLM/dashboard ready 待ち
 uv run joryu-up --no-wait        # ready 待ちをスキップ
 uv run joryu-up --no-open        # ブラウザ自動起動を無効化
