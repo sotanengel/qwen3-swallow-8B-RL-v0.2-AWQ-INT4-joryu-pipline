@@ -49,6 +49,7 @@ api = [
 dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",
+    "pytest-timeout>=2.3",
     "respx>=0.22",
     "ruff>=0.6",
     "fastapi>=0.115",
@@ -68,6 +69,9 @@ packages = ["src/joryu"]
 testpaths = ["tests"]
 addopts = "-ra"
 pythonpath = ["src"]
+markers = [
+    "e2e_chat: chat weather freeze regression scenarios (#207)",
+]
 
 [tool.coverage.run]
 source = ["joryu"]
