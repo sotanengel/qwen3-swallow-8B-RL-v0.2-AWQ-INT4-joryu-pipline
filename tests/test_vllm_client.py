@@ -129,8 +129,7 @@ def test_build_offline_chat_kwargs_omits_tool_choice() -> None:
     """vLLM offline ``LLM.chat()`` は tool_choice を受け付けないので chat_kwargs に含めない。
 
     回帰テスト (#109): tool_choice を ``LLM.chat()`` に渡すと
-    ``TypeError: got an unexpected keyword argument 'tool_choice'`` となり、
-    ``joryu-llm-serve`` 経由では HTTP 500 として観測される。
+    ``TypeError: got an unexpected keyword argument 'tool_choice'`` となる。
     """
     tools = [
         {

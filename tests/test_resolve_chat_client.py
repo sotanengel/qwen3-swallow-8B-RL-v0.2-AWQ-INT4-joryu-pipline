@@ -6,10 +6,9 @@ import pytest
 
 from joryu.config import Config, ModelConfig, VllmConfig
 from joryu.vllm_client import (
-    DEFAULT_LOCAL_JORYU_URL,
     DEFAULT_LOCAL_VLLM_URL,
     VllmClient,
-    VllmHttpClient,
+    VllmError,
     resolve_chat_client,
     resolve_stream_chat_client,
 )
@@ -36,24 +35,6 @@ def test_resolve_vllm_serve_backend_uses_env_url(monkeypatch: pytest.MonkeyPatch
     assert client._base_url == "http://custom:8100"
 
 
-def test_resolve_joryu_llm_serve_backend_returns_http_client(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.delenv("JORYU_VLLM_URL", raising=False)
-    cfg = VllmConfig(backend="joryu-llm-serve", serve_url="")
-    client = resolve_chat_client(ModelConfig(), cfg)
-    assert isinstance(client, VllmHttpClient)
-    assert client._base_url == DEFAULT_LOCAL_JORYU_URL
-
-
-def test_resolve_joryu_llm_serve_backend_uses_env_url(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("JORYU_VLLM_URL", "http://joryu:8100")
-    cfg = VllmConfig(backend="joryu-llm-serve")
-    client = resolve_chat_client(ModelConfig(), cfg)
-    assert isinstance(client, VllmHttpClient)
-    assert client._base_url == "http://joryu:8100"
-
-
 def test_resolve_inproc_backend_ignores_url(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("JORYU_VLLM_URL", "http://localhost:8100")
     cfg = VllmConfig(backend="inproc")
@@ -68,7 +49,7 @@ def test_default_backend_is_vllm_serve() -> None:
 def test_fingerprint_unchanged_when_backend_changes() -> None:
     base = Config()
     alt = Config()
-    alt.vllm.backend = "joryu-llm-serve"
+    alt.vllm.backend = "inproc"
     assert base.fingerprint() == alt.fingerprint()
 
 
@@ -83,4 +64,10 @@ def test_resolve_stream_client_vllm_serve(monkeypatch: pytest.MonkeyPatch) -> No
 
 def test_resolve_stream_client_non_vllm_serve_returns_none() -> None:
     assert resolve_stream_chat_client(ModelConfig(), VllmConfig(backend="inproc")) is None
-    assert resolve_stream_chat_client(ModelConfig(), VllmConfig(backend="joryu-llm-serve")) is None
+
+
+def test_resolve_chat_client_unknown_backend_raises() -> None:
+    cfg = VllmConfig()
+    cfg.backend = "joryu-llm-serve"  # type: ignore[assignment]
+    with pytest.raises(VllmError, match="unknown vllm.backend"):
+        resolve_chat_client(ModelConfig(), cfg)

@@ -84,6 +84,14 @@ def test_load_config_ignores_legacy_model_mode(tmp_path: Path) -> None:
     assert cfg.model.temperature == pytest.approx(0.4)
 
 
+def test_load_config_rejects_removed_joryu_llm_serve_backend(tmp_path: Path) -> None:
+    """ADR 0003: 旧 joryu-llm-serve backend は読み込み時に拒否する。"""
+    path = tmp_path / "removed-backend.yaml"
+    path.write_text('vllm:\n  backend: "joryu-llm-serve"\n', encoding="utf-8")
+    with pytest.raises(ValueError, match="vllm.backend"):
+        load_config(path)
+
+
 def test_load_config_missing_file_raises(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError):
         load_config(tmp_path / "nope.yaml")

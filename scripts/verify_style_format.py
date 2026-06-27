@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """styles.yaml 形式指示のローカル実測検証 (#55 サブタスク Y1/Y3)。
 
-GPU + vLLM (または joryu-llm-serve) 環境で dialog/prose/口調プリセットの
+GPU + vLLM 環境で dialog/prose/口調プリセットの
 markdown 率・文数を比較する。CI では実行しない。
 
 用法:
@@ -158,7 +158,7 @@ def main(argv: list[str] | None = None) -> int:
         if rc != 0:
             print(
                 "[verify-style] distill failed (vLLM/GPU 未起動の可能性). "
-                "joryu-llm-serve 起動後に再実行してください。",
+                "vllm serve 起動後に再実行してください。",
                 file=sys.stderr,
             )
             return rc

@@ -25,7 +25,6 @@ joryu-down = "joryu.cli.down:main"
 joryu-serve = "joryu.cli.serve:main"
 joryu-api = "joryu.cli.api:main"
 joryu-probe-vllm = "joryu.cli.probe_vllm:main"
-joryu-llm-serve = "joryu.cli.llm_serve:main"
 joryu-mcp = "joryu.cli.mcp_serve:main"
 
 [project.optional-dependencies]
