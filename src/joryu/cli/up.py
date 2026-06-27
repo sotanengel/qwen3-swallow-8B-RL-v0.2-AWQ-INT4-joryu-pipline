@@ -18,6 +18,9 @@ joryu ビルド前にホスト空き容量を検査し、不足時は `--force` 
     uv run joryu-up --force             # ディスク不足でも続行
     uv run joryu-up --refresh-stats     # 起動前に joryu-stats を回して dashboard 表示を最新化
     uv run joryu-up --build             # up 対象を強制 rebuild
+
+config.yaml で ``mcp.enabled: true`` のとき、``joryu-up`` は ``mcp`` コンテナ
+(``joryu-mcp --http``) も compose up 対象に含める。
 """
 
 from __future__ import annotations
@@ -126,7 +129,7 @@ def main(argv: list[str] | None = None) -> int:
     repo_root = Path.cwd()
 
     changed = changed_services_from_git(repo_root)
-    up_services = resolve_up_services(args, changed)
+    up_services = resolve_up_services(args, changed, repo_root=repo_root)
     first_run = is_first_up_run(repo_root)
     build_services = services_to_build(
         up_services,
