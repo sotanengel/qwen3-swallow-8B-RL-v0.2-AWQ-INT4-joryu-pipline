@@ -13,6 +13,7 @@ import respx
 from fastapi.testclient import TestClient
 
 from joryu.api.app import create_app
+from joryu.preflight import ensure_dashboard_data_paths
 from joryu.tools_impl import weather as weather_mod
 from tests.conftest import FakeVllmClient
 from tests.test_api_chat import STYLES_YAML, TOOLS_YAML, _parse_sse
@@ -141,3 +142,12 @@ def test_today_tokyo_weather_e2e(weather_client, repo_root, monkeypatch) -> None
     out_path = repo_root / "data" / "distilled" / "responses.jsonl"
     lines = out_path.read_text(encoding="utf-8").strip().split("\n")
     assert len(lines) == 4
+
+    ensure_dashboard_data_paths(repo_root)
+    public_jsonl = repo_root / "dashboard" / "public" / "responses.jsonl"
+    assert public_jsonl.exists()
+    assert public_jsonl.stat().st_size > 0
+    if public_jsonl.is_symlink():
+        assert public_jsonl.resolve() == out_path.resolve()
+    else:
+        assert public_jsonl.read_text(encoding="utf-8") == out_path.read_text(encoding="utf-8")
