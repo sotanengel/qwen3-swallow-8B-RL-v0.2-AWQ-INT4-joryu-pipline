@@ -11,7 +11,7 @@ from pathlib import Path
 from joryu.job_process import JobProcess, terminate_process_tree
 
 
-def test_terminate_process_tree_waits_for_graceful_exit(tmp_path: Path) -> None:
+def test_lifecycle_terminate_process_tree_waits_for_graceful_exit(tmp_path: Path) -> None:
     if sys.platform == "win32":
         cmd = [sys.executable, "-c", "import time; time.sleep(30)"]
     else:
@@ -27,6 +27,34 @@ def test_terminate_process_tree_waits_for_graceful_exit(tmp_path: Path) -> None:
     rc = terminate_process_tree(proc, wait_timeout_s=5.0)
     assert proc.poll() is not None
     assert rc is not None
+
+
+def test_lifecycle_job_process_context_manager_terminates_on_exit(tmp_path: Path) -> None:
+    log_path = tmp_path / "job.log"
+    terminated: list[str] = []
+
+    class _RunningProc:
+        stdout = iter([])
+
+        def poll(self) -> int | None:
+            return None
+
+        def wait(self, timeout: float | None = None) -> int:  # noqa: ARG002
+            return 0
+
+        def terminate(self) -> None:
+            terminated.append("terminate")
+
+        def kill(self) -> None:
+            terminated.append("kill")
+
+    def fake_popen(cmd, **kwargs):  # noqa: ARG001
+        return _RunningProc()
+
+    with JobProcess(["sleep", "999"], cwd=tmp_path, log_path=log_path, popen=fake_popen):
+        pass
+
+    assert terminated
 
 
 def test_job_process_writes_command_to_log(tmp_path: Path) -> None:

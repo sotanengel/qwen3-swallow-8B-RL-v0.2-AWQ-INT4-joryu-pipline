@@ -20,6 +20,11 @@ def test_mcp_http_health(bridge_client: TestClient) -> None:
     assert resp.json() == {"status": "ok"}
 
 
+def test_mcp_bridge_health_ok(bridge_client: TestClient) -> None:
+    """#272: mcp_bridge 命名規則エイリアス。"""
+    test_mcp_http_health(bridge_client)
+
+
 def test_mcp_http_weather(bridge_client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "joryu.mcp.http_bridge.weather_impl",
@@ -77,3 +82,20 @@ def test_mcp_http_invalid_body_returns_422(bridge_client: TestClient) -> None:
     detail = resp.json()["detail"]
     assert isinstance(detail, list)
     assert detail[0]["type"] == "int_parsing"
+
+
+def test_mcp_bridge_unknown_tool_returns_404(bridge_client: TestClient) -> None:
+    resp = bridge_client.post("/tools/nope", json={})
+    assert resp.status_code == 404
+
+
+def test_mcp_bridge_value_error_returns_400(
+    bridge_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def _bad_fetch(_args) -> str:
+        raise ValueError("invalid url")
+
+    monkeypatch.setattr("joryu.mcp.http_bridge.fetch_impl", _bad_fetch)
+    resp = bridge_client.post("/tools/fetch_url", json={"url": "not-a-url"})
+    assert resp.status_code == 400
+    assert "invalid url" in resp.json()["detail"]
