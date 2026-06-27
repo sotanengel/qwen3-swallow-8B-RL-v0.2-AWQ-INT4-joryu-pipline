@@ -45,4 +45,7 @@ Accepted
 
 - 同一 session への API レベル並行 POST 禁止
 - マルチワーカー対応
-- セッション永続化
+
+## 永続化 (Issue #219)
+
+2026-06 以降、セッション状態は `data/chat/sessions.db`（SQLite）に永続化される。TTL 自動削除は廃止し、明示 DELETE のみ。シングルワーカー前提は変わらない。

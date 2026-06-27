@@ -70,7 +70,7 @@ def test_tool_loop_streaming_error_via_streamer_emits_column_done(tmp_path: Path
         session_id="sess-1",
         columns={"prose": col},
         created_at=0.0,
-        expires_at=999999.0,
+        last_updated_at=0.0,
     )
     session = ChatSession(config=config, state=state)
     stream_client = FakeStreamClient(answer="x", omit_done_chunk=True)

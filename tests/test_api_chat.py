@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import json
-import time
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
 from joryu.api.app import create_app
+from joryu.chat.session import ChatSessionStore
 from joryu.jobs.models import DistillJobSpec, JobRecord, JobStatus
 from joryu.jobs.runner import JobRunner
 from joryu.styles import StylePreset
@@ -137,6 +137,16 @@ def test_get_missing_session(client: TestClient) -> None:
     assert resp.status_code == 404
 
 
+def test_session_survives_store_reopen(client: TestClient) -> None:
+    created = client.post("/api/chat/sessions").json()
+    session_id = created["session_id"]
+    db_path = client.app.state.chat_sessions._db._db_path
+    store2 = ChatSessionStore(db_path=db_path)
+    loaded = store2.get(session_id)
+    assert loaded is not None
+    assert loaded.session_id == session_id
+
+
 def test_delete_session(client: TestClient) -> None:
     created = client.post("/api/chat/sessions").json()
     session_id = created["session_id"]
@@ -150,14 +160,92 @@ def test_delete_missing_session(client: TestClient) -> None:
     assert resp.status_code == 404
 
 
-def test_session_ttl_expiry(client: TestClient) -> None:
+def test_list_sessions(client: TestClient) -> None:
+    s1 = client.post("/api/chat/sessions").json()
+    s2 = client.post("/api/chat/sessions").json()
+    resp = client.get("/api/chat/sessions")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body["items"]) == 2
+    ids = {item["session_id"] for item in body["items"]}
+    assert ids == {s1["session_id"], s2["session_id"]}
+    for item in body["items"]:
+        assert "created_at" in item
+        assert "last_updated_at" in item
+        assert item["turn_count"] == 0
+
+
+def test_list_sessions_pagination(client: TestClient) -> None:
+    for _ in range(3):
+        client.post("/api/chat/sessions")
+    page1 = client.get("/api/chat/sessions", params={"limit": 2}).json()
+    assert len(page1["items"]) == 2
+    assert page1["next_cursor"] is not None
+    page2 = client.get(
+        "/api/chat/sessions",
+        params={"limit": 2, "cursor": page1["next_cursor"]},
+    ).json()
+    assert len(page2["items"]) == 1
+    assert page2["next_cursor"] is None
+
+
+def test_patch_session_title(client: TestClient) -> None:
     created = client.post("/api/chat/sessions").json()
     session_id = created["session_id"]
-    store = client.app.state.chat_sessions
-    session = store.get(session_id)
-    assert session is not None
-    session.state.expires_at = time.monotonic() - 1
-    assert client.get(f"/api/chat/sessions/{session_id}").status_code == 404
+    resp = client.patch(
+        f"/api/chat/sessions/{session_id}",
+        json={"title": "手動タイトル"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["title"] == "手動タイトル"
+    listed = client.get("/api/chat/sessions").json()
+    match = next(i for i in listed["items"] if i["session_id"] == session_id)
+    assert match["title"] == "手動タイトル"
+
+
+def test_delete_session_removes_from_list(client: TestClient) -> None:
+    created = client.post("/api/chat/sessions").json()
+    session_id = created["session_id"]
+    client.delete(f"/api/chat/sessions/{session_id}")
+    listed = client.get("/api/chat/sessions").json()
+    assert all(i["session_id"] != session_id for i in listed["items"])
+
+
+def test_sse_sets_title_on_first_prompt(client: TestClient) -> None:
+    created = client.post("/api/chat/sessions").json()
+    session_id = created["session_id"]
+    long_prompt = "あ" * 50
+    with client.stream(
+        "POST",
+        f"/api/chat/sessions/{session_id}/messages",
+        json={"prompt": long_prompt},
+    ) as resp:
+        assert resp.status_code == 200
+        resp.read()
+    session = client.get(f"/api/chat/sessions/{session_id}").json()
+    assert session["title"] == "あ" * 30
+
+
+def test_title_not_overwritten_on_second_turn(client: TestClient) -> None:
+    created = client.post("/api/chat/sessions").json()
+    session_id = created["session_id"]
+    with client.stream(
+        "POST",
+        f"/api/chat/sessions/{session_id}/messages",
+        json={"prompt": "first prompt"},
+    ) as resp:
+        resp.read()
+    first = client.get(f"/api/chat/sessions/{session_id}").json()
+    assert first["title"] == "first prompt"
+
+    with client.stream(
+        "POST",
+        f"/api/chat/sessions/{session_id}/columns/prose/messages",
+        json={"prompt": "second prompt"},
+    ) as resp:
+        resp.read()
+    second = client.get(f"/api/chat/sessions/{session_id}").json()
+    assert second["title"] == "first prompt"
 
 
 def test_probe_idle_returns_ok(client: TestClient) -> None:
@@ -223,27 +311,6 @@ def test_probe_ok_with_stale_running_record_after_reconcile(
     reconciled = app.state.job_store.load(record.id)
     assert reconciled.status == JobStatus.FAILED
     assert reconciled.error == "recovered on api start"
-
-
-def test_purge_expired_on_create(client: TestClient) -> None:
-    store = client.app.state.chat_sessions
-    styles = {"prose": StylePreset(style_id="prose", label="散文", instruction="散文で。")}
-    from joryu.tool_executor import StubToolExecutor
-
-    old = store.create(
-        styles,
-        base_system_prompt="base",
-        model_name="m",
-        config_hash="h",
-        tools=[],
-        tool_ids=[],
-        out_path=client.app.state.repo_root / "data" / "distilled" / "responses.jsonl",
-        executor=StubToolExecutor(),
-    )
-    old.state.expires_at = time.monotonic() - 1
-    store._sessions[old.session_id] = old
-    client.post("/api/chat/sessions")
-    assert store.get(old.session_id) is None
 
 
 def test_sse_initial_broadcast(client: TestClient, repo_root: Path) -> None:
@@ -339,11 +406,9 @@ def _assert_well_terminated(events: list[tuple[str, dict]], *, column_ids: set[s
 def test_sse_single_column_unknown_column_emits_done(client: TestClient) -> None:
     import asyncio
 
-    from joryu.chat.session import ChatSessionStore
     from joryu.chat.sse import sse_single_column
-    from joryu.styles import StylePreset
 
-    store: ChatSessionStore = client.app.state.chat_sessions
+    store = client.app.state.chat_sessions
     styles = {"prose": StylePreset(style_id="prose", label="散文", instruction="散文で。")}
     session = store.create(
         styles,

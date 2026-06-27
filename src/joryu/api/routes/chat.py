@@ -38,6 +38,24 @@ class ColumnResponse(BaseModel):
 class SessionResponse(BaseModel):
     session_id: str
     columns: list[ColumnResponse]
+    title: str | None = None
+
+
+class SessionListItemResponse(BaseModel):
+    session_id: str
+    title: str | None
+    created_at: float
+    last_updated_at: float
+    turn_count: int
+
+
+class SessionListResponse(BaseModel):
+    items: list[SessionListItemResponse]
+    next_cursor: str | None = None
+
+
+class SessionTitleUpdateRequest(BaseModel):
+    title: str = Field(min_length=1)
 
 
 class MessageRequest(BaseModel):
@@ -66,6 +84,7 @@ ChatServiceDep = Annotated[ChatService, Depends(_chat_service)]
 def _session_to_response(session: ChatSession) -> SessionResponse:
     return SessionResponse(
         session_id=session.session_id,
+        title=session.title,
         columns=[
             ColumnResponse(
                 style_id=col.style_id,
@@ -94,6 +113,30 @@ def create_session(service: ChatServiceDep) -> SessionResponse:
     return _session_to_response(session)
 
 
+@router.get("/sessions", response_model=SessionListResponse)
+def list_sessions(
+    service: ChatServiceDep,
+    limit: int = 20,
+    cursor: str | None = None,
+) -> SessionListResponse:
+    if limit < 1 or limit > 100:
+        raise HTTPException(status_code=400, detail="limit must be between 1 and 100")
+    items, next_cursor = service.list_sessions(limit=limit, cursor=cursor)
+    return SessionListResponse(
+        items=[
+            SessionListItemResponse(
+                session_id=item.session_id,
+                title=item.title,
+                created_at=item.created_at,
+                last_updated_at=item.last_updated_at,
+                turn_count=item.turn_count,
+            )
+            for item in items
+        ],
+        next_cursor=next_cursor,
+    )
+
+
 @router.get("/sessions/{session_id}", response_model=SessionResponse)
 def get_session(session_id: str, service: ChatServiceDep) -> SessionResponse:
     session = service.get_session(session_id)
@@ -107,6 +150,26 @@ def delete_session(session_id: str, service: ChatServiceDep) -> Response:
     if not service.delete_session(session_id):
         raise HTTPException(status_code=404, detail="session not found")
     return Response(status_code=204)
+
+
+@router.patch("/sessions/{session_id}", response_model=SessionListItemResponse)
+def update_session_title(
+    session_id: str,
+    body: SessionTitleUpdateRequest,
+    service: ChatServiceDep,
+) -> SessionListItemResponse:
+    if not service.update_session_title(session_id, body.title):
+        raise HTTPException(status_code=404, detail="session not found")
+    session = service.get_session(session_id)
+    assert session is not None
+    turn_count = max((col.turn_index for col in session.columns.values()), default=0)
+    return SessionListItemResponse(
+        session_id=session.session_id,
+        title=session.title,
+        created_at=session.created_at,
+        last_updated_at=session.last_updated_at,
+        turn_count=turn_count,
+    )
 
 
 _SSE_HEADERS = {

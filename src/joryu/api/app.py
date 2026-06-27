@@ -45,7 +45,9 @@ def create_app(*, repo_root: Path | None = None) -> FastAPI:
     app.state.job_store = store
     app.state.job_runner = runner
     app.state.search_indexes = {}
-    app.state.chat_sessions = ChatSessionStore()
+    app.state.chat_sessions = ChatSessionStore(
+        db_path=root / "data" / "chat" / "sessions.db",
+    )
 
     cfg_path = root / "config.yaml"
     if cfg_path.exists():

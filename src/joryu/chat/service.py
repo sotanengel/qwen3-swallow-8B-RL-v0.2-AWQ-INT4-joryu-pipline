@@ -69,6 +69,23 @@ class ChatService:
     def delete_session(self, session_id: str) -> bool:
         return self._session_store.delete(session_id)
 
+    def save_session(self, session: ChatSession) -> None:
+        self._session_store.save(session)
+
+    def list_sessions(
+        self,
+        *,
+        limit: int = 20,
+        cursor: str | None = None,
+    ):
+        return self._session_store.list_sessions(limit=limit, cursor=cursor)
+
+    def update_session_title(self, session_id: str, title: str) -> bool:
+        return self._session_store.update_title(session_id, title)
+
+    def set_title_if_empty(self, session: ChatSession, prompt: str) -> None:
+        self._session_store.set_title_if_empty(session, prompt)
+
     async def stream_all_columns(
         self,
         session: ChatSession,
@@ -83,6 +100,8 @@ class ChatService:
                 monitor_client_disconnect(request, cancel_event),
             )
         try:
+            if all(col.turn_index == 0 for col in session.columns.values()):
+                self.set_title_if_empty(session, prompt)
             async for chunk in with_heartbeat(
                 sse_all_columns(
                     session,
@@ -101,6 +120,7 @@ class ChatService:
             if monitor_task is not None:
                 monitor_task.cancel()
                 await asyncio.gather(monitor_task, return_exceptions=True)
+            self.save_session(session)
 
     async def stream_single_column(
         self,
@@ -136,3 +156,4 @@ class ChatService:
             if monitor_task is not None:
                 monitor_task.cancel()
                 await asyncio.gather(monitor_task, return_exceptions=True)
+            self.save_session(session)

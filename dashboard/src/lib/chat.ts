@@ -28,6 +28,20 @@ export type ChatColumnState = {
 export type ChatSessionState = {
   session_id: string;
   columns: ChatColumnState[];
+  title?: string | null;
+};
+
+export type ChatSessionListItem = {
+  session_id: string;
+  title: string | null;
+  created_at: number;
+  last_updated_at: number;
+  turn_count: number;
+};
+
+export type ChatSessionListResponse = {
+  items: ChatSessionListItem[];
+  next_cursor: string | null;
 };
 
 const CHAT_BASE = "/api/chat";
@@ -52,6 +66,31 @@ export async function createSession(): Promise<ChatSessionState> {
 
 export async function fetchSession(sessionId: string): Promise<ChatSessionState> {
   return chatFetch<ChatSessionState>(`/sessions/${encodeURIComponent(sessionId)}`);
+}
+
+export async function fetchSessions(
+  limit = 20,
+  cursor?: string,
+): Promise<ChatSessionListResponse> {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (cursor) params.set("cursor", cursor);
+  return chatFetch<ChatSessionListResponse>(`/sessions?${params.toString()}`);
+}
+
+export async function deleteSession(sessionId: string): Promise<void> {
+  const res = await fetch(`${CHAT_BASE}/sessions/${encodeURIComponent(sessionId)}`, {
+    method: "DELETE",
+    cache: "no-store",
+  });
+  await checkResponse(res);
+}
+
+export async function renameSession(sessionId: string, title: string): Promise<ChatSessionListItem> {
+  return chatFetch<ChatSessionListItem>(`/sessions/${encodeURIComponent(sessionId)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title }),
+  });
 }
 
 async function consumeSse(
