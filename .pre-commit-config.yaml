@@ -28,6 +28,11 @@ repos:
 
   - repo: local
     hooks:
+      - id: lint-jsonl
+        name: lint JSONL (valid object per line)
+        entry: uv run python scripts/lint_jsonl.py
+        language: system
+        files: \.jsonl$
       - id: pinact
         name: pinact (verify GitHub Actions are pinned)
         entry: pinact run --fix=false --no-api
