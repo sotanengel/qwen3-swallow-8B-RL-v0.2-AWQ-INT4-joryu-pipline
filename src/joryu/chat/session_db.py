@@ -64,12 +64,24 @@ def _config_to_dict(config: ChatSessionConfig) -> dict[str, Any]:
         "tool_ids": list(config.tool_ids),
         "tool_definitions": list(config.tool_definitions),
         "out_path": str(config.out_path),
+        "repo_root": str(config.repo_root),
         "style_presets": {sid: _style_preset_to_dict(p) for sid, p in config.style_presets.items()},
     }
 
 
+def _repo_root_from_out_path(out_path: Path) -> Path:
+    resolved = out_path.resolve()
+    for parent in resolved.parents:
+        if (parent / "config.yaml").is_file():
+            return parent
+    return resolved.parent.parent.parent
+
+
 def _config_from_dict(data: dict[str, Any]) -> ChatSessionConfig:
     presets_raw = data.get("style_presets") or {}
+    out_path = Path(str(data["out_path"]))
+    repo_raw = data.get("repo_root")
+    repo_root = Path(str(repo_raw)) if repo_raw else _repo_root_from_out_path(out_path)
     return ChatSessionConfig(
         base_system_prompt=str(data["base_system_prompt"]),
         model_name=str(data["model_name"]),
@@ -77,7 +89,8 @@ def _config_from_dict(data: dict[str, Any]) -> ChatSessionConfig:
         tools=tuple(data.get("tools") or []),
         tool_ids=tuple(data.get("tool_ids") or []),
         tool_definitions=tuple(data.get("tool_definitions") or []),
-        out_path=Path(str(data["out_path"])),
+        out_path=out_path,
+        repo_root=repo_root,
         style_presets={sid: _style_preset_from_dict(body) for sid, body in presets_raw.items()},
     )
 

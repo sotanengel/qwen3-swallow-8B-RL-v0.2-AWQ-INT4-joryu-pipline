@@ -700,16 +700,57 @@ def ensure_dashboard_data_paths(repo_root: Path) -> None:
         jsonl_path.touch()
 
     public_dir = dashboard_public(repo_root)
-    public_jsonl = public_dir / cfg.distill.out_file
+    _ensure_dashboard_link(public_dir / cfg.distill.out_file, jsonl_path)
 
-    if public_jsonl.exists() or public_jsonl.is_symlink():
-        return
 
+def _dashboard_link_ok(public_path: Path, target: Path) -> bool:
+    if not public_path.exists() and not public_path.is_symlink():
+        return False
+    if public_path.is_symlink():
+        try:
+            return public_path.resolve() == target.resolve()
+        except OSError:
+            return False
+    if not target.exists():
+        return public_path.stat().st_size > 0
+    if public_path.stat().st_size == 0 and target.stat().st_size > 0:
+        return False
     try:
-        public_jsonl.symlink_to(jsonl_path.resolve(), target_is_directory=False)
+        return public_path.read_bytes() == target.read_bytes()
+    except OSError:
+        return False
+
+
+def _ensure_dashboard_link(public_path: Path, target: Path) -> None:
+    """symlink を優先し、失敗時は copy フォールバック (Windows 対応)。"""
+    public_path.parent.mkdir(parents=True, exist_ok=True)
+    if _dashboard_link_ok(public_path, target):
+        return
+    if public_path.exists() or public_path.is_symlink():
+        public_path.unlink(missing_ok=True)
+    try:
+        public_path.symlink_to(target.resolve(), target_is_directory=False)
+        return
     except OSError:
         try:
-            rel = Path(os.path.relpath(jsonl_path.resolve(), public_dir))
-            public_jsonl.symlink_to(rel, target_is_directory=False)
+            rel = Path(os.path.relpath(target.resolve(), public_path.parent))
+            public_path.symlink_to(rel, target_is_directory=False)
+            return
         except OSError:
             pass
+    shutil.copy2(target, public_path)
+
+
+def sync_dashboard_responses_copy(repo_root: Path) -> None:
+    """copy フォールバック時のみ chat 追記後に dashboard 側 JSONL を同期する。"""
+    from joryu.paths import DEFAULT_CONFIG, dashboard_public, resolve_optional_config
+
+    cfg = resolve_optional_config(repo_root / DEFAULT_CONFIG)
+    jsonl_path = repo_root / cfg.distill.out_dir / cfg.distill.out_file
+    public_jsonl = dashboard_public(repo_root) / cfg.distill.out_file
+    if public_jsonl.is_symlink() or not jsonl_path.exists():
+        return
+    if _dashboard_link_ok(public_jsonl, jsonl_path):
+        return
+    public_jsonl.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(jsonl_path, public_jsonl)

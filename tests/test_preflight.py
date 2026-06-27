@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import platform
 from pathlib import Path
 
 import pytest
@@ -422,12 +423,29 @@ def test_ensure_dashboard_data_paths_creates_jsonl_and_symlink(tmp_path: Path) -
     jsonl_path = tmp_path / "data" / "distilled" / "responses.jsonl"
     public_jsonl = tmp_path / "dashboard" / "public" / "responses.jsonl"
     assert jsonl_path.is_file()
+    assert public_jsonl.exists()
+    assert public_jsonl.stat().st_size >= 0
     if public_jsonl.is_symlink():
         assert public_jsonl.resolve() == jsonl_path.resolve()
-    elif not public_jsonl.exists():
-        import platform
+    elif platform.system() != "Windows":
+        pytest.fail("expected symlink on non-Windows platform")
 
-        assert platform.system() == "Windows"
+
+def test_ensure_dashboard_data_paths_refreshes_stale_empty_public_jsonl(tmp_path: Path) -> None:
+    (tmp_path / "config.yaml").write_text(
+        "distill:\n  out_dir: data/distilled\n  out_file: responses.jsonl\n",
+        encoding="utf-8",
+    )
+    src = tmp_path / "data" / "distilled" / "responses.jsonl"
+    src.parent.mkdir(parents=True)
+    src.write_text('{"prompt":"p"}\n', encoding="utf-8")
+    public_jsonl = tmp_path / "dashboard" / "public" / "responses.jsonl"
+    public_jsonl.parent.mkdir(parents=True)
+    public_jsonl.write_text("", encoding="utf-8")
+
+    ensure_dashboard_data_paths(tmp_path)
+
+    assert public_jsonl.stat().st_size > 0
 
 
 def test_jsonl_has_content(tmp_path: Path) -> None:

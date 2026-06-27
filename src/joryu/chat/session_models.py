@@ -28,6 +28,7 @@ class ChatSessionConfig:
     tool_ids: tuple[str, ...] = ()
     tool_definitions: tuple[dict[str, Any], ...] = ()
     out_path: Path = field(default_factory=lambda: Path("data/distilled/responses.jsonl"))
+    repo_root: Path = field(default_factory=Path.cwd)
     style_presets: dict[str, StylePreset] = field(default_factory=dict)
 
 
@@ -88,6 +89,10 @@ class ChatSession:
     @property
     def out_path(self) -> Path:
         return self.config.out_path
+
+    @property
+    def repo_root(self) -> Path:
+        return self.config.repo_root
 
     @property
     def style_presets(self) -> dict[str, StylePreset]:
