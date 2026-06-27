@@ -32,7 +32,7 @@ mcp = [
     "mcp>=1.0",
 ]
 vllm = [
-    "vllm>=0.8",
+    "vllm",
 ]
 search = [
     "rank-bm25>=0.2",
@@ -91,3 +91,11 @@ select = ["E", "F", "I", "UP", "B", "W", "T20"]
 
 [tool.ruff.lint.per-file-ignores]
 "scripts/**" = ["T20"]
+
+[tool.uv]
+override-dependencies = [
+    "torch>=2.12.1",
+]
+
+[tool.uv.sources]
+vllm = { git = "https://github.com/vllm-project/vllm", tag = "v0.23.1rc0" }
