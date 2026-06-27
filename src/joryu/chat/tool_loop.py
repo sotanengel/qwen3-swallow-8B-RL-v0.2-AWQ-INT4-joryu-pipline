@@ -241,13 +241,21 @@ class ToolLoopRunner:
                     call_ids = [_generate_tool_call_id() for _ in chat.tool_calls]
                     for call_id, call in zip(call_ids, chat.tool_calls, strict=True):
                         key = _tool_call_dedupe_key(call)
+                        tool_error: dict[str, Any] | None = None
                         if self._tool_loop_dedupe and key in executed_cache:
                             result = executed_cache[key]
                         else:
                             try:
                                 result = await asyncio.to_thread(executor.run, call)
-                            except (KeyError, ValueError) as exc:
+                            except Exception as exc:
                                 result = f"error: {exc}"
+                                tool_error = {
+                                    "type": "tool_error",
+                                    "column": column_id,
+                                    "call_id": call_id,
+                                    "name": call.name,
+                                    "message": str(exc),
+                                }
                             if self._tool_loop_dedupe:
                                 executed_cache[key] = result
                         yield {
@@ -257,6 +265,8 @@ class ToolLoopRunner:
                             "name": call.name,
                             "arguments": call.arguments,
                         }
+                        if tool_error is not None:
+                            yield tool_error
                         yield {
                             "type": "tool_result",
                             "column": column_id,

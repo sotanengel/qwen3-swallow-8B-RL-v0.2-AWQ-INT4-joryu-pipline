@@ -75,7 +75,11 @@ def get_executor(request: Request) -> ToolExecutor:
         return override
     _repo_root, cfg = _load_repo_config(request)
     if cfg.mcp.enabled:
-        return McpToolExecutor(url=cfg.mcp.url)
+        return McpToolExecutor(
+            url=cfg.mcp.url,
+            connect_timeout=cfg.mcp.timeout.connect,
+            read_timeout=cfg.mcp.timeout.read,
+        )
     return build_default_executor()
 
 
