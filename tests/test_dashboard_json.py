@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import platform
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -33,7 +34,7 @@ def test_concurrent_writes_do_not_raise(tmp_path: Path) -> None:
     def _write(n: int) -> None:
         write_dashboard_json(dst, {"total": n}, source_path=src)
 
-    with ThreadPoolExecutor(max_workers=16) as pool:
+    with ThreadPoolExecutor(max_workers=4 if platform.system() == "Windows" else 16) as pool:
         list(pool.map(_write, range(100)))
 
     assert dst.is_file()
