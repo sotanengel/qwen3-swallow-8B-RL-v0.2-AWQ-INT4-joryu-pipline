@@ -467,9 +467,9 @@ def _emit_preflight_log(message: str, log: Callable[[str], None] | None) -> None
     if log is not None:
         log(message)
         return
-    import sys
+    import logging
 
-    print(message, file=sys.stderr)
+    logging.getLogger(__name__).info("%s", message)
 
 
 def ensure_prompt_bank(

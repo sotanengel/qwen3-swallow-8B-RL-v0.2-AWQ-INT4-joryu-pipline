@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import sys
 from pathlib import Path
 
 from joryu.cli.common import add_config_argument, resolve_cli_config, resolve_cli_distill_input
 from joryu.export import DEFAULT_LEVEL, export_jsonl
+
+logger = logging.getLogger(__name__)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -52,16 +55,17 @@ def main(argv: list[str] | None = None) -> int:
     bundle_tar = args.bundle_tar or cfg.export.bundle_tar
 
     if not src.exists():
-        print(f"[joryu-export] input not found: {src}", file=sys.stderr)
+        logger.error("[joryu-export] input not found: %s", src)
         return 2
 
     res = export_jsonl(src, out_dir=out_dir, level=level, bundle_tar=bundle_tar)
-    print(
-        f"[joryu-export] wrote {res.compressed_path}  (meta: {res.meta_path.name})",
-        file=sys.stderr,
+    logger.info(
+        "[joryu-export] wrote %s  (meta: %s)",
+        res.compressed_path,
+        res.meta_path.name,
     )
     if res.tar_path is not None:
-        print(f"[joryu-export] bundled: {res.tar_path}", file=sys.stderr)
+        logger.info("[joryu-export] bundled: %s", res.tar_path)
     return 0
 
 

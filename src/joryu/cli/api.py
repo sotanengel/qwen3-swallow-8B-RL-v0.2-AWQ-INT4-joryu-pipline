@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import sys
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -29,10 +32,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         import uvicorn
     except ImportError:
-        print(
-            "[joryu-api] uvicorn not installed. Run: uv sync --extra api",
-            file=sys.stderr,
-        )
+        logger.error("[joryu-api] uvicorn not installed. Run: uv sync --extra api")
         return 2
 
     from joryu.api.app import create_app

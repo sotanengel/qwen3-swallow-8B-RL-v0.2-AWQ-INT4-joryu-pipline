@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import logging
 import subprocess
-import sys
+
+logger = logging.getLogger(__name__)
 
 
 def compose_build_command(*, services: list[str]) -> list[str]:
@@ -90,9 +92,8 @@ def run_up_startup_cleanup() -> None:
 
 def run_pre_browser_image_cleanup() -> None:
     """build 完了後・ブラウザ起動直前: dangling (<none>) image を回収する。"""
-    print(
+    logger.info(
         "[joryu-up] removing dangling images (<none>) before opening browser",
-        file=sys.stderr,
     )
     run(image_prune_command())
 
@@ -104,5 +105,5 @@ def run_builder_cache_cleanup() -> None:
 
 def run(cmd: list[str]) -> int:
     """ログ出しつつ subprocess.run で実行し、返り値を返す。"""
-    print(f"[joryu] {' '.join(cmd)}", file=sys.stderr)
+    logger.info("[joryu] %s", " ".join(cmd))
     return subprocess.run(cmd, check=False).returncode

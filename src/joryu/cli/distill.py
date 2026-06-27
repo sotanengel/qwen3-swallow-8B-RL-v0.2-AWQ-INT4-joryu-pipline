@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import re
 import sys
 import time
@@ -20,6 +21,8 @@ from joryu.docker_delegate import (
 from joryu.jobs.models import DistillJobSpec
 from joryu.variants import parse_comma_list, parse_float_list
 from joryu.vllm_client import SupportsChat
+
+logger = logging.getLogger(__name__)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -131,14 +134,14 @@ def main(argv: list[str] | None = None, *, _client: SupportsChat | None = None) 
         )
         top_ps = parse_float_list(spec.top_p, min_val=0.8, max_val=0.95, name="top_p")
     except (FileNotFoundError, ValueError) as exc:
-        print(f"[joryu-distill] error: {exc}", file=sys.stderr)
+        logger.error("[joryu-distill] error: %s", exc)
         return 2
 
     deadline = None
     try:
         secs = parse_duration(spec.duration)
     except ValueError as exc:
-        print(f"[joryu-distill] error: {exc}", file=sys.stderr)
+        logger.error("[joryu-distill] error: %s", exc)
         return 2
     if secs is not None:
         deadline = time.time() + secs

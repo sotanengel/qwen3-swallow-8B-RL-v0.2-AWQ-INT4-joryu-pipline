@@ -87,4 +87,7 @@ target-version = "py312"
 src = ["src", "tests"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B", "W"]
+select = ["E", "F", "I", "UP", "B", "W", "T20"]
+
+[tool.ruff.lint.per-file-ignores]
+"scripts/**" = ["T20"]

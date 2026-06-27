@@ -128,10 +128,14 @@ def test_build_docker_command_mounts_tools_when_provided(tmp_path: Path) -> None
 
 
 def test_run_in_docker_captures_stderr_on_failure(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """returncode != 0 のとき subprocess stderr が capture され stderr に出力される。"""
+    """returncode != 0 のとき subprocess stderr が capture され logging に記録される。"""
+    import logging
+
     from joryu import docker_delegate
+
+    caplog.set_level(logging.WARNING, logger="joryu.docker_delegate")
 
     config_path = tmp_path / "config.yaml"
     config_path.write_text("model: {}\ndistill:\n  styles_file: styles.yaml\n", encoding="utf-8")
@@ -158,8 +162,7 @@ def test_run_in_docker_captures_stderr_on_failure(
         extra_args=["--count", "1"],
     )
     assert rc == 1
-    captured = capsys.readouterr()
-    assert "docker-stderr-marker" in captured.err
+    assert any("docker-stderr-marker" in r.message for r in caplog.records)
 
 
 def test_build_docker_command_allocates_tty_when_requested(tmp_path: Path) -> None:

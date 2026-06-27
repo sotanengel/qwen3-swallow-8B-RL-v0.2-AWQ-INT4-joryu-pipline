@@ -56,19 +56,25 @@ def test_wait_for_dashboard_returns_false_on_timeout(monkeypatch: pytest.MonkeyP
     assert wait_for_dashboard(poll_interval_s=0, timeout_s=0.01) is False
 
 
-def test_open_dashboard_uses_browser(capsys: pytest.CaptureFixture[str]) -> None:
+def test_open_dashboard_uses_browser(caplog: pytest.LogCaptureFixture) -> None:
+    import logging
+
+    caplog.set_level(logging.INFO, logger="joryu.browser")
     browser = _FakeBrowser()
     open_dashboard(DASHBOARD_URL, browser=browser)
     assert browser.urls == [DASHBOARD_URL]
-    assert "opening" in capsys.readouterr().err
+    assert any("opening" in r.message for r in caplog.records)
 
 
 def test_open_dashboard_uses_startfile_on_windows(
     monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
+    import logging
+
+    caplog.set_level(logging.INFO, logger="joryu.browser")
     opened: list[str] = []
-    monkeypatch.setattr("joryu.browser.sys.platform", "win32")
+    monkeypatch.setattr("sys.platform", "win32")
 
     def _startfile(url: str) -> None:
         opened.append(url)
@@ -76,13 +82,15 @@ def test_open_dashboard_uses_startfile_on_windows(
     monkeypatch.setattr("os.startfile", _startfile, raising=False)
     open_dashboard(DASHBOARD_URL)
     assert opened == [DASHBOARD_URL]
-    assert "opening" in capsys.readouterr().err
+    assert any("opening" in r.message for r in caplog.records)
 
 
-def test_open_dashboard_when_ready_skips_if_not_ready(capsys: pytest.CaptureFixture[str]) -> None:
+def test_open_dashboard_when_ready_skips_if_not_ready(caplog: pytest.LogCaptureFixture) -> None:
+    import logging
+
+    caplog.set_level(logging.WARNING, logger="joryu.browser")
     open_dashboard_when_ready(wait_fn=lambda _url: False, open_fn=lambda **_kw: None)
-    err = capsys.readouterr().err
-    assert "skipped opening browser" in err
+    assert any("skipped opening browser" in r.message for r in caplog.records)
 
 
 def test_open_dashboard_when_ready_runs_pre_open_fn_before_open() -> None:

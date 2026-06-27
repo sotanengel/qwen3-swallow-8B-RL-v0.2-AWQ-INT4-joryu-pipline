@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-import sys
+import logging
 import time
 import urllib.error
 import urllib.request
@@ -18,6 +18,8 @@ DASHBOARD_URL = "http://localhost:3000"
 DEFAULT_READY_TIMEOUT_S = 120.0
 VLLM_READY_TIMEOUT_S = 600.0
 DEFAULT_POLL_INTERVAL_S = 0.5
+
+logger = logging.getLogger(__name__)
 
 
 class _UrlOpen(Protocol):
@@ -149,7 +151,7 @@ def wait_for_up_services(
     log: Callable[[str], None] | None = None,
 ) -> bool:
     """up 対象サービスが ready になるまで待つ。失敗時 False。"""
-    emit = log or (lambda msg: print(msg, file=sys.stderr))
+    emit = log or (lambda msg: logger.info("%s", msg))
 
     if "api" in up_services:
         emit(f"[joryu-up] waiting for API at {API_HEALTH_URL}")

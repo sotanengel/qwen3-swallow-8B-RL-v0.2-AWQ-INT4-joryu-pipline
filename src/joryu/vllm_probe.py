@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import gc
-import sys
+import logging
 from pathlib import Path
 
 from joryu.config import load_config
@@ -15,6 +15,8 @@ from joryu.vllm_limits import (
     vllm_config_fingerprint,
     write_probe_limits,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _probe_once(
@@ -79,7 +81,7 @@ def probe_limits(
 ) -> VllmLimits | None:
     """候補を降順で試行し、成功した最大 (num_ctx, num_predict) を返す。"""
     for num_ctx, num_predict in candidates:
-        print(f"[probe] trying num_ctx={num_ctx} num_predict={num_predict}", flush=True)
+        logger.info("[probe] trying num_ctx=%s num_predict=%s", num_ctx, num_predict)
         try:
             _probe_once(
                 model_path=model_path,
@@ -95,22 +97,25 @@ def probe_limits(
                 max_num_seqs=max_num_seqs,
                 swap_space_gib=swap_space_gib,
             )
-            print(f"[probe] OK num_ctx={num_ctx} num_predict={num_predict}", flush=True)
+            logger.info("[probe] OK num_ctx=%s num_predict=%s", num_ctx, num_predict)
             return VllmLimits(num_ctx=num_ctx, num_predict=num_predict)
         except Exception as exc:  # noqa: BLE001
-            print(
-                f"[probe] failed at (num_ctx={num_ctx}, num_predict={num_predict}): "
-                f"{type(exc).__name__}: {exc}",
-                flush=True,
+            logger.warning(
+                "[probe] failed at (num_ctx=%s, num_predict=%s): %s: %s",
+                num_ctx,
+                num_predict,
+                type(exc).__name__,
+                exc,
             )
             inner = exc.__cause__ or exc.__context__
             seen: set[int] = {id(exc)}
             depth = 0
             while inner is not None and id(inner) not in seen and depth < 4:
                 seen.add(id(inner))
-                print(
-                    f"[probe]   caused by: {type(inner).__name__}: {inner}",
-                    flush=True,
+                logger.warning(
+                    "[probe]   caused by: %s: %s",
+                    type(inner).__name__,
+                    inner,
                 )
                 inner = inner.__cause__ or inner.__context__
                 depth += 1
@@ -146,7 +151,7 @@ def run_probe(*, config: str | Path, out: str | Path | None = None) -> int:
         swap_space_gib=cfg.vllm.swap_space_gib,
     )
     if limits is None:
-        print("[probe] all candidates failed", file=sys.stderr)
+        logger.error("[probe] all candidates failed")
         return 1
 
     write_probe_limits(
@@ -154,14 +159,15 @@ def run_probe(*, config: str | Path, out: str | Path | None = None) -> int:
         limits,
         extra={"config_fingerprint": vllm_config_fingerprint(cfg)},
     )
-    print(f"[probe] wrote {out_path}")
+    logger.info("[probe] wrote %s", out_path)
     if limits.num_ctx < cfg.model.num_ctx:
-        print(
-            f"[probe] WARNING: probed num_ctx={limits.num_ctx} is below "
-            f"requested {cfg.model.num_ctx}. Inspect [probe] failure logs above. "
-            f"If failures are not VRAM-related (e.g. FlashInfer JIT errors), "
-            f"the probe should not have degraded — please report.",
-            file=sys.stderr,
+        logger.warning(
+            "[probe] WARNING: probed num_ctx=%s is below requested %s. "
+            "Inspect [probe] failure logs above. "
+            "If failures are not VRAM-related (e.g. FlashInfer JIT errors), "
+            "the probe should not have degraded — please report.",
+            limits.num_ctx,
+            cfg.model.num_ctx,
         )
     return 0
 
