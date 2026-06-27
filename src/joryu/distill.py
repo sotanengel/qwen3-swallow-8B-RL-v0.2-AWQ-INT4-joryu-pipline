@@ -26,6 +26,7 @@ from joryu.paths import DEFAULT_CONFIG, resolve_config_relative, resolve_repo_ro
 from joryu.progress import load_done_keys, load_truncated_run_keys, run_key_from_parts
 from joryu.progress_reporter import DistillProgressReporter
 from joryu.prompt_bank import EffectiveSampling, PromptRow, load_prompt_bank
+from joryu.prompt_dedup import PromptDedupGuard
 from joryu.stats import compute_stats, resolve_stats_output_path
 from joryu.styles import StylePreset, load_styles, resolve_style_ids
 from joryu.tool_call_recovery import recover_tool_call
@@ -570,6 +571,7 @@ def run_distill(
         _StatsRefreshThrottler(out_p, stats_refresher) if stats_refresher is not None else None
     )
     DistillLiveState.begin()
+    dedup_guard = PromptDedupGuard(max_per_key=config.distill.max_records_per_prompt_style)
     try:
         with JsonlAppendWriter(out_p) as writer:
             for i, variant in enumerate(work, 1):
@@ -679,7 +681,17 @@ def run_distill(
 
                 DistillLiveState.clear_retry(run_key)
                 final_answer = str(record.get("answer") or "")
+                style_key = eff.style_id if eff.style_id is not None else ""
+                if dedup_guard.should_skip(prompt=row.prompt, style_id=style_key):
+                    log(
+                        f"[joryu-distill] [{i}/{run_total}] "
+                        f"重複プロンプト上限 — スキップ (style={style_key!r})",
+                        file=sys.stderr,
+                    )
+                    reporter.update(i)
+                    continue
                 writer.write(record)
+                dedup_guard.record(prompt=row.prompt, style_id=style_key)
                 n += 1
                 reporter.record_success(row.prompt, final_answer, style_id=eff.style_id)
                 reporter.update(i)

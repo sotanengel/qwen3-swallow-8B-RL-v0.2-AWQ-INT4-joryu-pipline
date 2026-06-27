@@ -7,8 +7,9 @@ from dataclasses import dataclass
 
 from joryu.config import Config
 from joryu.prompt_bank import EffectiveSampling, PromptRow, merge_with_defaults
-from joryu.styles import StylePreset, apply_style
-from joryu.tools import ToolDefinition
+from joryu.styles import StylePreset
+from joryu.system_prompt import build_system_prompt
+from joryu.tools import ToolDefinition, resolve_tool_ids
 
 
 @dataclass
@@ -81,10 +82,29 @@ def expand_variants(
                     eff.sampling["temperature"] = temp
                     eff.sampling["top_p"] = top_p
 
+                    tool_defs: list[ToolDefinition] = []
+                    if row.tool_ids and tools_registry:
+                        tool_defs = resolve_tool_ids(row.tool_ids, tools_registry)
+                    elif tools_registry and eff.tools:
+                        for schema in eff.tools:
+                            fn = schema.get("function") if isinstance(schema, dict) else None
+                            if isinstance(fn, dict) and isinstance(fn.get("name"), str):
+                                name = fn["name"]
+                                if name in tools_registry:
+                                    tool_defs.append(tools_registry[name])
+
                     if preset is not None:
-                        style_id, merged = apply_style(eff.system_prompt, preset)
-                        eff.style_id = style_id
-                        eff.system_prompt = merged
+                        eff.system_prompt = build_system_prompt(
+                            base=eff.system_prompt,
+                            tool_defs=tool_defs or None,
+                            style_preset=preset,
+                        )
+                        eff.style_id = preset.style_id
+                    elif tool_defs:
+                        eff.system_prompt = build_system_prompt(
+                            base=eff.system_prompt,
+                            tool_defs=tool_defs,
+                        )
                     elif row.style_id is not None:
                         eff.style_id = row.style_id
 

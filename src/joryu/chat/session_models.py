@@ -26,6 +26,7 @@ class ChatSessionConfig:
     config_hash: str = ""
     tools: tuple[dict[str, Any], ...] = ()
     tool_ids: tuple[str, ...] = ()
+    tool_definitions: tuple[dict[str, Any], ...] = ()
     out_path: Path = field(default_factory=lambda: Path("data/distilled/responses.jsonl"))
     style_presets: dict[str, StylePreset] = field(default_factory=dict)
 

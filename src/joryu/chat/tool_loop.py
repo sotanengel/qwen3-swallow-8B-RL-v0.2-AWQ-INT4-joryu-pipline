@@ -10,6 +10,7 @@ from dataclasses import asdict
 from typing import Any
 
 from joryu.chat.token_stream import TokenStreamer
+from joryu.completion_normalize import normalize_chat_result
 from joryu.tool_call_recovery import recover_tool_call
 from joryu.tool_calls import ParsedToolCall
 from joryu.tool_executor import ToolExecutor
@@ -241,6 +242,7 @@ class ToolLoopRunner:
                             yield tok
 
                     if tools_arg:
+                        chat = normalize_chat_result(chat, tools=tools_arg)
                         chat, _recovery = await asyncio.to_thread(
                             recover_tool_call,
                             client,
@@ -249,6 +251,8 @@ class ToolLoopRunner:
                             tools=tools_arg,
                             sampling=sampling,
                         )
+                    else:
+                        chat = normalize_chat_result(chat, tools=None)
                     final_chat = chat
 
                     assistant_turn: dict[str, Any] = {

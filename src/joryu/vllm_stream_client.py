@@ -10,7 +10,8 @@ from typing import Any, Literal
 
 import httpx
 
-from joryu.tool_calls import ParsedToolCall, extract_tool_calls_with_diagnostics
+from joryu.completion_normalize import normalize_chat_result
+from joryu.tool_calls import ParsedToolCall
 from joryu.vllm_client import ChatResult, VllmError, extract_known_tool_names
 from joryu.vllm_serve_client import (
     _DEFAULT_MODEL,
@@ -147,32 +148,28 @@ def _assemble_chat_result(
     tool_calls: tuple[ParsedToolCall, ...],
     known_tool_names: set[str] | None,
     effective_max_tokens: int | None,
+    tools: list[dict[str, Any]] | None = None,
 ) -> ChatResult:
-    if tool_calls:
-        _, cleaned_answer, diagnostics = extract_tool_calls_with_diagnostics(
-            content,
-            known_tool_names=known_tool_names or None,
-        )
-        suspected = tuple(diagnostics.get("suspected_unparsed_tool_calls", []))
-    else:
-        cleaned_answer = content.strip()
-        suspected = ()
-
     raw_completion = _reconstruct_raw_completion(
         content=content if thinking is None else content,
         reasoning_content=thinking,
     )
-    return ChatResult(
+    preliminary = ChatResult(
         thinking=thinking,
-        answer=cleaned_answer,
+        answer=content.strip(),
         finish_reason=finish_reason,
         prompt_tokens=None,
         completion_tokens=None,
         effective_max_tokens=effective_max_tokens,
         tool_calls=tool_calls,
         raw_completion=raw_completion or None,
-        suspected_unparsed_tool_calls=suspected,
+        suspected_unparsed_tool_calls=(),
     )
+    if tools is None and known_tool_names:
+        tools = [
+            {"type": "function", "function": {"name": name}} for name in sorted(known_tool_names)
+        ]
+    return normalize_chat_result(preliminary, tools=tools)
 
 
 class VllmServeStreamClient:
@@ -270,6 +267,7 @@ class VllmServeStreamClient:
             tool_calls=tool_calls,
             known_tool_names=known or None,
             effective_max_tokens=effective_max,
+            tools=tools,
         )
         yield StreamChunk(kind="done", finish_reason=finish_reason, result=result)
 

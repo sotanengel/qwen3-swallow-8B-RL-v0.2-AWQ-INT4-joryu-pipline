@@ -20,11 +20,11 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Any, Protocol
 
+from joryu.completion_normalize import normalize_chat_result
 from joryu.config import ModelConfig, VllmConfig
 from joryu.paths import resolve_limits_probe_path
 from joryu.tool_calls import (
     ParsedToolCall,
-    extract_tool_calls_with_diagnostics,
 )
 from joryu.vllm_limits import clamp_model_limits, load_probe_limits
 
@@ -342,11 +342,6 @@ class VllmClient:
         completion = request_output.outputs[0]
         content: str = completion.text or ""
         thinking, answer = extract_thinking(content)
-        known = extract_known_tool_names(tools)
-        tool_calls, answer, diagnostics = extract_tool_calls_with_diagnostics(
-            answer,
-            known_tool_names=known or None,
-        )
         out_prompt_tokens = (
             len(request_output.prompt_token_ids)
             if getattr(request_output, "prompt_token_ids", None) is not None
@@ -354,19 +349,18 @@ class VllmClient:
         )
         token_ids = getattr(completion, "token_ids", None)
         out_completion_tokens = len(token_ids) if token_ids is not None else None
-        return ChatResult(
+        preliminary = ChatResult(
             thinking=thinking,
             answer=answer,
             finish_reason=getattr(completion, "finish_reason", None),
             prompt_tokens=out_prompt_tokens,
             completion_tokens=out_completion_tokens,
             effective_max_tokens=effective_max,
-            tool_calls=tuple(tool_calls),
+            tool_calls=(),
             raw_completion=content,
-            suspected_unparsed_tool_calls=tuple(
-                diagnostics.get("suspected_unparsed_tool_calls", [])
-            ),
+            suspected_unparsed_tool_calls=(),
         )
+        return normalize_chat_result(preliminary, tools=tools)
 
     @classmethod
     def from_config(cls, model_cfg: ModelConfig, vllm_cfg: VllmConfig) -> VllmClient:
