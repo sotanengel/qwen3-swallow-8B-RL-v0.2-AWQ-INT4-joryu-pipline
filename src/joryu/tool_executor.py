@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import json
 import operator
 from collections.abc import Callable
 from typing import Any, Protocol
@@ -128,6 +129,27 @@ def build_default_executor() -> RegistryToolExecutor:
 _MCP_TOOL_NAMES = frozenset({"search", "weather", "fetch_url"})
 
 
+class ToolUpstreamError(Exception):
+    """MCP HTTP ブリッジ等 upstream の 4xx/422 応答。"""
+
+    def __init__(self, *, status: int, body: str, url: str) -> None:
+        self.status = status
+        self.body = body
+        self.url = url
+        super().__init__(f"HTTP {status}: {body}")
+
+
+def _response_error_body(response: Any) -> str:
+    try:
+        data = response.json()
+    except Exception:
+        text = getattr(response, "text", "") or ""
+        return text or getattr(response, "reason_phrase", "") or ""
+    if isinstance(data, dict):
+        return json.dumps(data, ensure_ascii=False)
+    return str(data)
+
+
 class McpToolExecutor:
     """MCP 経由 (または同一実装への in-process bridge) のツール実行。"""
 
@@ -179,7 +201,12 @@ class McpToolExecutor:
             if exc.response.status_code >= 500:
                 log_mcp_fallback(url=self._url, reason=str(exc))
                 return self._local.run(call)
-            raise
+            body = _response_error_body(exc.response)
+            raise ToolUpstreamError(
+                status=exc.response.status_code,
+                body=body,
+                url=str(exc.request.url),
+            ) from exc
         if isinstance(payload, dict) and "result" in payload:
             result = payload["result"]
             return str(result)

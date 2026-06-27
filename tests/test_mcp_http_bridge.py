@@ -80,8 +80,17 @@ def test_mcp_http_invalid_body_returns_422(bridge_client: TestClient) -> None:
     resp = bridge_client.post("/tools/web_search", json={"top_k": "not-a-number"})
     assert resp.status_code == 422
     detail = resp.json()["detail"]
-    assert isinstance(detail, list)
-    assert detail[0]["type"] == "int_parsing"
+    assert isinstance(detail, dict)
+    assert detail.get("missing") == []
+    assert "errors" in detail
+
+
+def test_mcp_http_empty_weather_location_returns_400(bridge_client: TestClient) -> None:
+    resp = bridge_client.post("/tools/weather", json={"location": ""})
+    assert resp.status_code == 400
+    detail = resp.json()["detail"]
+    assert detail["missing"] == ["location"]
+    assert "location" in detail["hint"]
 
 
 def test_mcp_bridge_unknown_tool_returns_404(bridge_client: TestClient) -> None:
@@ -98,4 +107,6 @@ def test_mcp_bridge_value_error_returns_400(
     monkeypatch.setattr("joryu.mcp.http_bridge.fetch_impl", _bad_fetch)
     resp = bridge_client.post("/tools/fetch_url", json={"url": "not-a-url"})
     assert resp.status_code == 400
-    assert "invalid url" in resp.json()["detail"]
+    detail = resp.json()["detail"]
+    assert isinstance(detail, dict)
+    assert "invalid url" in detail["hint"]

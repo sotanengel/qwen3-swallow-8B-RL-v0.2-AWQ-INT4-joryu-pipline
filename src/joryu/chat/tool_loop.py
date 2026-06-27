@@ -12,7 +12,7 @@ from joryu.chat.token_stream import TokenStreamer
 from joryu.completion_normalize import normalize_chat_result
 from joryu.tool_call_recovery import recover_tool_call
 from joryu.tool_calls import ParsedToolCall
-from joryu.tool_executor import ToolExecutor
+from joryu.tool_executor import ToolExecutor, ToolUpstreamError
 from joryu.tool_pipeline.decision import ToolLoopDecisionMaker
 from joryu.tool_pipeline.pipeline import (
     append_tool_turn_messages,
@@ -238,6 +238,17 @@ class ToolLoopRunner:
                                 )
                             except asyncio.CancelledError:
                                 raise
+                            except ToolUpstreamError as exc:
+                                result = f"error: HTTP {exc.status} — {exc.body}"
+                                tool_error = {
+                                    "type": "tool_error",
+                                    "column": column_id,
+                                    "call_id": call_id,
+                                    "name": call.name,
+                                    "message": str(exc),
+                                    "status": exc.status,
+                                    "body": exc.body,
+                                }
                             except Exception as exc:
                                 result = f"error: {exc}"
                                 tool_error = {
