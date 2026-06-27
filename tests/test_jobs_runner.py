@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 import threading
 import time
 from pathlib import Path
@@ -678,6 +679,75 @@ def test_runner_ensure_dashboard_data_paths_on_distill_start(tmp_path: Path, mon
         time.sleep(0.05)
 
     assert called == [tmp_path]
+
+
+def test_runner_nonzero_exit_stderr_in_log(tmp_path: Path, monkeypatch) -> None:
+    """subprocess returncode != 0 のとき stderr が job log に含まれる。"""
+    monkeypatch.setattr("joryu.jobs.runner.STATS_REFRESH_INTERVAL_SEC", 3600.0)
+    store = JobStore(tmp_path)
+    record = JobRecord.create(DistillJobSpec(count=1))
+    store.save(record)
+
+    runner = JobRunner(
+        store,
+        tmp_path,
+        refresh_stats=lambda _s: 0,
+        command_builder=lambda _root, _rec: [
+            sys.executable,
+            "-c",
+            "import sys; sys.stderr.write('ERR_MARKER\\n'); sys.exit(42)",
+        ],
+    )
+    runner.enqueue(record)
+
+    deadline = time.time() + 10.0
+    while time.time() < deadline:
+        loaded = store.load(record.id)
+        if loaded.status in (JobStatus.SUCCEEDED, JobStatus.FAILED):
+            break
+        time.sleep(0.05)
+
+    loaded = store.load(record.id)
+    assert loaded.status == JobStatus.FAILED
+    assert loaded.exit_code == 42
+    log_text = store.log_path(record.id).read_text(encoding="utf-8")
+    assert "ERR_MARKER" in log_text
+
+
+def test_runner_logs_exception_with_traceback(tmp_path: Path, monkeypatch, caplog) -> None:
+    """予期しない例外は logging.exception で traceback を残す。"""
+    import logging
+
+    monkeypatch.setattr("joryu.jobs.runner.STATS_REFRESH_INTERVAL_SEC", 3600.0)
+    caplog.set_level(logging.ERROR, logger="joryu.jobs.runner")
+
+    store = JobStore(tmp_path)
+    record = JobRecord.create(DistillJobSpec(count=1))
+    store.save(record)
+
+    def boom(_root: Path, _rec: JobRecord) -> list[str]:
+        raise RuntimeError("boom-marker")
+
+    runner = JobRunner(
+        store,
+        tmp_path,
+        refresh_stats=lambda _s: 0,
+        command_builder=boom,
+    )
+    runner.enqueue(record)
+
+    deadline = time.time() + 5.0
+    while time.time() < deadline:
+        loaded = store.load(record.id)
+        if loaded.status == JobStatus.FAILED:
+            break
+        time.sleep(0.05)
+
+    loaded = store.load(record.id)
+    assert loaded.status == JobStatus.FAILED
+    assert "boom-marker" in (loaded.error or "")
+    assert any(r.exc_info is not None for r in caplog.records)
+    assert any("job failed" in r.message for r in caplog.records)
 
 
 def test_stats_refresh_loop_calls_refresh_before_wait() -> None:

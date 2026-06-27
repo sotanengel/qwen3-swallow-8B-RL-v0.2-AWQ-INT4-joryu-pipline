@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import platform
 import shutil
@@ -16,6 +17,8 @@ from joryu.distill import STATS_REFRESH_INTERVAL_SEC
 from joryu.docker_paths import map_path_for_docker, resolve_host_repo_root
 from joryu.jobs.models import CurateJobSpec, DistillJobSpec, JobKind, JobRecord, JobStatus
 from joryu.jobs.store import JobStore
+
+logger = logging.getLogger(__name__)
 
 CURATE_JOBS_REL = "data/curated/jobs"
 
@@ -539,10 +542,12 @@ class JobRunner:
                 record.error = f"{label} exited with code {exit_code}"
         except OSError as exc:
             record.exit_code = 1
+            logger.exception("job failed", extra={"job_id": job_id})
             self.store.append_log(job_id, f"[joryu-runner] error: {exc}\n")
             record.error = str(exc)
         except Exception as exc:
             record.exit_code = 1
+            logger.exception("job failed", extra={"job_id": job_id})
             self.store.append_log(job_id, f"[joryu-runner] error: {exc}\n")
             record.error = str(exc)
         finally:

@@ -249,4 +249,7 @@ def run_in_docker(
         container_name=container_name,
     )
     print(f"[joryu] docker delegate: {' '.join(cmd)}", file=sys.stderr)
-    return subprocess.run(cmd, check=False).returncode
+    proc = subprocess.run(cmd, check=False, capture_output=True, text=True)
+    if proc.stderr:
+        print(proc.stderr, file=sys.stderr, end="" if proc.stderr.endswith("\n") else "\n")
+    return proc.returncode
