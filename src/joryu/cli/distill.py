@@ -145,6 +145,9 @@ def main(argv: list[str] | None = None, *, _client: SupportsChat | None = None) 
         return 2
     if secs is not None:
         deadline = time.time() + secs
+        from joryu.hard_deadline import install_hard_deadline
+
+        install_hard_deadline(secs)
 
     run_distill(
         cfg,

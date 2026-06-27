@@ -128,3 +128,38 @@ def test_distill_job_spec_to_distill_argv_includes_style_and_sampling() -> None:
     assert "--top-p" in extra
     assert "0.9" in extra
     assert "--mode" not in extra
+
+
+def test_main_installs_hard_deadline_when_duration_set(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    bank = tmp_path / "bank.jsonl"
+    bank.write_text('{"prompt": "Q"}\n', encoding="utf-8")
+    out = tmp_path / "out.jsonl"
+    cfg_yaml = tmp_path / "c.yaml"
+    cfg_yaml.write_text(
+        "distill:\n"
+        f'  prompt_bank: "{bank.as_posix()}"\n'
+        f'  out_dir: "{tmp_path.as_posix()}"\n'
+        '  out_file: "out.jsonl"\n',
+        encoding="utf-8",
+    )
+    (tmp_path / "tools.yaml").write_text("tools: {}\n", encoding="utf-8")
+
+    from joryu.cli import distill as cli_distill
+    from tests.conftest import FakeVllmClient
+
+    installed: list[int] = []
+
+    def _fake_install(seconds: int) -> None:
+        installed.append(seconds)
+
+    monkeypatch.setattr("joryu.hard_deadline.install_hard_deadline", _fake_install)
+
+    rc = cli_distill.main(
+        ["--no-docker", "--config", str(cfg_yaml), "--out", str(out), "--duration", "45s"],
+        _client=FakeVllmClient(answer="ans"),
+    )
+    assert rc == 0
+    assert installed == [45]
