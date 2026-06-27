@@ -189,24 +189,19 @@ def test_services_to_build_force_build() -> None:
 
 
 def test_resolve_up_services_default_no_changes() -> None:
-    args = argparse.Namespace(full=False, frontend_only=False, backend_only=False)
+    args = argparse.Namespace(frontend_only=False, backend_only=False)
     assert resolve_up_services(args, set()) == ["dashboard", "api", "joryu"]
 
 
 def test_resolve_up_services_default_with_joryu_diff() -> None:
-    args = argparse.Namespace(full=False, frontend_only=False, backend_only=False)
+    args = argparse.Namespace(frontend_only=False, backend_only=False)
     assert resolve_up_services(args, {"joryu"}) == ["dashboard", "api", "joryu"]
 
 
 def test_resolve_up_services_default_with_both_diffs() -> None:
-    args = argparse.Namespace(full=False, frontend_only=False, backend_only=False)
+    args = argparse.Namespace(frontend_only=False, backend_only=False)
     assert resolve_up_services(args, {"joryu", "dashboard"}) == ["dashboard", "api", "joryu"]
     assert resolve_up_services(args, {"api", "dashboard"}) == ["dashboard", "api", "joryu"]
-
-
-def test_resolve_up_services_full() -> None:
-    args = argparse.Namespace(full=True, frontend_only=False, backend_only=False)
-    assert resolve_up_services(args, {"joryu"}) == ["dashboard", "api", "joryu"]
 
 
 def test_should_up_mcp_requires_enabled_and_url(tmp_path: Path) -> None:
@@ -226,7 +221,7 @@ def test_resolve_up_services_includes_mcp_when_config_enabled(tmp_path: Path) ->
         "mcp:\n  enabled: true\n  url: http://mcp:8200\n",
         encoding="utf-8",
     )
-    args = argparse.Namespace(full=False, frontend_only=False, backend_only=False)
+    args = argparse.Namespace(frontend_only=False, backend_only=False)
     assert resolve_up_services(args, set(), repo_root=tmp_path) == [
         "dashboard",
         "mcp",
@@ -240,7 +235,7 @@ def test_resolve_up_services_skips_mcp_for_frontend_only(tmp_path: Path) -> None
         "mcp:\n  enabled: true\n  url: http://mcp:8200\n",
         encoding="utf-8",
     )
-    args = argparse.Namespace(full=False, frontend_only=True, backend_only=False)
+    args = argparse.Namespace(frontend_only=True, backend_only=False)
     assert resolve_up_services(args, set(), repo_root=tmp_path) == ["dashboard"]
 
 

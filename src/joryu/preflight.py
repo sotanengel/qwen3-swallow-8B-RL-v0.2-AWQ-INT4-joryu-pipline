@@ -304,9 +304,7 @@ def resolve_up_services(
     dashboard + api を起動する。config.yaml で MCP が有効なら mcp も含める。
     """
     del changed  # build 判定は services_to_build 側
-    if args.full:
-        services = list(_DEFAULT_UP)
-    elif args.backend_only:
+    if args.backend_only:
         services = ["joryu"]
     elif args.frontend_only:
         services = ["dashboard"]

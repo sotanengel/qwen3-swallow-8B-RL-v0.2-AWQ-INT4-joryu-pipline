@@ -100,7 +100,6 @@ tools.yaml ───┤
 | `joryu-curate` | 蒸留 JSONL から高品質サブセットを抽出 |
 | `joryu-api` | 蒸留ジョブ REST API (FastAPI, :8000) |
 | `joryu-up` | git 差分 → `compose build` → `compose up` (既定: dashboard + api + joryu)。`--detach` 時 ready 待ち |
-| `joryu-up --full` | 上記と同義 (後方互換) |
 | `joryu-up --force` | ディスク preflight をスキップ |
 | `joryu-serve` | `joryu-up --frontend-only` の互換エイリアス |
 

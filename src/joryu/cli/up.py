@@ -10,7 +10,6 @@ joryu ビルド前にホスト空き容量を検査し、不足時は `--force` 
 簡略コマンド:
     uv run joryu-up                     # dashboard + api + joryu (git 差分に応じて build)
     uv run joryu-up --frontend-only     # dashboard のみ
-    uv run joryu-up --full              # dashboard + api + joryu (--full は後方互換)
     uv run joryu-up --backend-only      # joryu コンテナのみ
     uv run joryu-up --detach            # バックグラウンド起動 + ready 待ち
     uv run joryu-up --no-wait           # ready 待ちをスキップ
@@ -69,11 +68,6 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     g = p.add_mutually_exclusive_group()
-    g.add_argument(
-        "--full",
-        action="store_true",
-        help="joryu + dashboard + api を up (差分があるサービスのみ build)",
-    )
     g.add_argument(
         "--frontend-only",
         action="store_true",

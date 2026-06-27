@@ -137,13 +137,13 @@ def test_up_joryu_diff_triggers_build_then_up(monkeypatch: pytest.MonkeyPatch) -
     ]
 
 
-def test_up_full_brings_up_all_builds_only_changed(
+def test_up_default_brings_up_all_builds_only_changed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """--full → 全サービス up、差分がある dashboard のみ build。"""
+    """既定 → 全サービス up、差分がある dashboard のみ build。"""
     calls = _patch_runner(monkeypatch)
     monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: {"dashboard"})
-    rc = cli_up.main(["--full"])
+    rc = cli_up.main([])
     assert rc == 0
     assert calls[0] == _STARTUP_IMAGE_PRUNE
     assert calls[1] == ["docker", "compose", "build", "dashboard"]
@@ -190,16 +190,16 @@ def test_up_backend_only(monkeypatch: pytest.MonkeyPatch) -> None:
     assert calls[5] == ["docker", "image", "prune", "-f"]
 
 
+def test_up_rejects_removed_full_flag(monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch_runner(monkeypatch)
+    with pytest.raises(SystemExit):
+        cli_up.main(["--full"])
+
+
 def test_up_mutex_flags_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
     _patch_runner(monkeypatch)
     with pytest.raises(SystemExit):
         cli_up.main(["--frontend-only", "--backend-only"])
-
-
-def test_up_full_and_frontend_only_mutex(monkeypatch: pytest.MonkeyPatch) -> None:
-    _patch_runner(monkeypatch)
-    with pytest.raises(SystemExit):
-        cli_up.main(["--full", "--frontend-only"])
 
 
 def test_up_refresh_stats_before_compose(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -240,7 +240,7 @@ def test_up_no_build_flag(monkeypatch: pytest.MonkeyPatch) -> None:
         "joryu.cli.up.changed_services_from_git",
         lambda _root: {"dashboard"},
     )
-    cli_up.main(["--no-build", "--full"])
+    cli_up.main(["--no-build"])
     assert len(calls) == 2
     assert calls[0] == _STARTUP_IMAGE_PRUNE
     assert calls[1] == ["docker", "compose", "up", "dashboard", "api", "joryu"]
@@ -255,7 +255,7 @@ def test_up_no_build_flag_force_recreate_when_joryu_runtime_changed(
         "joryu.cli.up.changed_services_from_git",
         lambda _root: {"joryu"},
     )
-    cli_up.main(["--no-build", "--full"])
+    cli_up.main(["--no-build"])
     assert len(calls) == 2
     assert calls[0] == _STARTUP_IMAGE_PRUNE
     assert calls[1] == [
