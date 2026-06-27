@@ -13,12 +13,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from joryu.curate.judge_client import RUBRIC_KEYS
+from joryu.curate.judge_client import HEALTH_RUBRIC_KEYS, RUBRIC_KEYS
 from joryu.dashboard_json import write_dashboard_json
-from joryu.paths import CURATION_JSON_REL
+from joryu.paths import CURATION_JSON_REL, SCREENING_JSON_REL
 from joryu.stats import length_bins
 
 DEFAULT_CURATION_OUTPUT = CURATION_JSON_REL
+DEFAULT_SCREENING_OUTPUT = SCREENING_JSON_REL
 DEFAULT_REJECTED_SAMPLE_N = 20
 
 _SCORE_BIN_EDGES: tuple[int, ...] = (0, 10, 20, 30, 40, 50, 60, 70, 80, 90)
@@ -251,6 +252,123 @@ def write_curation_json(
     src_path = Path(scores_jsonl)
     dst_path = Path(dst)
     stats = compute_curation_stats(src_path, rejected_sample_n=rejected_sample_n)
+    return write_dashboard_json(
+        dst_path,
+        stats,
+        source_path=src_path,
+        generated_at=generated_at,
+    )
+
+
+# Screening signal code → rule ID mapping (Epic #305)
+_SCREENING_RULE_MAP: dict[str, str] = {
+    "THINK-TAG": "R-01",
+    "END-WELL": "R-02",
+    "TRUNC": "R-02",
+    "REPEAT-NG": "R-03",
+    "REPEAT-CHAR": "R-03",
+    "CTRL-CHAR": "R-04",
+    "LANG-JA": "R-05",
+    "LEN-A": "R-06",
+    "LEN-T": "R-06",
+    "TPL-LEAK": "R-08",
+    "SYNTAX-BREAK": "R-09",
+}
+
+
+def compute_screening_stats(scores_jsonl: str | Path) -> dict[str, Any]:
+    """健全性スクリーニング scores.jsonl から集計レポートを生成。"""
+    p = Path(scores_jsonl)
+    if not p.exists():
+        return _empty_screening_stats()
+
+    total = 0
+    label_counts: Counter[str] = Counter()
+    rule_violations: Counter[str] = Counter()
+    llm_sums: dict[str, float] = dict.fromkeys(HEALTH_RUBRIC_KEYS, 0.0)
+    llm_count = 0
+    evaluator_models: Counter[str] = Counter()
+
+    for raw_line in p.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        row = json.loads(line)
+        total += 1
+        lbl = row.get("screening_label") or "UNKNOWN"
+        label_counts[lbl] += 1
+        ev_model = row.get("evaluator_model")
+        if isinstance(ev_model, str) and ev_model:
+            evaluator_models[ev_model] += 1
+        rejected_by = row.get("rejected_by") or []
+        signal_scores = row.get("signal_scores") or {}
+        signal_raw = row.get("signal_raw") or {}
+        for code, rule_id in _SCREENING_RULE_MAP.items():
+            if code in rejected_by:
+                rule_violations[rule_id] += 1
+            elif code in signal_scores and float(signal_scores[code]) < 0.5:
+                rule_violations[rule_id] += 1
+        if "LLM-HEALTH" in signal_scores:
+            raw_health = signal_raw.get("LLM-HEALTH") if isinstance(signal_raw, dict) else {}
+            if isinstance(raw_health, dict):
+                llm_count += 1
+                for k in HEALTH_RUBRIC_KEYS:
+                    v = raw_health.get(k, 0)
+                    try:
+                        llm_sums[k] += float(v)
+                    except (TypeError, ValueError):
+                        pass
+
+    rule_ids = sorted(set(_SCREENING_RULE_MAP.values()))
+    rule_rates = {rid: (rule_violations[rid] / total if total else 0.0) for rid in rule_ids}
+    llm_avg = {k: (llm_sums[k] / llm_count if llm_count else 0.0) for k in HEALTH_RUBRIC_KEYS}
+    label_dist = {
+        lbl: {"count": label_counts[lbl], "rate": label_counts[lbl] / total if total else 0.0}
+        for lbl in ("OK", "REVIEW", "NG")
+    }
+    for lbl in label_counts:
+        if lbl not in label_dist:
+            label_dist[lbl] = {
+                "count": label_counts[lbl],
+                "rate": label_counts[lbl] / total if total else 0.0,
+            }
+
+    return {
+        "total": total,
+        "label_distribution": label_dist,
+        "rule_violation_rates": rule_rates,
+        "llm_health_averages": llm_avg,
+        "llm_health_count": llm_count,
+        "evaluator_models": dict(evaluator_models),
+        "judge_comparison": None,
+    }
+
+
+def _empty_screening_stats() -> dict[str, Any]:
+    return {
+        "total": 0,
+        "label_distribution": {},
+        "rule_violation_rates": {},
+        "llm_health_averages": {},
+        "llm_health_count": 0,
+        "evaluator_models": {},
+        "judge_comparison": None,
+    }
+
+
+def write_screening_json(
+    scores_jsonl: str | Path,
+    dst: str | Path,
+    *,
+    generated_at: datetime | None = None,
+    judge_comparison: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """`dashboard/public/screening.json` を書き出す。"""
+    src_path = Path(scores_jsonl)
+    dst_path = Path(dst)
+    stats = compute_screening_stats(src_path)
+    if judge_comparison is not None:
+        stats["judge_comparison"] = judge_comparison
     return write_dashboard_json(
         dst_path,
         stats,

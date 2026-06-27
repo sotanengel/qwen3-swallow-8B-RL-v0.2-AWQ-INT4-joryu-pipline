@@ -9,9 +9,24 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from joryu.curate.judge_client import RUBRIC_KEYS, JudgeClient
+from joryu.curate.judge_client import HEALTH_RUBRIC_KEYS, RUBRIC_KEYS, JudgeClient
 
 from . import SignalResult
+
+
+def truncate_for_health(text: str, *, max_each: int = 500) -> str:
+    """think 長文を冒頭/末尾に truncate (要件 §9)。"""
+    if len(text) <= max_each * 2:
+        return text
+    return f"{text[:max_each]}\n...\n{text[-max_each:]}"
+
+
+def build_health_response_text(record: dict[str, Any]) -> str:
+    tt = record.get("thinking_trace") or record.get("reasoning") or ""
+    ans = record.get("answer") or ""
+    if tt:
+        return f"{truncate_for_health(tt)}\n{ans}"
+    return ans
 
 
 @dataclass
@@ -27,6 +42,29 @@ class LLMRubricSignal:
         answer = record.get("answer") or ""
         scores = self.judge.score_rubric(prompt, answer)
         valid = [scores.get(k, 3) for k in RUBRIC_KEYS]
+        avg = sum(valid) / len(valid) if valid else 3.0
+        normalized = avg / 5.0
+        return SignalResult(self.code, self.version, normalized, scores, hard_reject=False)
+
+
+@dataclass
+class LlmHealthRubric:
+    """健全性 LLM rubric (L-01〜L-05)。学習価値 rubric (LLM-RUBRIC) とは別シグナル。"""
+
+    code: str = "LLM-HEALTH"
+    version: str = "health_rubric.ja.v1.0"
+    judge: JudgeClient = None  # type: ignore[assignment]
+    prompt_template: str = ""
+
+    def evaluate(self, record: dict[str, Any]) -> SignalResult:
+        prompt = record.get("prompt") or ""
+        response = build_health_response_text(record)
+        scores = self.judge.score_health_rubric(
+            prompt,
+            response,
+            health_prompt_template=self.prompt_template,
+        )
+        valid = [scores.get(k, 3) for k in HEALTH_RUBRIC_KEYS]
         avg = sum(valid) / len(valid) if valid else 3.0
         normalized = avg / 5.0
         return SignalResult(self.code, self.version, normalized, scores, hard_reject=False)
@@ -97,4 +135,11 @@ class LLMPairSignalContext:
         return {i: (wins[i] / matches[i]) if matches[i] else 0.5 for i in indices}
 
 
-__all__ = ["LLMPairSignalContext", "LLMRubricSignal", "LLMSelfSignal"]
+__all__ = [
+    "LLMPairSignalContext",
+    "LLMRubricSignal",
+    "LLMSelfSignal",
+    "LlmHealthRubric",
+    "build_health_response_text",
+    "truncate_for_health",
+]
