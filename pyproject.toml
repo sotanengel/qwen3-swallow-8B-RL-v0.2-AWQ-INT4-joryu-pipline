@@ -26,6 +26,7 @@ joryu-serve = "joryu.cli.serve:main"
 joryu-api = "joryu.cli.api:main"
 joryu-probe-vllm = "joryu.cli.probe_vllm:main"
 joryu-mcp = "joryu.cli.mcp_serve:main"
+joryu-seed-gen = "joryu.seed_gen.cli:main"
 
 [project.optional-dependencies]
 mcp = [
@@ -42,6 +43,11 @@ api = [
     "httpx>=0.27",
     "uvicorn[standard]>=0.30",
     "rank-bm25>=0.2",
+]
+seed_gen = [
+    "faiss-cpu>=1.7",
+    "numpy>=1.26",
+    "sentence-transformers>=3.0",
 ]
 
 [dependency-groups]

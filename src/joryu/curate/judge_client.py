@@ -35,6 +35,14 @@ HEALTH_RUBRIC_KEYS: tuple[str, ...] = (
     "L-05",
 )
 
+PROMPT_HEALTH_RUBRIC_KEYS: tuple[str, ...] = (
+    "P-01",
+    "P-02",
+    "P-03",
+    "P-04",
+    "P-05",
+)
+
 
 PairWinner = Literal["a", "b", "tie"]
 
@@ -48,6 +56,13 @@ class JudgeClient(Protocol):
         self,
         prompt: str,
         response: str,
+        *,
+        health_prompt_template: str,
+    ) -> dict[str, Any]: ...
+
+    def score_prompt_health_rubric(
+        self,
+        prompt: str,
         *,
         health_prompt_template: str,
     ) -> dict[str, Any]: ...
@@ -76,6 +91,8 @@ class FakeJudgeClient:
         self_scorer: Callable[[str, str, str], float] | None = None,
         health_scores: dict[str, Any] | None = None,
         health_scorer: Callable[[str, str], dict[str, Any]] | None = None,
+        prompt_health_scores: dict[str, Any] | None = None,
+        prompt_health_scorer: Callable[[str], dict[str, Any]] | None = None,
     ) -> None:
         self._scores = scores or {k: 4 for k in RUBRIC_KEYS}
         self._scorer = scorer
@@ -87,6 +104,12 @@ class FakeJudgeClient:
         if "reason_brief" not in self._health_scores:
             self._health_scores["reason_brief"] = "ok"
         self._health_scorer = health_scorer
+        self._prompt_health_scores = dict(
+            prompt_health_scores or {k: 4 for k in PROMPT_HEALTH_RUBRIC_KEYS}
+        )
+        if "reason_brief" not in self._prompt_health_scores:
+            self._prompt_health_scores["reason_brief"] = "ok"
+        self._prompt_health_scorer = prompt_health_scorer
         self.calls: list[dict[str, str]] = []
         self.pair_calls: list[dict[str, str]] = []
         self.self_calls: list[dict[str, str]] = []
@@ -109,6 +132,17 @@ class FakeJudgeClient:
         if self._health_scorer is not None:
             return self._health_scorer(prompt, response)
         return dict(self._health_scores)
+
+    def score_prompt_health_rubric(
+        self,
+        prompt: str,
+        *,
+        health_prompt_template: str,
+    ) -> dict[str, Any]:
+        del health_prompt_template
+        if self._prompt_health_scorer is not None:
+            return self._prompt_health_scorer(prompt)
+        return dict(self._prompt_health_scores)
 
     def compare_pair(self, prompt: str, answer_a: str, answer_b: str) -> PairWinner:
         self.pair_calls.append({"prompt": prompt, "a": answer_a, "b": answer_b})
@@ -185,6 +219,26 @@ class VllmJudgeClient:
             logger.warning("[curate.judge.health] chat failed: %s", exc)
             return _default_neutral_health_scores()
         return parse_health_rubric_response(result.answer)
+
+    def score_prompt_health_rubric(
+        self,
+        prompt: str,
+        *,
+        health_prompt_template: str,
+    ) -> dict[str, Any]:
+        user_msg = health_prompt_template.replace("{instruction}", prompt)
+        messages = [{"role": "user", "content": user_msg}]
+        try:
+            result = self._chat.chat_via_template(
+                messages,
+                enable_thinking=False,
+                max_tokens=self._max_tokens,
+                temperature=self._temperature,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("[curate.judge.prompt_health] chat failed: %s", exc)
+            return _default_neutral_prompt_health_scores()
+        return parse_prompt_health_rubric_response(result.answer)
 
     def compare_pair(self, prompt: str, answer_a: str, answer_b: str) -> PairWinner:
         messages = [
@@ -282,6 +336,30 @@ def parse_rubric_response(text: str) -> dict[str, int]:
 def _default_neutral_health_scores() -> dict[str, Any]:
     out: dict[str, Any] = {k: 3 for k in HEALTH_RUBRIC_KEYS}
     out["reason_brief"] = "parse_failed"
+    return out
+
+
+def _default_neutral_prompt_health_scores() -> dict[str, Any]:
+    out: dict[str, Any] = {k: 3 for k in PROMPT_HEALTH_RUBRIC_KEYS}
+    out["reason_brief"] = "parse_failed"
+    return out
+
+
+def parse_prompt_health_rubric_response(text: str) -> dict[str, Any]:
+    """プロンプト健全性 rubric JSON を抽出 (P-01〜P-05 + reason_brief)。"""
+    parsed = _extract_json_object(text)
+    if parsed is None:
+        return _default_neutral_prompt_health_scores()
+    out: dict[str, Any] = {}
+    for k in PROMPT_HEALTH_RUBRIC_KEYS:
+        v = parsed.get(k, 3)
+        try:
+            iv = int(round(float(v)))
+        except (TypeError, ValueError):
+            iv = 3
+        out[k] = max(1, min(5, iv))
+    reason = parsed.get("reason_brief", "")
+    out["reason_brief"] = str(reason) if reason is not None else ""
     return out
 
 
@@ -437,6 +515,16 @@ class OpenAICompatibleJudgeClient:
         text = self._chat_complete([{"role": "user", "content": user_msg}])
         return parse_health_rubric_response(text)
 
+    def score_prompt_health_rubric(
+        self,
+        prompt: str,
+        *,
+        health_prompt_template: str,
+    ) -> dict[str, Any]:
+        user_msg = health_prompt_template.replace("{instruction}", prompt)
+        text = self._chat_complete([{"role": "user", "content": user_msg}])
+        return parse_prompt_health_rubric_response(text)
+
     def compare_pair(self, prompt: str, answer_a: str, answer_b: str) -> PairWinner:
         messages = [
             {"role": "system", "content": DEFAULT_PAIR_PROMPT},
@@ -512,7 +600,8 @@ __all__ = [
     "RUBRIC_KEYS",
     "VllmJudgeClient",
     "get_default_rubric_prompt",
-    "parse_health_rubric_response",
+    "PROMPT_HEALTH_RUBRIC_KEYS",
+    "parse_prompt_health_rubric_response",
     "parse_pair_response",
     "parse_rubric_response",
     "parse_self_response",

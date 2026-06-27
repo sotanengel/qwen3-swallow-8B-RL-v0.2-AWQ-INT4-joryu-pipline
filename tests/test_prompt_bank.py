@@ -12,6 +12,26 @@ def _write_jsonl(path: Path, lines: list[str]) -> None:
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def test_prompt_row_id_domain_optional(tmp_path: Path) -> None:
+    """id / domain は optional。既存行・新規行の 4 パターンを許容する (#314)。"""
+    cases = [
+        ('{"prompt":"legacy only"}', None, None),
+        ('{"prompt":"id only","id":"uuid-1"}', "uuid-1", None),
+        ('{"prompt":"domain only","domain":"math"}', None, "math"),
+        ('{"prompt":"both","id":"uuid-2","domain":"coding"}', "uuid-2", "coding"),
+    ]
+    for line, exp_id, exp_domain in cases:
+        row = load_prompt_bank_from_line(tmp_path, line)
+        assert row.id == exp_id
+        assert row.domain == exp_domain
+
+
+def load_prompt_bank_from_line(tmp_path: Path, line: str) -> PromptRow:
+    p = tmp_path / "one.jsonl"
+    _write_jsonl(p, [line])
+    return load_prompt_bank(p)[0]
+
+
 def test_minimal_row_uses_defaults(tmp_path: Path) -> None:
     p = tmp_path / "b.jsonl"
     _write_jsonl(p, ['{"prompt": "桜の特徴は？"}'])

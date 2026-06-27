@@ -10,7 +10,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from joryu.api.routes import chat, curate, dashboard, jobs, search
+from joryu.api.routes import chat, curate, dashboard, jobs, search, seed_gen
 from joryu.chat.session import ChatSessionStore
 from joryu.config import load_config
 from joryu.http_client import close_shared_async_client
@@ -81,6 +81,8 @@ def create_app(*, repo_root: Path | None = None) -> FastAPI:
     app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
     app.include_router(jobs.router, prefix="/api/jobs", tags=["jobs"])
     app.include_router(curate.router, prefix="/api/curate/jobs", tags=["curate"])
+    app.include_router(seed_gen.router, prefix="/api/seed-gen/jobs", tags=["seed_gen"])
+    app.include_router(seed_gen.status_router, prefix="/api/seed-gen", tags=["seed_gen"])
     app.include_router(dashboard.router, prefix="/api/dashboard", tags=["dashboard"])
     app.include_router(search.router, prefix="/api/dashboard", tags=["dashboard"])
     return app

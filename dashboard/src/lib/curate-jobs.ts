@@ -4,6 +4,9 @@ export type CurateJobSpec = {
   config: string;
   skip_llm: boolean;
   threshold: number | null;
+  screening: boolean;
+  prompt_bank: boolean;
+  src: string;
 };
 
 export type CurateJobRecord = {
@@ -28,6 +31,9 @@ export type CreateCurateJobRequest = {
   skip_llm?: boolean;
   threshold?: number | null;
   config?: string;
+  screening?: boolean;
+  prompt_bank?: boolean;
+  src?: string;
 };
 
 export type LogResponse = {
@@ -72,6 +78,9 @@ export function parseCurateJobRecord(data: unknown): CurateJobRecord {
         row.spec?.threshold === null || row.spec?.threshold === undefined
           ? null
           : Number(row.spec.threshold),
+      screening: Boolean(row.spec?.screening),
+      prompt_bank: Boolean(row.spec?.prompt_bank),
+      src: String(row.spec?.src ?? ""),
     },
     status: row.status,
     created_at: String(row.created_at),

@@ -1,0 +1,206 @@
+version: 1
+target_total: 230000
+legacy_category_aliases:
+  general_qa:
+    - 社会・現代問題
+    - 歴史・文化考察
+    - 政治学・国際関係
+    - 自然・環境・生態
+    - 農業・土地・生業
+    - 都市論・地域論
+  reasoning_logic:
+    - 心理学・人間行動
+    - 戦略・意思決定論
+  math:
+    - 数学・論理・抽象思考
+  coding:
+    - テクノロジー・未来社会
+  summarization:
+    - ビジネス文書・報告
+  creative_writing:
+    - エッセイ・随筆
+    - 創作・ストーリーテリング
+    - 文学・詩的表現
+    - 映像・写真・視覚芸術
+    - 物語論・批評・文芸評論
+    - 音楽・音響表現
+  roleplay_dialogue:
+    - 対話・コミュニケーション
+  instruction_following:
+    - 法律・制度設計
+    - 教育・学習論
+  paraphrase_style:
+    - 翻訳・異文化接触
+    - 言語・コミュニケーション論
+  business_writing:
+    - 労働・職業・キャリア論
+    - 経済・金融
+  explanation_edu:
+    - 技術解説・サイエンス
+  data_extraction:
+    - データ抽出・構造化
+  multi_step_cot:
+    - 哲学・倫理的考察
+  ethics_judgment:
+    - 宗教・神話・精神性
+    - 医療・健康・ウェルビーイング
+  casual_chat:
+    - スポーツ・身体論
+    - 料理・食文化
+    - 建築・空間デザイン
+domains:
+  - key: general_qa
+    target: 25000
+    seed_templates:
+      - "{theme} について {persona} 向けに分かりやすく説明してください。"
+      - "{theme} に関する一般的な質問を日本語で 1 つ作成してください。"
+    themes:
+      - 環境問題
+      - 宇宙開発
+      - 少子高齢化
+      - 地方創生
+      - デジタル化
+  - key: reasoning_logic
+    target: 22000
+    seed_templates:
+      - "{theme} について論理的に考える練習問題を作成してください。"
+      - "{persona} が {theme} を判断する際の思考手順を問う質問を作成してください。"
+    themes:
+      - 因果関係
+      - 仮説検証
+      - 反論への対応
+      - 前提の確認
+  - key: math
+    target: 28000
+    seed_templates:
+      - "{theme} に関する数学の問題を日本語で作成してください。"
+      - "次のテーマに沿った計算・論理パズルを 1 問作成してください: {theme}"
+    themes:
+      - 代数
+      - 幾何
+      - 確率
+      - 数列
+      - 組み合わせ
+  - key: coding
+    target: 24000
+    seed_templates:
+      - "{theme} を実装・解説するためのプログラミング課題を日本語で作成してください。"
+      - "{persona} 向けに {theme} に関するコード課題を 1 つ作成してください。"
+    themes:
+      - Python
+      - データ構造
+      - API 設計
+      - テスト
+      - デバッグ
+  - key: summarization
+    target: 12000
+    seed_templates:
+      - "次のテーマの長文を要約させる指示文を作成してください: {theme}"
+      - "{theme} に関する文章の要点抽出タスクを日本語で作成してください。"
+    themes:
+      - ニュース記事
+      - 会議議事録
+      - 研究概要
+      - 製品説明
+  - key: creative_writing
+    target: 14000
+    seed_templates:
+      - "{theme} を題材にした創作指示を日本語で作成してください。"
+      - "{persona} 向けの {theme} に関する物語創作プロンプトを作成してください。"
+    themes:
+      - 短編小説
+      - 詩
+      - モノローグ
+      - 世界観設定
+      - キャラクター描写
+  - key: roleplay_dialogue
+    target: 8000
+    seed_templates:
+      - "{persona} と {theme} について対話するロールプレイ指示を作成してください。"
+      - "{theme} の場面を想定した会話練習プロンプトを作成してください。"
+    themes:
+      - カスタマーサポート
+      - 面接
+      - 相談
+      - 雑談
+  - key: instruction_following
+    target: 18000
+    seed_templates:
+      - "厳密な制約付きで {theme} に関する指示文を作成してください。"
+      - "次の形式制約を含むタスク指示を日本語で作成してください: {theme}"
+    themes:
+      - 箇条書き
+      - 文字数制限
+      - 禁止語
+      - 出力フォーマット
+  - key: paraphrase_style
+    target: 10000
+    seed_templates:
+      - "{theme} の文体を変えて言い換えさせる指示を作成してください。"
+      - "{persona} 向けの言い換え・文体変換タスクを日本語で作成してください。"
+    themes:
+      - 敬体と常体
+      - 簡潔化
+      - 丁寧化
+      - 専門用語の平易化
+  - key: business_writing
+    target: 11000
+    seed_templates:
+      - "{theme} に関するビジネス文書作成タスクを日本語で作成してください。"
+      - "{persona} 向けの {theme} に関する報告・提案プロンプトを作成してください。"
+    themes:
+      - 企画書
+      - メール
+      - 報告書
+      - 提案書
+  - key: explanation_edu
+    target: 16000
+    seed_templates:
+      - "{theme} を初学者向けに説明させる指示文を作成してください。"
+      - "{persona} 向けに {theme} を教えるための質問を作成してください。"
+    themes:
+      - 科学概念
+      - 歴史的事件
+      - 社会制度
+      - 技術原理
+  - key: data_extraction
+    target: 9000
+    seed_templates:
+      - "{theme} から情報を抽出・構造化させる指示を作成してください。"
+      - "次のテーマに関するデータ抽出タスクを日本語で作成してください: {theme}"
+    themes:
+      - 表データ
+      - ログ解析
+      - エンティティ抽出
+      - 分類ラベル
+  - key: multi_step_cot
+    target: 20000
+    seed_templates:
+      - "{theme} について段階的に考えさせる多段階推論タスクを作成してください。"
+      - "{persona} が {theme} を解く手順を示させるプロンプトを作成してください。"
+    themes:
+      - 複数条件の問題
+      - 計画立案
+      - 原因分析
+      - 意思決定
+  - key: ethics_judgment
+    target: 6000
+    seed_templates:
+      - "{theme} に関する倫理・価値判断を問うプロンプトを作成してください。"
+      - "{persona} 視点で {theme} の是非を考察させる質問を作成してください。"
+    themes:
+      - AI 倫理
+      - 個人情報
+      - 公平性
+      - 責任
+  - key: casual_chat
+    target: 7000
+    seed_templates:
+      - "{theme} について自然な雑談を促すプロンプトを作成してください。"
+      - "{persona} との日常的な会話を想定した質問を作成してください。"
+    themes:
+      - 趣味
+      - 休日の過ごし方
+      - 食べ物
+      - 旅行
+      - 天気

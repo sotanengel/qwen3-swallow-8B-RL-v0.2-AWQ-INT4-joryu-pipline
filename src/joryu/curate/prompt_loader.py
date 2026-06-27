@@ -12,6 +12,7 @@ _EVAL_VERSION_RE = re.compile(r"^#\s*eval_version:\s*(\S+)", re.MULTILINE)
 _VERSION_RE = re.compile(r"^#\s*version:\s*(\S+)", re.MULTILINE)
 
 DEFAULT_HEALTH_RUBRIC_REL = "prompts/health_rubric.ja.txt"
+DEFAULT_PROMPT_HEALTH_RUBRIC_REL = "prompts/prompt_health_rubric.ja.txt"
 
 _CACHE: dict[str, LoadedPrompt] = {}
 
@@ -47,14 +48,17 @@ def _parse_prompt_file(path: Path) -> LoadedPrompt:
     )
 
 
-def _default_health_rubric_path() -> Path:
-    """リポジトリ内の既定プロンプトパスを解決。"""
+def _resolve_prompt_path(rel: str) -> Path:
     here = Path(__file__).resolve()
     for base in (here.parents[3], *([] if resolve_repo_root() is None else [resolve_repo_root()])):
-        candidate = Path(base) / DEFAULT_HEALTH_RUBRIC_REL
+        candidate = Path(base) / rel
         if candidate.is_file():
             return candidate.resolve()
-    raise FileNotFoundError(f"health rubric prompt not found at {DEFAULT_HEALTH_RUBRIC_REL}")
+    raise FileNotFoundError(f"prompt file not found at {rel}")
+
+
+def _default_health_rubric_path() -> Path:
+    return _resolve_prompt_path(DEFAULT_HEALTH_RUBRIC_REL)
 
 
 def load_health_rubric(path: Path | None = None) -> LoadedPrompt:
@@ -77,8 +81,30 @@ def load_health_rubric(path: Path | None = None) -> LoadedPrompt:
     return loaded
 
 
+def load_prompt_health_rubric(path: Path | None = None) -> LoadedPrompt:
+    """プロンプトバンク専用 LLM rubric をロード (キャッシュ付き)。"""
+    if path is not None:
+        key = str(path.resolve())
+        if key not in _CACHE:
+            if not path.is_file():
+                raise FileNotFoundError(f"prompt health rubric not found: {path}")
+            _CACHE[key] = _parse_prompt_file(path)
+        return _CACHE[key]
+
+    default_key = "prompt_health_default"
+    if default_key in _CACHE:
+        return _CACHE[default_key]
+
+    resolved = _resolve_prompt_path(DEFAULT_PROMPT_HEALTH_RUBRIC_REL)
+    loaded = _parse_prompt_file(resolved)
+    _CACHE[default_key] = loaded
+    return loaded
+
+
 __all__ = [
     "DEFAULT_HEALTH_RUBRIC_REL",
+    "DEFAULT_PROMPT_HEALTH_RUBRIC_REL",
     "LoadedPrompt",
     "load_health_rubric",
+    "load_prompt_health_rubric",
 ]
