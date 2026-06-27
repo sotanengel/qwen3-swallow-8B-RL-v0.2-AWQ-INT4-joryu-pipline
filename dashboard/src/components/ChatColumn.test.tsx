@@ -1,12 +1,57 @@
-import { describe, expect, it } from "vitest";
+// @vitest-environment jsdom
 
-import { applyChatEvent, type ColumnUiState } from "@/components/ChatColumn";
+import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it } from "vitest";
+
+import { applyChatEvent, ChatColumn, type ColumnUiState } from "@/components/ChatColumn";
 
 const baseColumn = (): ColumnUiState => ({
   style_id: "prose",
   label: "散文",
   messages: [],
   turn_index: 0,
+});
+
+afterEach(() => {
+  cleanup();
+});
+
+describe("ChatColumn markdown rendering", () => {
+  it("renders user and assistant messages as markdown", () => {
+    render(
+      <ChatColumn
+        column={{
+          ...baseColumn(),
+          messages: [
+            { role: "user", content: "これは **太字** です" },
+            { role: "assistant", content: "## 見出し\n\n- 項目1" },
+          ],
+        }}
+        showInput={false}
+        onSend={() => {}}
+      />,
+    );
+
+    expect(screen.getByText("太字").tagName).toBe("STRONG");
+    expect(screen.getByRole("heading", { level: 2, name: "見出し" })).toBeTruthy();
+    expect(screen.getByText("項目1").closest("li")).toBeTruthy();
+  });
+
+  it("renders streaming assistant text as markdown", () => {
+    render(
+      <ChatColumn
+        column={{
+          ...baseColumn(),
+          isStreaming: true,
+          streamingText: "`code` snippet",
+        }}
+        showInput={false}
+        onSend={() => {}}
+      />,
+    );
+
+    expect(screen.getByText("code").tagName).toBe("CODE");
+  });
 });
 
 describe("applyChatEvent", () => {
