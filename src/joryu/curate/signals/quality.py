@@ -6,6 +6,13 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
+from joryu.style_format import (
+    has_dialog_think_leak,
+    has_phrase_triple_repeat,
+    has_prose_style_violation,
+    has_qa_short_style_violation,
+)
+
 from . import SignalResult
 
 _FACTUAL_NUMBER_RE = re.compile(
@@ -105,20 +112,32 @@ class StyleFormat:
     code: str = "STYLE-FMT"
     version: str = "v1"
 
-    _PLAIN_STYLES = frozenset({"prose", "qa_short", "dialog"})
-
     def evaluate(self, record: dict[str, Any]) -> SignalResult:
         style_id = record.get("style_id")
         answer = record.get("answer")
         if not isinstance(style_id, str) or not isinstance(answer, str) or not answer.strip():
             return SignalResult(self.code, self.version, 1.0, None, False)
-        if style_id in self._PLAIN_STYLES:
-            violation = _PROSE_MARKDOWN_RE.search(answer) is not None
+        if has_phrase_triple_repeat(answer):
+            return SignalResult(self.code, self.version, 0.0, "phrase_repeat", True)
+        if style_id == "report":
+            return SignalResult(self.code, self.version, 1.0, style_id, False)
+        if style_id == "prose":
+            violation = has_prose_style_violation(answer)
             return SignalResult(
                 self.code, self.version, 0.0 if violation else 1.0, style_id, violation
             )
-        if style_id == "report":
-            return SignalResult(self.code, self.version, 1.0, style_id, False)
+        if style_id == "qa_short":
+            violation = has_qa_short_style_violation(answer)
+            return SignalResult(
+                self.code, self.version, 0.0 if violation else 1.0, style_id, violation
+            )
+        if style_id == "dialog":
+            violation = has_dialog_think_leak(answer) or (
+                _PROSE_MARKDOWN_RE.search(answer) is not None
+            )
+            return SignalResult(
+                self.code, self.version, 0.0 if violation else 1.0, style_id, violation
+            )
         return SignalResult(self.code, self.version, 1.0, None, False)
 
 
