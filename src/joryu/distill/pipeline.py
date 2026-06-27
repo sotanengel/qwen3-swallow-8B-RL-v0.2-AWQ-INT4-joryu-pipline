@@ -1,44 +1,36 @@
-"""コア蒸留ループ。prompt bank → JSONL レコード。
-
-mode 概念は #94 で削除し、Qwen3 の thinking モードで固定運用する。
-"""
+"""DistillPipeline ランナー (#251)。"""
 
 from __future__ import annotations
 
-import hashlib
-import json
 import logging
 import sys
 import time
 from collections.abc import Callable
-from dataclasses import asdict
-from datetime import UTC, datetime
 from functools import partial
 from pathlib import Path
 from typing import Any
 
 from joryu.config import Config
-from joryu.dashboard_json import write_dashboard_json
+from joryu.distill.keys import variant_run_key
+from joryu.distill.protocol import DistillContext, Stage
+from joryu.distill.record import record_from_chat
+from joryu.distill.stages import LoopStage, make_build_with_turns, make_tool_loop_chat_fn
+from joryu.distill.stats import StatsRefreshThrottler, default_stats_refresher
 from joryu.distill_live import DistillLiveState
 from joryu.distill_retry import generate_until_complete
 from joryu.paths import DEFAULT_CONFIG, resolve_config_relative, resolve_repo_root
-from joryu.progress import load_done_keys, load_truncated_run_keys, run_key_from_parts
+from joryu.progress import load_done_keys, load_truncated_run_keys
 from joryu.progress_reporter import DistillProgressReporter
-from joryu.prompt_bank import EffectiveSampling, PromptRow, load_prompt_bank
+from joryu.prompt_bank import PromptRow, load_prompt_bank
 from joryu.prompt_dedup import PromptDedupGuard
-from joryu.stats import compute_stats, resolve_stats_output_path
 from joryu.styles import StylePreset, load_styles, resolve_style_ids
-from joryu.tool_call_recovery import recover_tool_call
 from joryu.tool_executor import ToolExecutor, build_default_executor
-from joryu.tool_pipeline.pipeline import ToolCallPipeline, aggregate_tool_calls_from_turns
 from joryu.tools import load_tools
-from joryu.variants import DistillVariant, expand_variants
-from joryu.vllm_client import ChatResult, SupportsChat, VllmError
+from joryu.variants import expand_variants
+from joryu.vllm.protocol import SupportsChat, VllmError
 from joryu.writer import JsonlAppendWriter
 
 logger = logging.getLogger(__name__)
-
-STATS_REFRESH_INTERVAL_SEC = 3.0
 
 
 def _resolve_tools_path(
@@ -47,7 +39,6 @@ def _resolve_tools_path(
     config_path: Path | None,
     out_p: Path,
 ) -> Path:
-    """tools.yaml の絶対パスを config 親基準で解決する。"""
     if config_path is not None:
         return resolve_config_relative(config_path, config.distill.tools_file)
     root = resolve_repo_root(out_path=out_p)
@@ -59,164 +50,14 @@ def _resolve_tools_path(
     return rel.resolve()
 
 
-def _build_record(
-    *,
-    row: PromptRow,
-    eff: EffectiveSampling,
-    thinking: str | None,
-    answer: str,
-    model_name: str,
-    config_hash: str,
-    chat: ChatResult,
-    turns: list[dict[str, Any]] | None = None,
-) -> dict[str, Any]:
-    sampling = dict(eff.sampling)
-    if chat.effective_max_tokens is not None:
-        sampling["effective_max_tokens"] = chat.effective_max_tokens
-    suspected = list(chat.suspected_unparsed_tool_calls)
-    if suspected:
-        logger.warning(
-            "[distill] suspected unparsed tool_call patterns in answer: prompt=%r hints=%s",
-            row.prompt[:80],
-            suspected,
-        )
-    return {
-        "prompt": row.prompt,
-        "category": row.category,
-        "style_id": eff.style_id,
-        "system_prompt": eff.system_prompt,
-        "sampling": sampling,
-        "thinking_trace": thinking,
-        "reasoning": thinking or "",
-        "answer": answer,
-        "model": model_name,
-        "config_hash": config_hash,
-        "finish_reason": chat.finish_reason,
-        "prompt_tokens": chat.prompt_tokens,
-        "completion_tokens": chat.completion_tokens,
-        "tools": eff.tools,
-        "tool_ids_requested": row.tool_ids,
-        "tool_calls": [asdict(c) for c in chat.tool_calls],
-        "turns": turns or [],
-        "raw_completion": chat.raw_completion,
-        "suspected_unparsed_tool_calls": suspected,
-        "created_at": datetime.now(UTC).isoformat(),
-    }
-
-
-def _record_from_chat(
-    chat: ChatResult,
-    *,
-    row: PromptRow,
-    eff: EffectiveSampling,
-    model_name: str,
-    config_hash: str,
-    turns: list[dict[str, Any]] | None = None,
-) -> dict[str, Any]:
-    thinking = chat.thinking
-    final_answer = (chat.answer or "").strip()
-    return _build_record(
-        row=row,
-        eff=eff,
-        thinking=thinking,
-        answer=final_answer,
-        model_name=model_name,
-        config_hash=config_hash,
-        chat=chat,
-        turns=turns,
-    )
-
-
-def _make_tool_loop_chat_fn(
-    client: SupportsChat,
-    executor: ToolExecutor,
-    max_turns: int,
-    turns_holder: dict[str, Any],
-    *,
-    no_think_fallback: bool = False,
-    tool_loop_dedupe: bool = True,
-) -> Callable[..., ChatResult]:
-    def _chat_with_loop(
-        loop_messages: list[dict[str, str]],
-        *,
-        tools: list[dict[str, Any]] | None,
-        **sampling_kwargs: Any,
-    ) -> ChatResult:
-        chat, turns, dedupe_meta = ToolCallPipeline(
-            max_turns=max_turns,
-            tool_loop_dedupe=tool_loop_dedupe,
-        ).run_sync(
-            client,
-            loop_messages,
-            tools=tools,
-            executor=executor,
-            sampling=sampling_kwargs,
-            no_think_fallback=no_think_fallback,
-        )
-        turns_holder["turns"] = turns
-        if dedupe_meta is not None:
-            turns_holder["tool_loop_dedupe"] = dedupe_meta
-        else:
-            turns_holder.pop("tool_loop_dedupe", None)
-        return chat
-
-    return _chat_with_loop
-
-
-def _aggregate_tool_calls_from_turns(turns: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """tool_loop の各 assistant turn から tool_calls を集約する (shim)。"""
-    return aggregate_tool_calls_from_turns(turns)
-
-
-def _make_build_with_turns(
-    build_record: Callable[[ChatResult], dict[str, Any]],
-    *,
-    use_tool_loop: bool,
-    turns_holder: dict[str, Any],
-    client: SupportsChat | None = None,
-    messages: list[dict[str, str]] | None = None,
-    tools: list[dict[str, Any]] | None = None,
-    sampling: dict[str, Any] | None = None,
-    no_think_fallback: bool = False,
-) -> Callable[[ChatResult], dict[str, Any]]:
-    def _build_with_turns(chat: ChatResult) -> dict[str, Any]:
-        final_chat = chat
-        recovery_meta: dict[str, Any] | None = None
-        if client is not None and messages is not None and sampling is not None:
-            final_chat, recovery_meta = recover_tool_call(
-                client,
-                chat,
-                messages=messages,
-                tools=tools,
-                sampling=sampling,
-                no_think_fallback=no_think_fallback,
-            )
-        record = build_record(final_chat)
-        if recovery_meta and recovery_meta.get("attempts"):
-            record["tool_call_recovery"] = recovery_meta
-        record["no_think_fallback_used"] = bool(
-            recovery_meta.get("no_think_fallback_used") if recovery_meta else False
-        )
-        if use_tool_loop:
-            record["turns"] = turns_holder["turns"]
-            aggregated = _aggregate_tool_calls_from_turns(turns_holder["turns"])
-            if aggregated:
-                record["tool_calls"] = aggregated
-            if dedupe_meta := turns_holder.get("tool_loop_dedupe"):
-                record["tool_loop_dedupe"] = dedupe_meta
-        return record
-
-    return _build_with_turns
-
-
 def _report_truncation_retry(
     attempt: int,
     _record: dict[str, Any],
     *,
     run_key: str,
     row: PromptRow,
-    eff: EffectiveSampling,
-    stats_throttler: _StatsRefreshThrottler | None,
+    eff: Any,
+    stats_throttler: StatsRefreshThrottler | None,
 ) -> None:
     DistillLiveState.report_retry(
         run_key=run_key,
@@ -228,62 +69,58 @@ def _report_truncation_retry(
         stats_throttler.maybe_refresh(force=True)
 
 
-def variant_run_key(variant: DistillVariant) -> str:
-    """DistillVariant から resume キーを構築。"""
-    tool_names = sorted(
-        t["function"]["name"]
-        for t in variant.eff.tools
-        if isinstance(t.get("function"), dict) and isinstance(t["function"].get("name"), str)
-    )
-    tools_hash = (
-        hashlib.sha1(json.dumps(tool_names, ensure_ascii=False).encode()).hexdigest()[:8]
-        if tool_names
-        else None
-    )
-    return run_key_from_parts(
-        prompt=variant.row.prompt,
-        style_id=variant.eff.style_id,
-        temperature=variant.eff.sampling.get("temperature"),
-        top_p=variant.eff.sampling.get("top_p"),
-        tools_hash=tools_hash,
-    )
+class DistillPipeline:
+    """Stage 連結蒸留パイプライン。"""
 
+    def __init__(self, stages: tuple[Stage, ...] | None = None) -> None:
+        self._stages = stages or (LoopStage(),)
 
-def default_stats_refresher(out_path: Path) -> None:
-    """dashboard/public/stats.json を蒸留 JSONL から更新する。"""
-    dst = resolve_stats_output_path(out_path=out_path)
-    if dst is None:
-        return
-    stats = compute_stats(out_path)
-    live = DistillLiveState.to_dict()
-    if live["active"] or live["truncation_retries"]:
-        stats["distill_live"] = live
-    write_dashboard_json(dst, stats, source_path=out_path)
+    def apply_stages(self, record: dict[str, Any], context: DistillContext) -> dict[str, Any]:
+        for stage in self._stages:
+            record = stage.process(record, context)
+        return record
 
-
-class _StatsRefreshThrottler:
-    """蒸留中の stats.json 更新を間引く。"""
-
-    def __init__(
+    def run(
         self,
-        out_path: Path,
-        refresher: Callable[[Path], None],
+        config: Config,
         *,
-        interval_sec: float = STATS_REFRESH_INTERVAL_SEC,
-        time_fn: Callable[[], float] | None = None,
-    ) -> None:
-        self._out_path = out_path
-        self._refresher = refresher
-        self._interval = interval_sec
-        self._time_fn = time_fn or time.time
-        self._last_refresh = -interval_sec
-
-    def maybe_refresh(self, *, force: bool = False) -> None:
-        now = self._time_fn()
-        if not force and now - self._last_refresh < self._interval:
-            return
-        self._refresher(self._out_path)
-        self._last_refresh = now
+        bank_path: str | Path | None = None,
+        out_path: str | Path | None = None,
+        client: SupportsChat | None = None,
+        count: int = 0,
+        deadline: float | None = None,
+        redo_truncated: bool = False,
+        style_presets: list[StylePreset] | None = None,
+        temperatures: list[float] | None = None,
+        top_ps: list[float] | None = None,
+        executor: ToolExecutor | None = None,
+        tool_loop: bool | None = None,
+        tool_loop_max_turns: int | None = None,
+        override_tool_ids: list[str] | None = None,
+        config_path: Path | None = None,
+        _print: Any = None,
+        stats_refresher: Callable[[Path], None] | None = None,
+    ) -> int:
+        return run_distill(
+            config,
+            bank_path=bank_path,
+            out_path=out_path,
+            client=client,
+            count=count,
+            deadline=deadline,
+            redo_truncated=redo_truncated,
+            style_presets=style_presets,
+            temperatures=temperatures,
+            top_ps=top_ps,
+            executor=executor,
+            tool_loop=tool_loop,
+            tool_loop_max_turns=tool_loop_max_turns,
+            override_tool_ids=override_tool_ids,
+            config_path=config_path,
+            _print=_print,
+            stats_refresher=stats_refresher,
+            pipeline=self,
+        )
 
 
 def run_distill(
@@ -305,15 +142,14 @@ def run_distill(
     config_path: Path | None = None,
     _print: Any = None,
     stats_refresher: Callable[[Path], None] | None = None,
+    pipeline: DistillPipeline | None = None,
 ) -> int:
     """蒸留を実行し、新規に書き込んだレコード数を返す。"""
+    pipe = pipeline or DistillPipeline()
     log = _print if _print is not None else print
 
     bank_p = Path(bank_path) if bank_path else Path(config.distill.prompt_bank)
-    if out_path is not None:
-        out_p = Path(out_path)
-    else:
-        out_p = Path(config.distill.out_dir) / config.distill.out_file
+    out_p = Path(out_path) if out_path else Path(config.distill.out_dir) / config.distill.out_file
 
     rows = load_prompt_bank(bank_p)
     if override_tool_ids:
@@ -355,7 +191,7 @@ def run_distill(
     work = pending[:count] if count else pending
 
     if client is None:
-        from joryu.vllm_client import resolve_chat_client
+        from joryu.vllm.factory import resolve_chat_client
 
         client = resolve_chat_client(config.model, config.vllm)
 
@@ -382,7 +218,7 @@ def run_distill(
     fingerprint = config.fingerprint()
     n = 0
     stats_throttler = (
-        _StatsRefreshThrottler(out_p, stats_refresher) if stats_refresher is not None else None
+        StatsRefreshThrottler(out_p, stats_refresher) if stats_refresher is not None else None
     )
     DistillLiveState.begin()
     dedup_guard = PromptDedupGuard(max_per_key=config.distill.max_records_per_prompt_style)
@@ -403,7 +239,7 @@ def run_distill(
                 ]
 
                 build_record = partial(
-                    _record_from_chat,
+                    record_from_chat,
                     row=row,
                     eff=eff,
                     model_name=config.model.name,
@@ -411,7 +247,7 @@ def run_distill(
                 )
                 turns_holder: dict[str, Any] = {"turns": []}
                 chat_fn = (
-                    _make_tool_loop_chat_fn(
+                    make_tool_loop_chat_fn(
                         client,
                         loop_executor,
                         loop_max_turns,
@@ -422,7 +258,7 @@ def run_distill(
                     if use_tool_loop and loop_executor is not None
                     else None
                 )
-                build_with_turns = _make_build_with_turns(
+                build_with_turns = make_build_with_turns(
                     build_record,
                     use_tool_loop=use_tool_loop,
                     turns_holder=turns_holder,
@@ -493,6 +329,21 @@ def run_distill(
                     reporter.update(i)
                     continue
 
+                context = DistillContext(
+                    config=config,
+                    client=client,
+                    row=row,
+                    eff=eff,
+                    model_name=config.model.name,
+                    config_hash=fingerprint,
+                    messages=messages,
+                    turns_holder=turns_holder,
+                    executor=loop_executor,
+                    use_tool_loop=use_tool_loop,
+                    no_think_fallback=no_think_fallback,
+                )
+                record = pipe.apply_stages(record, context)
+
                 DistillLiveState.clear_retry(run_key)
                 final_answer = str(record.get("answer") or "")
                 style_key = eff.style_id if eff.style_id is not None else ""
@@ -524,8 +375,16 @@ def load_style_presets_from_config(
     config: Config,
     style_ids: list[str],
 ) -> list[StylePreset]:
-    """config.distill.styles_file から style ID を解決。"""
     if not style_ids:
         return []
     styles = load_styles(config.distill.styles_file)
     return resolve_style_ids(style_ids, styles)
+
+
+__all__ = [
+    "DistillPipeline",
+    "default_stats_refresher",
+    "load_style_presets_from_config",
+    "run_distill",
+    "variant_run_key",
+]
