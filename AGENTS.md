@@ -56,3 +56,9 @@ bash scripts/setup-dev.sh
 4. `tests/test_preflight.py` / `tests/test_cli_up_down.py` / `tests/test_readiness.py` — TDD で起動対象・待機順序を固定
 
 起動確認・ユーザーへの案内は **`uv run joryu-up`（必要なら `--detach`）** に統一する。例: MCP は `config.yaml` の `mcp.enabled` 時に `joryu-up` が `mcp` コンテナも up する。
+
+## ロギング
+
+- ライブラリ / CLI の診断出力は `print` ではなく `logging` を使う（`joryu.logging_config.setup_logging()` で stderr に出力）。
+- `except` で例外を握るときは必ず `logger.exception(...)` または `logger.error(..., exc_info=True)` で traceback を残す。
+- ruff `T20`（`print` 検出）を有効にしている。`src/joryu` 内に `print` を追加しない。

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import platform
 import subprocess
@@ -15,6 +16,8 @@ JORYU_PROBE_CONTAINER = "joryu-probe-vllm"
 JORYU_DISTILL_HOST_CONTAINER = "joryu-distill-host"
 JORYU_COMPOSE_CONTAINER_NAMES = frozenset({"joryu", "joryu-api", "joryu-dashboard"})
 JORYU_MANAGED_PREFIXES = ("joryu-job-", "joryu-probe-", "joryu-distill-")
+
+logger = logging.getLogger(__name__)
 
 
 def is_managed_joryu_container(name: str) -> bool:
@@ -206,7 +209,7 @@ def run_in_docker(
     cwd = Path.cwd()
     config_path = (cwd / config).resolve()
     if not config_path.exists():
-        print(f"[joryu] config not found: {config_path}", file=sys.stderr)
+        logger.error("[joryu] config not found: %s", config_path)
         return 2
 
     from joryu.docker_runtime import prepare_distill_docker_mounts
@@ -214,7 +217,7 @@ def run_in_docker(
     try:
         mounts = prepare_distill_docker_mounts(cwd, config_path, config_rel=config)
     except (FileNotFoundError, ValueError) as exc:
-        print(f"[joryu] config error: {exc}", file=sys.stderr)
+        logger.error("[joryu] config error: %s", exc)
         return 2
 
     if "--style" in extra_args or any(a.startswith("--style") for a in extra_args):
@@ -223,7 +226,7 @@ def run_in_docker(
 
             cfg = load_config(config_path)
             candidate = (config_path.parent / cfg.distill.styles_file).resolve()
-            print(f"[joryu] styles file not found: {candidate}", file=sys.stderr)
+            logger.error("[joryu] styles file not found: %s", candidate)
             return 2
 
     if container_name:
@@ -248,8 +251,8 @@ def run_in_docker(
         native_flag=native_flag,
         container_name=container_name,
     )
-    print(f"[joryu] docker delegate: {' '.join(cmd)}", file=sys.stderr)
+    logger.info("[joryu] docker delegate: %s", " ".join(cmd))
     proc = subprocess.run(cmd, check=False, capture_output=True, text=True)
     if proc.stderr:
-        print(proc.stderr, file=sys.stderr, end="" if proc.stderr.endswith("\n") else "\n")
+        logger.warning("%s", proc.stderr.rstrip("\n"))
     return proc.returncode

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import sys
 from pathlib import Path
 
@@ -11,6 +12,8 @@ from joryu.curate.stats import DEFAULT_CURATION_OUTPUT, write_curation_json
 from joryu.stats import DEFAULT_STATS_OUTPUT, write_stats_json
 
 DEFAULT_OUTPUT = DEFAULT_STATS_OUTPUT
+
+logger = logging.getLogger(__name__)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -51,7 +54,7 @@ def main(argv: list[str] | None = None) -> int:
     out = Path(args.output)
 
     stats = write_stats_json(src, out)
-    print(f"[joryu-stats] wrote {out}  (total={stats['total']})", file=sys.stderr)
+    logger.info("[joryu-stats] wrote %s  (total=%s)", out, stats["total"])
 
     if args.curation:
         curate_dir = Path(args.curation)
@@ -59,12 +62,14 @@ def main(argv: list[str] | None = None) -> int:
         if scores.exists():
             cur_out = Path(args.curation_output)
             cur = write_curation_json(scores, cur_out)
-            print(
-                f"[joryu-stats] wrote {cur_out}  (total={cur['total']}, kept={cur['accepted']})",
-                file=sys.stderr,
+            logger.info(
+                "[joryu-stats] wrote %s  (total=%s, kept=%s)",
+                cur_out,
+                cur["total"],
+                cur["accepted"],
             )
         else:
-            print(f"[joryu-stats] curation scores.jsonl missing: {scores}", file=sys.stderr)
+            logger.warning("[joryu-stats] curation scores.jsonl missing: %s", scores)
     return 0
 
 

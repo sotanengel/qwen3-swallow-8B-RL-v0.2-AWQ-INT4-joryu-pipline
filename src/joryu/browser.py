@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import sys
+import logging
 import threading
 import webbrowser
 from collections.abc import Callable
@@ -11,6 +11,8 @@ from typing import Protocol
 from joryu.readiness import DASHBOARD_URL, wait_for_dashboard
 
 DEFAULT_READY_TIMEOUT_S = 120.0
+
+logger = logging.getLogger(__name__)
 
 
 class _WebBrowser(Protocol):
@@ -23,10 +25,12 @@ def open_dashboard(
     browser: _WebBrowser | None = None,
 ) -> None:
     """既定ブラウザで dashboard URL を開く。"""
-    print(f"[joryu-up] opening {url}", file=sys.stderr)
+    logger.info("[joryu-up] opening %s", url)
     if browser is not None:
         browser.open(url)
         return
+    import sys
+
     if sys.platform == "win32":
         import os
 
@@ -50,9 +54,9 @@ def schedule_open_dashboard(
                 pre_open_fn()
             open_fn(url)
         else:
-            print(
-                f"[joryu-up] dashboard not ready at {url}; skipped opening browser",
-                file=sys.stderr,
+            logger.warning(
+                "[joryu-up] dashboard not ready at %s; skipped opening browser",
+                url,
             )
 
     thread = threading.Thread(target=_worker, daemon=True)
@@ -72,7 +76,7 @@ def open_dashboard_when_ready(
             pre_open_fn()
         open_fn(url)
     else:
-        print(
-            f"[joryu-up] dashboard not ready at {url}; skipped opening browser",
-            file=sys.stderr,
+        logger.warning(
+            "[joryu-up] dashboard not ready at %s; skipped opening browser",
+            url,
         )

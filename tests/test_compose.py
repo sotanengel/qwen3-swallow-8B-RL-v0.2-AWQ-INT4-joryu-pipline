@@ -120,9 +120,12 @@ def test_run_up_startup_cleanup_prunes_dangling_only(
 
 def test_run_pre_browser_image_cleanup_prunes_dangling_only(
     monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     """ブラウザ起動直前 cleanup は dangling image のみ削除する。"""
+    import logging
+
+    caplog.set_level(logging.INFO, logger="joryu.compose")
     calls: list[list[str]] = []
 
     def _fake_run(cmd: list[str], **_kwargs: object) -> object:
@@ -136,7 +139,7 @@ def test_run_pre_browser_image_cleanup_prunes_dangling_only(
     monkeypatch.setattr("joryu.compose.subprocess.run", _fake_run)
     run_pre_browser_image_cleanup()
     assert calls == [image_prune_command()]
-    assert "before opening browser" in capsys.readouterr().err
+    assert any("before opening browser" in r.message for r in caplog.records)
 
 
 def test_up_force_recreate_after_build() -> None:
