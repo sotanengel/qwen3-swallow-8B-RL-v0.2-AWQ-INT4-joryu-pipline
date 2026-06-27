@@ -10,6 +10,8 @@ import urllib.request
 from collections.abc import Callable
 from typing import Any, Protocol
 
+from joryu.utils.retry import ExponentialBackoff
+
 API_HEALTH_URL = "http://localhost:8000/api/health"
 VLLM_HEALTH_URL = "http://localhost:8100/health"
 MCP_HEALTH_URL = "http://localhost:8200/health"
@@ -26,6 +28,17 @@ class _UrlOpen(Protocol):
     def __call__(self, url: str, timeout: int = ...) -> Any: ...
 
 
+def _poll_backoff_delay(attempt: int, *, poll_interval_s: float) -> float:
+    if poll_interval_s <= 0:
+        return 0.0
+    policy = ExponentialBackoff(
+        base=max(poll_interval_s * 0.25, 0.05),
+        max_delay=poll_interval_s,
+        jitter=0.1,
+    )
+    return policy.delay_for_attempt(attempt)
+
+
 def wait_for_http_ok(
     url: str,
     *,
@@ -36,6 +49,7 @@ def wait_for_http_ok(
     """HTTP 200 が返るまでポーリング。タイムアウト時は False。"""
     opener = urlopen_fn or urllib.request.urlopen
     deadline = time.monotonic() + timeout_s
+    attempt = 0
     while time.monotonic() < deadline:
         try:
             with opener(url, timeout=2) as resp:
@@ -43,7 +57,8 @@ def wait_for_http_ok(
                     return True
         except (urllib.error.URLError, OSError, TimeoutError, ValueError):
             pass
-        time.sleep(poll_interval_s)
+        time.sleep(_poll_backoff_delay(attempt, poll_interval_s=poll_interval_s))
+        attempt += 1
     return False
 
 
@@ -58,11 +73,13 @@ def wait_for_http_json(
     """JSON レスポンスが predicate を満たすまでポーリング。"""
     opener = urlopen_fn or urllib.request.urlopen
     deadline = time.monotonic() + timeout_s
+    attempt = 0
     while time.monotonic() < deadline:
         try:
             with opener(url, timeout=2) as resp:
                 if resp.status != 200:
-                    time.sleep(poll_interval_s)
+                    time.sleep(_poll_backoff_delay(attempt, poll_interval_s=poll_interval_s))
+                    attempt += 1
                     continue
                 body = resp.read()
                 data = json.loads(body.decode("utf-8"))
@@ -70,7 +87,8 @@ def wait_for_http_json(
                     return True
         except (urllib.error.URLError, OSError, TimeoutError, ValueError, json.JSONDecodeError):
             pass
-        time.sleep(poll_interval_s)
+        time.sleep(_poll_backoff_delay(attempt, poll_interval_s=poll_interval_s))
+        attempt += 1
     return False
 
 
@@ -93,6 +111,7 @@ def wait_for_vllm_health(
     """vLLM デーモン ``/health`` が ready になるまでポーリング。"""
     opener = urlopen_fn or urllib.request.urlopen
     deadline = time.monotonic() + timeout_s
+    attempt = 0
     while time.monotonic() < deadline:
         try:
             with opener(url, timeout=2) as resp:
@@ -100,7 +119,8 @@ def wait_for_vllm_health(
                     return True
         except (urllib.error.URLError, OSError, TimeoutError, ValueError):
             pass
-        time.sleep(poll_interval_s)
+        time.sleep(_poll_backoff_delay(attempt, poll_interval_s=poll_interval_s))
+        attempt += 1
     return False
 
 

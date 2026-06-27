@@ -12,6 +12,7 @@ from joryu.completion_normalize import normalize_chat_result
 from joryu.tool_calls import (
     ParsedToolCall,
 )
+from joryu.utils.retry import ExponentialBackoff, call_with_retry
 from joryu.vllm_client import ChatResult, VllmError, extract_known_tool_names, extract_thinking
 
 logger = logging.getLogger(__name__)
@@ -202,14 +203,26 @@ class VllmServeClient:
             headers={"Content-Type": "application/json"},
             method="POST",
         )
+
+        def _post_once() -> dict[str, Any]:
+            try:
+                with urllib.request.urlopen(req, timeout=self._timeout_s) as resp:
+                    return json.loads(resp.read().decode("utf-8"))
+            except urllib.error.HTTPError as exc:
+                detail = exc.read().decode("utf-8", errors="replace")
+                raise VllmError(f"vLLM daemon HTTP {exc.code}: {detail}") from exc
+
         try:
-            with urllib.request.urlopen(req, timeout=self._timeout_s) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
-        except urllib.error.HTTPError as exc:
-            detail = exc.read().decode("utf-8", errors="replace")
-            raise VllmError(f"vLLM daemon HTTP {exc.code}: {detail}") from exc
+            data = call_with_retry(
+                _post_once,
+                exceptions=(urllib.error.URLError, TimeoutError, OSError),
+                attempts=3,
+                backoff=ExponentialBackoff(base=0.5, max_delay=4.0, jitter=0.1),
+            )
         except urllib.error.URLError as exc:
             raise VllmError(f"vLLM serve unreachable at {self._base_url}: {exc}") from exc
+        except (TimeoutError, OSError) as exc:
+            raise VllmError(f"vLLM serve request failed at {self._base_url}: {exc}") from exc
 
         known = extract_known_tool_names(tools)
         return openai_response_to_chat_result(
