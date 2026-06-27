@@ -61,8 +61,8 @@ search:
   snippet_chars: 200
 
 mcp:
-  enabled: false
-  url: ""
+  enabled: true
+  url: "http://mcp:8200"
 
 export:
   out_dir: "exports"

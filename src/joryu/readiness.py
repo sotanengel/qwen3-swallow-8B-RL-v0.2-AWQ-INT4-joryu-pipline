@@ -12,6 +12,7 @@ from typing import Any, Protocol
 
 API_HEALTH_URL = "http://localhost:8000/api/health"
 VLLM_HEALTH_URL = "http://localhost:8100/health"
+MCP_HEALTH_URL = "http://localhost:8200/health"
 DASHBOARD_URL = "http://localhost:3000"
 
 DEFAULT_READY_TIMEOUT_S = 120.0
@@ -124,6 +125,10 @@ def wait_for_dashboard(
     return wait_for_http_ok(url, **kwargs)
 
 
+def wait_for_mcp(**kwargs: Any) -> bool:
+    return wait_for_http_ok(MCP_HEALTH_URL, **kwargs)
+
+
 def resolve_vllm_health_url() -> str:
     """常駐 LLM デーモンの health URL (api コンテナ内は JORYU_VLLM_URL 優先)。"""
     import os
@@ -163,6 +168,13 @@ def wait_for_up_services(
             emit(f"[joryu-up] API not ready at {API_HEALTH_URL}")
             return False
         emit("[joryu-up] API ready")
+
+    if "mcp" in up_services:
+        emit(f"[joryu-up] waiting for MCP at {MCP_HEALTH_URL}")
+        if not wait_for_mcp():
+            emit(f"[joryu-up] MCP not ready at {MCP_HEALTH_URL}")
+            return False
+        emit("[joryu-up] MCP ready")
 
     if "joryu" in up_services:
         emit(f"[joryu-up] waiting for vLLM daemon at {VLLM_HEALTH_URL}")

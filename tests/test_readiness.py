@@ -9,10 +9,13 @@ import pytest
 
 from joryu.readiness import (
     API_HEALTH_URL,
+    MCP_HEALTH_URL,
     VLLM_HEALTH_URL,
     vllm_health_body_ready,
     wait_for_api,
     wait_for_http_ok,
+    wait_for_mcp,
+    wait_for_up_services,
     wait_for_vllm_daemon,
     wait_for_vllm_health,
 )
@@ -145,3 +148,46 @@ def test_wait_for_vllm_daemon_uses_default_url(monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setattr("joryu.readiness.wait_for_vllm_health", _wait)
     wait_for_vllm_daemon()
     assert seen == [VLLM_HEALTH_URL]
+
+
+def test_wait_for_mcp_uses_health_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: list[str] = []
+
+    def _wait(url: str, **kwargs: object) -> bool:
+        seen.append(url)
+        return True
+
+    monkeypatch.setattr("joryu.readiness.wait_for_http_ok", _wait)
+    assert wait_for_mcp()
+    assert seen == [MCP_HEALTH_URL]
+
+
+def test_wait_for_up_services_waits_for_mcp(monkeypatch: pytest.MonkeyPatch) -> None:
+    order: list[str] = []
+
+    def _api(**kwargs: object) -> bool:
+        del kwargs
+        order.append("api")
+        return True
+
+    def _mcp(**kwargs: object) -> bool:
+        del kwargs
+        order.append("mcp")
+        return True
+
+    def _vllm(**kwargs: object) -> bool:
+        del kwargs
+        order.append("vllm")
+        return True
+
+    def _dash(**kwargs: object) -> bool:
+        del kwargs
+        order.append("dashboard")
+        return True
+
+    monkeypatch.setattr("joryu.readiness.wait_for_api", _api)
+    monkeypatch.setattr("joryu.readiness.wait_for_mcp", _mcp)
+    monkeypatch.setattr("joryu.readiness.wait_for_vllm_daemon", _vllm)
+    monkeypatch.setattr("joryu.readiness.wait_for_dashboard", _dash)
+    assert wait_for_up_services(["dashboard", "mcp", "api", "joryu"]) is True
+    assert order == ["api", "mcp", "vllm", "dashboard"]

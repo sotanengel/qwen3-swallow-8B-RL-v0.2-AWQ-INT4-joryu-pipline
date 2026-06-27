@@ -30,6 +30,7 @@ from joryu.preflight import (
     services_missing_build_at_head,
     services_to_build,
     should_force_recreate,
+    should_up_mcp,
     stop_joryu_for_up,
     vllm_limits_probe_needed,
 )
@@ -41,14 +42,14 @@ from joryu.preflight import (
         ("src/joryu/cli/up.py", {"joryu"}),
         ("src/joryu/distill.py", {"api", "joryu"}),
         ("src/joryu/preflight.py", {"api", "joryu"}),
-        ("src/joryu/jobs/runner.py", {"api"}),
+        ("src/joryu/jobs/runner.py", {"api", "mcp"}),
         ("src/joryu/docker_delegate.py", {"api", "joryu"}),
         ("src/joryu/docker_runtime.py", {"api", "joryu"}),
         ("src/joryu/stats.py", {"api", "joryu"}),
-        ("docker-compose.yml", {"api", "joryu"}),
-        ("src/joryu/jobs/models.py", {"api"}),
-        ("src/joryu/api/app.py", {"api"}),
-        ("Dockerfile.api", {"api"}),
+        ("docker-compose.yml", {"api", "joryu", "mcp"}),
+        ("src/joryu/jobs/models.py", {"api", "mcp"}),
+        ("src/joryu/api/app.py", {"api", "mcp"}),
+        ("Dockerfile.api", {"api", "mcp"}),
         ("Dockerfile", {"joryu"}),
         ("pyproject.toml", {"joryu"}),
         ("dashboard/src/app/page.tsx", {"dashboard"}),
@@ -96,7 +97,7 @@ def test_changed_services_includes_commits_since_last_up(tmp_path: Path) -> None
         return _GitResult(stdout="")
 
     changed = changed_services_from_git(tmp_path, git_runner=_fake_git)
-    assert changed == {"api"}
+    assert changed == {"api", "mcp"}
 
 
 def test_services_to_build_first_run_builds_all_up_targets() -> None:
@@ -206,6 +207,41 @@ def test_resolve_up_services_default_with_both_diffs() -> None:
 def test_resolve_up_services_full() -> None:
     args = argparse.Namespace(full=True, frontend_only=False, backend_only=False)
     assert resolve_up_services(args, {"joryu"}) == ["dashboard", "api", "joryu"]
+
+
+def test_should_up_mcp_requires_enabled_and_url(tmp_path: Path) -> None:
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text("mcp:\n  enabled: true\n  url: http://mcp:8200\n", encoding="utf-8")
+    assert should_up_mcp(tmp_path) is True
+
+    cfg.write_text("mcp:\n  enabled: true\n  url: ''\n", encoding="utf-8")
+    assert should_up_mcp(tmp_path) is False
+
+    cfg.write_text("mcp:\n  enabled: false\n  url: http://mcp:8200\n", encoding="utf-8")
+    assert should_up_mcp(tmp_path) is False
+
+
+def test_resolve_up_services_includes_mcp_when_config_enabled(tmp_path: Path) -> None:
+    (tmp_path / "config.yaml").write_text(
+        "mcp:\n  enabled: true\n  url: http://mcp:8200\n",
+        encoding="utf-8",
+    )
+    args = argparse.Namespace(full=False, frontend_only=False, backend_only=False)
+    assert resolve_up_services(args, set(), repo_root=tmp_path) == [
+        "dashboard",
+        "mcp",
+        "api",
+        "joryu",
+    ]
+
+
+def test_resolve_up_services_skips_mcp_for_frontend_only(tmp_path: Path) -> None:
+    (tmp_path / "config.yaml").write_text(
+        "mcp:\n  enabled: true\n  url: http://mcp:8200\n",
+        encoding="utf-8",
+    )
+    args = argparse.Namespace(full=False, frontend_only=True, backend_only=False)
+    assert resolve_up_services(args, set(), repo_root=tmp_path) == ["dashboard"]
 
 
 def test_services_to_build_intersection() -> None:

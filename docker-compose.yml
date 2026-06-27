@@ -81,6 +81,29 @@ services:
       - ./data/distilled/responses.jsonl:/app/public/responses.jsonl:ro
     restart: "on-failure:3"
 
+  mcp:
+    image: joryu-api:latest
+    container_name: joryu-mcp
+    ports:
+      - "8200:8200"
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      - .:/workspace
+    working_dir: /app
+    environment:
+      - JORYU_REPO_ROOT=/workspace
+      - PYTHONPATH=/workspace/src
+    command: ["joryu-mcp", "--http", "--host", "0.0.0.0", "--port", "8200"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8200/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+    restart: "on-failure:3"
+
   api:
     build:
       context: .

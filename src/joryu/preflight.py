@@ -69,7 +69,7 @@ _DASHBOARD_RUNTIME_PATHS = frozenset(
     }
 )
 
-_SERVICE_ORDER = ("dashboard", "api", "joryu")
+_COMPOSE_SERVICE_ORDER = ("dashboard", "mcp", "api", "joryu")
 _DEFAULT_UP = ("dashboard", "api", "joryu")
 _UP_STATE_REL = Path("data") / ".joryu" / "up-state.json"
 
@@ -126,7 +126,11 @@ def path_affects_service(path: str) -> set[str]:
     if normalized in _DASHBOARD_RUNTIME_PATHS:
         return set()
     if normalized.startswith(_API_PREFIXES) or normalized == "Dockerfile.api":
-        return {"api"}
+        return {"api", "mcp"}
+    if normalized.startswith("src/joryu/mcp/"):
+        return {"api", "mcp"}
+    if normalized == "docker-compose.yml":
+        return {"api", "joryu", "mcp"}
     if normalized in _JORYU_JOB_RUNTIME_PATHS:
         return {"api", "joryu"}
     if normalized.startswith(_DASHBOARD_PREFIX):
@@ -271,20 +275,48 @@ def is_first_up_run(repo_root: Path) -> bool:
     return load_up_state(repo_root) is None
 
 
-def resolve_up_services(args: argparse.Namespace, changed: set[str]) -> list[str]:
+def should_up_mcp(repo_root: Path) -> bool:
+    """config.yaml の mcp.enabled + url が設定されていれば compose up 対象。"""
+    from joryu.config import load_config
+
+    try:
+        cfg = load_config(repo_root / "config.yaml")
+    except FileNotFoundError:
+        return False
+    return cfg.mcp.enabled and bool(cfg.mcp.url.strip())
+
+
+def _with_mcp_service(services: list[str]) -> list[str]:
+    if "mcp" in services or "api" not in services:
+        return services
+    out = list(services)
+    out.insert(out.index("api"), "mcp")
+    return out
+
+
+def resolve_up_services(
+    args: argparse.Namespace,
+    changed: set[str],
+    *,
+    repo_root: Path | None = None,
+) -> list[str]:
     """CLI フラグから `docker compose up` 対象サービスを決定。
 
     git 差分 (`changed`) は build 対象の判定にのみ使う。既定モードでは常に
-    dashboard + api を起動する。
+    dashboard + api を起動する。config.yaml で MCP が有効なら mcp も含める。
     """
     del changed  # build 判定は services_to_build 側
     if args.full:
-        return list(_SERVICE_ORDER)
-    if args.backend_only:
-        return ["joryu"]
-    if args.frontend_only:
-        return ["dashboard"]
-    return list(_DEFAULT_UP)
+        services = list(_DEFAULT_UP)
+    elif args.backend_only:
+        services = ["joryu"]
+    elif args.frontend_only:
+        services = ["dashboard"]
+    else:
+        services = list(_DEFAULT_UP)
+    if repo_root is not None and should_up_mcp(repo_root):
+        services = _with_mcp_service(services)
+    return services
 
 
 def services_to_build(
@@ -321,7 +353,13 @@ def services_to_build(
         if needs_joryu:
             candidates.append("joryu")
 
-    return [svc for svc in _SERVICE_ORDER if svc in candidates]
+    candidate_set = set(candidates)
+    if "mcp" in candidate_set:
+        candidate_set.discard("mcp")
+        if "api" in up_services:
+            candidate_set.add("api")
+
+    return [svc for svc in _COMPOSE_SERVICE_ORDER if svc in candidate_set]
 
 
 def should_force_recreate(

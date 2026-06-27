@@ -56,6 +56,9 @@ error 発生時も `column_done` → `done` でストリームが必ず終了す
 
 ## MCP サーバー
 
+``config.yaml`` の ``mcp.enabled: true`` かつ ``url`` 設定時、``uv run joryu-up`` が
+``mcp`` コンテナ (``joryu-mcp --http``) も起動する。compose 内 URL は ``http://mcp:8200``。
+
 ```bash
 uv run joryu-mcp --stdio
 uv run joryu-mcp --http --port 8200

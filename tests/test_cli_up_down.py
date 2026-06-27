@@ -40,6 +40,7 @@ def _patch_runner(
     monkeypatch.setattr("joryu.cli.up.schedule_open_dashboard", lambda **_: None)
     monkeypatch.setattr("joryu.cli.up.open_dashboard_when_ready", lambda **_: None)
     monkeypatch.setattr("joryu.cli.up.wait_for_up_services", lambda _services: True)
+    monkeypatch.setattr("joryu.preflight.should_up_mcp", lambda _root: False)
     monkeypatch.setattr("joryu.cli.up.is_first_up_run", lambda _root: False)
     # 空き容量チェックは環境依存なので既定で no-op 化 (insufficient disk テストでは上書き)
     monkeypatch.setattr("joryu.cli.up.check_disk_space", lambda *_args, **_kwargs: None)
@@ -619,3 +620,12 @@ def test_serve_alias_still_works(monkeypatch: pytest.MonkeyPatch) -> None:
     assert rc == 0
     assert calls[0] == _STARTUP_IMAGE_PRUNE
     assert calls[1] == ["docker", "compose", "up", "dashboard"]
+
+
+def test_up_includes_mcp_when_config_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = _patch_runner(monkeypatch)
+    monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: set())
+    monkeypatch.setattr("joryu.preflight.should_up_mcp", lambda _root: True)
+    rc = cli_up.main([])
+    assert rc == 0
+    assert calls[1] == ["docker", "compose", "up", "dashboard", "mcp", "api", "joryu"]
