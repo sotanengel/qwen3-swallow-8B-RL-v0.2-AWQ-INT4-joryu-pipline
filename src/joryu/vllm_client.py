@@ -9,13 +9,10 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 import re
 import threading
-import urllib.error
-import urllib.request
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Any, Protocol
@@ -34,8 +31,6 @@ __all__ = [
     "SupportsChatStream",
     "VllmClient",
     "VllmError",
-    "VllmHttpClient",
-    "DEFAULT_LOCAL_JORYU_URL",
     "DEFAULT_LOCAL_VLLM_URL",
     "build_chat_template_kwargs",
     "compute_effective_max_tokens",
@@ -52,7 +47,6 @@ _PROMPT_TOKEN_MARGIN = 32
 _MIN_EFFECTIVE_MAX_TOKENS = 64
 
 DEFAULT_LOCAL_VLLM_URL = "http://localhost:8100"
-DEFAULT_LOCAL_JORYU_URL = "http://localhost:8100"
 
 os.environ.setdefault("VLLM_USE_DEEP_GEMM", "0")
 os.environ.setdefault("VLLM_DEEP_GEMM_WARMUP", "skip")
@@ -126,9 +120,7 @@ def build_offline_chat_kwargs(
         vLLM offline ``LLM.chat()`` のシグネチャ
         (`vllm/entrypoints/llm.py` L959-973) には ``tool_choice`` 引数が存在しない。
         ここに ``tool_choice`` を含めると ``LLM.chat()`` 側で
-        ``TypeError: got an unexpected keyword argument 'tool_choice'`` が発生し、
-        ``joryu-llm-serve`` 経由では **HTTP 500 Internal Server Error** として返る。
-
+        ``TypeError: got an unexpected keyword argument 'tool_choice'`` が発生する。
         named function 強制は OpenAI 互換 HTTP サーバ (``vllm serve``) でのみ動作する機能で、
         offline では ``SamplingParams.guided_decoding`` 経由で代替する必要がある。
         ここでは安全側に倒して ``tool_choice`` を黙って捨て、上位レイヤ
@@ -437,8 +429,6 @@ def resolve_chat_client(model_cfg: ModelConfig, vllm_cfg: VllmConfig) -> Support
         from joryu.vllm_serve_client import VllmServeClient
 
         return VllmServeClient(url or DEFAULT_LOCAL_VLLM_URL, model=vllm_cfg.model_path)
-    if backend == "joryu-llm-serve":
-        return VllmHttpClient(url or DEFAULT_LOCAL_JORYU_URL)
     raise VllmError(f"unknown vllm.backend: {backend!r}")
 
 
@@ -453,63 +443,3 @@ def resolve_stream_chat_client(
 
     url = resolve_vllm_serve_url(vllm_cfg)
     return VllmServeStreamClient(url or DEFAULT_LOCAL_VLLM_URL, model=vllm_cfg.model_path)
-
-
-class VllmHttpClient:
-    """常駐 joryu-llm-serve へ HTTP で推論を委譲するクライアント (vllm 非 import)。"""
-
-    def __init__(self, base_url: str, *, timeout_s: float = 600.0) -> None:
-        self._base_url = base_url.rstrip("/")
-        self._timeout_s = timeout_s
-
-    def chat_via_template(
-        self,
-        messages: list[dict[str, str]],
-        *,
-        enable_thinking: bool = True,
-        tools: list[dict[str, Any]] | None = None,
-        tool_choice: dict[str, Any] | str | None = None,
-        **sampling_overrides: Any,
-    ) -> ChatResult:
-        payload = {
-            "messages": messages,
-            "enable_thinking": enable_thinking,
-            "tools": tools,
-            "tool_choice": tool_choice,
-            "sampling": dict(sampling_overrides),
-        }
-        body = json.dumps(payload).encode("utf-8")
-        req = urllib.request.Request(
-            f"{self._base_url}/v1/chat",
-            data=body,
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        try:
-            with urllib.request.urlopen(req, timeout=self._timeout_s) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
-        except urllib.error.HTTPError as exc:
-            detail = exc.read().decode("utf-8", errors="replace")
-            raise VllmError(f"vLLM daemon HTTP {exc.code}: {detail}") from exc
-        except urllib.error.URLError as exc:
-            raise VllmError(f"vLLM daemon unreachable at {self._base_url}: {exc}") from exc
-
-        tool_calls = tuple(
-            ParsedToolCall(name=tc["name"], arguments=tc.get("arguments", {}), raw="")
-            for tc in data.get("tool_calls", [])
-        )
-        suspected = data.get("suspected_unparsed_tool_calls") or []
-        return ChatResult(
-            thinking=data.get("thinking"),
-            answer=data.get("answer", ""),
-            finish_reason=data.get("finish_reason"),
-            prompt_tokens=data.get("prompt_tokens"),
-            completion_tokens=data.get("completion_tokens"),
-            effective_max_tokens=data.get("effective_max_tokens"),
-            tool_calls=tool_calls,
-            raw_completion=data.get("raw_completion"),
-            suspected_unparsed_tool_calls=tuple(s for s in suspected if isinstance(s, str)),
-        )
-
-    def close(self) -> None:
-        return None

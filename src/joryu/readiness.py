@@ -77,19 +77,8 @@ def wait_for_api(**kwargs: Any) -> bool:
 
 
 def vllm_health_body_ready(body: bytes) -> bool:
-    """``/health`` レスポンスが ready か判定。
-
-    - vllm serve: HTTP 200 + 空ボディ
-    - joryu-llm-serve: ``{"status": "ok", ...}``
-    """
-    text = body.decode("utf-8").strip()
-    if not text:
-        return True
-    try:
-        data = json.loads(text)
-    except json.JSONDecodeError:
-        return False
-    return isinstance(data, dict) and data.get("status") == "ok"
+    """``/health`` レスポンスが ready か判定 (vllm serve: HTTP 200 + 空ボディ)。"""
+    return not body.decode("utf-8").strip()
 
 
 def wait_for_vllm_health(
@@ -140,7 +129,7 @@ def resolve_vllm_health_url() -> str:
 
 
 def is_vllm_daemon_ready(**kwargs: Any) -> bool:
-    """vLLM デーモンが ready か (1 回 GET)。vllm serve / joryu-llm-serve 両対応。"""
+    """vLLM デーモンが ready か (1 回 GET)。vllm serve の空ボディ /health を想定。"""
     url = kwargs.pop("url", None) or resolve_vllm_health_url()
     urlopen_fn = kwargs.pop("urlopen_fn", None)
 

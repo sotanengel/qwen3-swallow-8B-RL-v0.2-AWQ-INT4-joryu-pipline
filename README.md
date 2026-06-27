@@ -85,7 +85,6 @@ uv run joryu-down --volumes      # HF キャッシュ含めて完全に削除
 | 値 | 説明 |
 |---|---|
 | `vllm-serve` (既定) | Docker compose が起動する本物 `vllm serve` (`/v1/chat/completions`) |
-| `joryu-llm-serve` | 旧 FastAPI ラッパ (`/v1/chat`)。手動 `joryu-llm-serve` 起動時に指定 |
 | `inproc` | ホスト / コンテナ内で vLLM を in-process ロード (`LLM.chat`) |
 
 `JORYU_VLLM_URL` は引き続き有効（api コンテナから joryu サービスへ接続）。`backend` / `serve_url` / `serve_port` は `config_hash` に含めないため、バックエンド切替でも蒸留 JSONL の再現性キーは変わらない。

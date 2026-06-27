@@ -51,10 +51,13 @@ class VllmConfig:
     serve_port: int = 8100
     serve_url: str = ""
     # 推論バックエンド:
-    #   "vllm-serve"      : 本物 vllm serve (OpenAI 互換 /v1) — 既定
-    #   "joryu-llm-serve" : 独自 FastAPI ラッパ (/v1/chat) — 後方互換
-    #   "inproc"          : in-process LLM.chat() (vllm 直 import)
-    backend: Literal["vllm-serve", "joryu-llm-serve", "inproc"] = "vllm-serve"
+    #   "vllm-serve" : 本物 vllm serve (OpenAI 互換 /v1) — 既定
+    #   "inproc"     : in-process LLM.chat() (vllm 直 import, GPU テスト用)
+    backend: Literal["vllm-serve", "inproc"] = "vllm-serve"
+
+    def __post_init__(self) -> None:
+        if self.backend not in ("vllm-serve", "inproc"):
+            raise ValueError(f"vllm.backend must be 'vllm-serve' or 'inproc', got {self.backend!r}")
 
 
 # config_hash (下流 SFT 再現性) から除外する vllm キー。

@@ -20,7 +20,7 @@ UI は `isStreaming && streamingText` のときのみ表示するため、推論
 
 ## Consequences
 
-- `backend: vllm-serve` 以外 (inproc / joryu-llm-serve) は streaming 非対応のまま。イベントループブロックは `asyncio.to_thread` で緩和。
+- `backend: vllm-serve` 以外 (`inproc`) は streaming 非対応のまま。イベントループブロックは `asyncio.to_thread` で緩和。
 - `httpx` を api extra 依存に追加。
 - `recover_tool_call` は streaming 完了後の `ChatResult` に対して従来どおり実行。
 

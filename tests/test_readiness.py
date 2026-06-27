@@ -68,8 +68,9 @@ def test_vllm_health_body_ready_accepts_empty_body() -> None:
     assert vllm_health_body_ready(b"  \n") is True
 
 
-def test_vllm_health_body_ready_accepts_joryu_json() -> None:
-    assert vllm_health_body_ready(json.dumps({"status": "ok", "model_loaded": True}).encode())
+def test_vllm_health_body_ready_rejects_json_body() -> None:
+    body = json.dumps({"status": "ok", "model_loaded": True}).encode()
+    assert vllm_health_body_ready(body) is False
 
 
 def test_wait_for_vllm_health_accepts_empty_200_body() -> None:
@@ -89,25 +90,25 @@ def test_wait_for_vllm_health_accepts_empty_200_body() -> None:
     )
 
 
-def test_wait_for_vllm_daemon_accepts_status_ok_without_model_loaded() -> None:
+def test_wait_for_vllm_daemon_retries_until_empty_200_body() -> None:
     calls = {"n": 0}
 
     def _urlopen(url: str, timeout: int = 0) -> _FakeResponse:
         calls["n"] += 1
         if calls["n"] < 2:
-            return _FakeResponse(503, json.dumps({"status": "loading"}).encode())
-        return _FakeResponse(200, json.dumps({"status": "ok"}).encode())
+            return _FakeResponse(503, b"")
+        return _FakeResponse(200, b"")
 
     assert wait_for_vllm_daemon(urlopen_fn=_urlopen, poll_interval_s=0, timeout_s=1)
 
 
-def test_wait_for_vllm_daemon_accepts_joryu_model_loaded_response() -> None:
+def test_wait_for_vllm_daemon_rejects_json_body() -> None:
     body = json.dumps({"status": "ok", "model_loaded": True}).encode()
 
     def _urlopen(url: str, timeout: int = 0) -> _FakeResponse:
         return _FakeResponse(200, body)
 
-    assert wait_for_vllm_daemon(urlopen_fn=_urlopen, poll_interval_s=0, timeout_s=1)
+    assert wait_for_vllm_daemon(urlopen_fn=_urlopen, poll_interval_s=0, timeout_s=0.01) is False
 
 
 def test_wait_for_api_uses_health_url(monkeypatch: pytest.MonkeyPatch) -> None:
