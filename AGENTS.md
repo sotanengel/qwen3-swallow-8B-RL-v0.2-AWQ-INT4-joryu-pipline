@@ -24,7 +24,7 @@ bash scripts/setup-dev.sh
 4. `bash scripts/check_coverage.sh`（`pyproject.toml` の `fail_under` 未満で失敗）
 5. `bash scripts/verify_pipeline.sh`（CI と同じ end-to-end スモーク）
 
-`--quick` は開発中の途中確認のみ。PR・コミット前では使用禁止。
+`--quick` は開発中の途中確認のみ。PR・コミット前では使用禁止。`--quick` でも **pre-commit（JSONL lint / ruff / zizmor 等）は実行される**が、`pytest` カバレッジと `verify_pipeline.sh` は省略される。
 
 ## pre-commit / pre-push フック
 
