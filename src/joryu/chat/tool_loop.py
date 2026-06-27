@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import uuid
 from collections.abc import AsyncIterator
 from dataclasses import asdict
@@ -14,6 +13,11 @@ from joryu.completion_normalize import normalize_chat_result
 from joryu.tool_call_recovery import recover_tool_call
 from joryu.tool_calls import ParsedToolCall
 from joryu.tool_executor import ToolExecutor
+from joryu.tool_pipeline.decision import ToolLoopDecisionMaker
+from joryu.tool_pipeline.pipeline import (
+    append_tool_turn_messages,
+    tool_call_dedupe_key,
+)
 from joryu.vllm_client import ChatResult, SupportsChat, SupportsChatStream
 
 DEFAULT_MAX_TURNS = 4
@@ -23,61 +27,6 @@ _TOOL_EXECUTION_TIMEOUT_SEC = 15.0
 
 def _generate_tool_call_id() -> str:
     return f"call_{uuid.uuid4().hex[:24]}"
-
-
-def _tool_calls_to_openai(
-    tool_calls: tuple[ParsedToolCall, ...],
-    *,
-    ids: list[str] | None = None,
-) -> list[dict[str, Any]]:
-    if ids is None:
-        ids = [_generate_tool_call_id() for _ in tool_calls]
-    return [
-        {
-            "id": call_id,
-            "type": "function",
-            "function": {
-                "name": call.name,
-                "arguments": json.dumps(call.arguments, ensure_ascii=False),
-            },
-        }
-        for call_id, call in zip(ids, tool_calls, strict=True)
-    ]
-
-
-def _append_tool_turn_messages(
-    working_messages: list[dict[str, Any]],
-    *,
-    assistant_content: str,
-    tool_calls: tuple[ParsedToolCall, ...],
-    tool_results: list[tuple[str, str]],
-) -> list[dict[str, Any]]:
-    ids = [_generate_tool_call_id() for _ in tool_calls]
-    updated: list[dict[str, Any]] = [
-        *working_messages,
-        {
-            "role": "assistant",
-            "content": assistant_content,
-            "tool_calls": _tool_calls_to_openai(tool_calls, ids=ids),
-        },
-    ]
-    for call_id, (name, content) in zip(ids, tool_results, strict=True):
-        updated.append(
-            {
-                "role": "tool",
-                "tool_call_id": call_id,
-                "name": name,
-                "content": content,
-            }
-        )
-    return updated
-
-
-def _tool_call_dedupe_key(call: ParsedToolCall) -> tuple[str, str]:
-    return (
-        call.name,
-        json.dumps(call.arguments, sort_keys=True, ensure_ascii=False),
-    )
 
 
 def _error_chat_result() -> ChatResult:
@@ -133,6 +82,7 @@ class ToolLoopRunner:
         self._max_turns = max_turns
         self._tool_loop_dedupe = tool_loop_dedupe
         self._token_streamer = token_streamer or TokenStreamer()
+        self._decision = ToolLoopDecisionMaker()
 
     async def _chat_sync(
         self,
@@ -264,7 +214,10 @@ class ToolLoopRunner:
                         assistant_turn["raw_completion"] = chat.raw_completion
                     turns.append(assistant_turn)
 
-                    if not chat.tool_calls or executor is None:
+                    if self._decision.should_break_after_chat(
+                        chat,
+                        has_executor=executor is not None,
+                    ):
                         column_messages.append({"role": "assistant", "content": chat.answer or ""})
                         break
 
@@ -272,7 +225,7 @@ class ToolLoopRunner:
                     tool_results: list[tuple[str, str]] = []
                     call_ids = [_generate_tool_call_id() for _ in chat.tool_calls]
                     for call_id, call in zip(call_ids, chat.tool_calls, strict=True):
-                        key = _tool_call_dedupe_key(call)
+                        key = tool_call_dedupe_key(call)
                         tool_error: dict[str, Any] | None = None
                         if self._tool_loop_dedupe and key in executed_cache:
                             result = executed_cache[key]
@@ -324,7 +277,7 @@ class ToolLoopRunner:
                     for name, content in tool_results:
                         column_messages.append({"role": "tool", "name": name, "content": content})
 
-                    working_messages = _append_tool_turn_messages(
+                    working_messages = append_tool_turn_messages(
                         working_messages,
                         assistant_content=assistant_content,
                         tool_calls=chat.tool_calls,
@@ -343,7 +296,11 @@ class ToolLoopRunner:
                     error_emitted = True
                     break
             else:
-                exhausted = final_chat is not None and bool(final_chat.tool_calls)
+                exhausted = self._decision.is_exhausted(
+                    loop_completed=True,
+                    broke_early=False,
+                    chat=final_chat,
+                )
 
             if final_chat is None and not error_emitted:
                 yield {"type": "error", "column": column_id, "message": "no chat result"}
