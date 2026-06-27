@@ -155,6 +155,8 @@ class McpToolExecutor:
     def _run_remote(self, call: ParsedToolCall) -> str:
         import httpx
 
+        from joryu.mcp_runtime import log_mcp_fallback
+
         mcp_tool = "web_search" if call.name == "search" else call.name
         timeout = httpx.Timeout(
             connect=self._connect_timeout,
@@ -162,13 +164,22 @@ class McpToolExecutor:
             write=5.0,
             pool=5.0,
         )
-        with httpx.Client(timeout=timeout) as client:
-            resp = client.post(
-                f"{self._url}/tools/{mcp_tool}",
-                json=call.arguments,
-            )
-            resp.raise_for_status()
-            payload = resp.json()
+        try:
+            with httpx.Client(timeout=timeout) as client:
+                resp = client.post(
+                    f"{self._url}/tools/{mcp_tool}",
+                    json=call.arguments,
+                )
+                resp.raise_for_status()
+                payload = resp.json()
+        except httpx.ConnectError as exc:
+            log_mcp_fallback(url=self._url, reason=str(exc))
+            return self._local.run(call)
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code >= 500:
+                log_mcp_fallback(url=self._url, reason=str(exc))
+                return self._local.run(call)
+            raise
         if isinstance(payload, dict) and "result" in payload:
             result = payload["result"]
             return str(result)
