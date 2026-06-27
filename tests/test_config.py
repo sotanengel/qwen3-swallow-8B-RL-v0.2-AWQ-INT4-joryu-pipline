@@ -163,3 +163,19 @@ mcp:
     assert cfg.mcp.url == "http://localhost:8200"
     assert cfg.mcp.timeout.connect == pytest.approx(1.5)
     assert cfg.mcp.timeout.read == pytest.approx(6.0)
+
+
+def test_load_config_tools_weather(tmp_path: Path) -> None:
+    path = tmp_path / "tools.yaml"
+    path.write_text(
+        """
+tools:
+  weather:
+    timeout: 2.5
+    provider: open_meteo
+""".strip(),
+        encoding="utf-8",
+    )
+    cfg = load_config(path)
+    assert cfg.tools.weather.timeout == pytest.approx(2.5)
+    assert cfg.tools.weather.provider == "open_meteo"

@@ -67,6 +67,11 @@ mcp:
     connect: 3.0
     read: 8.0
 
+tools:
+  weather:
+    timeout: 5.0
+    provider: open_meteo
+
 export:
   out_dir: "exports"
   compression: "zstd"
