@@ -36,15 +36,59 @@ class FetchUrlArgs(BaseModel):
     url: str = ""
 
 
+def _validation_error_payload(exc: ValidationError) -> dict[str, Any]:
+    missing: list[str] = []
+    for err in exc.errors():
+        if err.get("type") == "missing":
+            loc = err.get("loc", ())
+            if loc:
+                missing.append(str(loc[-1]))
+    hint = "provide all required fields"
+    if missing:
+        hint = f"required field(s) missing: {', '.join(missing)}"
+    payload: dict[str, Any] = {"missing": missing, "hint": hint}
+    if not missing:
+        payload["errors"] = exc.errors()
+    return payload
+
+
+def _missing_field_payload(field: str, *, hint: str) -> dict[str, str]:
+    return {"missing": [field], "hint": hint}
+
+
 def _run_weather(args: WeatherArgs) -> str:
+    if not args.location.strip():
+        raise HTTPException(
+            status_code=400,
+            detail=_missing_field_payload(
+                "location",
+                hint="weather requires non-empty 'location'",
+            ),
+        )
     return weather_impl(args.location, args.date)
 
 
 def _run_web_search(args: WebSearchArgs) -> str:
+    if not args.query.strip():
+        raise HTTPException(
+            status_code=400,
+            detail=_missing_field_payload(
+                "query",
+                hint="web_search requires non-empty 'query'",
+            ),
+        )
     return search_impl(args.query, top_k=args.top_k)
 
 
 def _run_fetch_url(args: FetchUrlArgs) -> str:
+    if not args.url.strip():
+        raise HTTPException(
+            status_code=400,
+            detail=_missing_field_payload(
+                "url",
+                hint="fetch_url requires non-empty 'url'",
+            ),
+        )
     return fetch_impl(args.url)
 
 
@@ -71,11 +115,19 @@ def create_http_app() -> FastAPI:
         try:
             args = model_cls.model_validate(body)
         except ValidationError as exc:
-            raise HTTPException(status_code=422, detail=exc.errors()) from exc
+            raise HTTPException(
+                status_code=422,
+                detail=_validation_error_payload(exc),
+            ) from exc
         try:
             return ToolResult(result=handler(args))
+        except HTTPException:
+            raise
         except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+            raise HTTPException(
+                status_code=400,
+                detail={"missing": [], "hint": str(exc)},
+            ) from exc
         except TimeoutError as exc:
             raise HTTPException(status_code=504, detail=str(exc)) from exc
         except httpx.HTTPError as exc:
