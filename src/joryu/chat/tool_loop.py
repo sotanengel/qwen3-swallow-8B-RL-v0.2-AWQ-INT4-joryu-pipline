@@ -3,17 +3,19 @@
 from __future__ import annotations
 
 import asyncio
+import time
 import uuid
 from collections.abc import AsyncIterator
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from typing import Any
 
 from joryu.chat.thinking_guard import (
     ensure_not_thinking_runaway,
     register_empty_thinking_delta,
-    strip_empty_thinking_tags,
+    strip_think_blocks,
 )
 from joryu.chat.token_stream import TokenStreamer
+from joryu.chat.tool_meta import ToolTurnMeta, read_executor_mcp_status
 from joryu.completion_normalize import normalize_chat_result
 from joryu.tool_call_recovery import recover_tool_call
 from joryu.tool_calls import ParsedToolCall
@@ -46,6 +48,17 @@ def _normalize_tool_call(call: ParsedToolCall) -> ParsedToolCall:
 
 def _tool_error_fingerprint(name: str, result: str) -> tuple[str, str]:
     return (name, result)
+
+
+def _sanitize_chat_result(chat: ChatResult) -> ChatResult:
+    sanitized = strip_think_blocks(chat.answer or "")
+    if sanitized == chat.answer:
+        return chat
+    return replace(chat, answer=sanitized)
+
+
+def _sanitize_assistant_content(content: str) -> str:
+    return strip_think_blocks(content or "")
 
 
 def _error_chat_result() -> ChatResult:
@@ -178,6 +191,7 @@ class ToolLoopRunner:
         tools_arg = tools or None
         tool_loop_done_emitted = False
         error_emitted = False
+        tool_meta = ToolTurnMeta()
 
         try:
             for turn_index in range(self._max_turns):
@@ -239,7 +253,7 @@ class ToolLoopRunner:
 
                     assistant_turn: dict[str, Any] = {
                         "role": "assistant",
-                        "content": chat.answer,
+                        "content": _sanitize_assistant_content(chat.answer or ""),
                         "tool_calls": [asdict(c) for c in chat.tool_calls],
                     }
                     if chat.raw_completion is not None:
@@ -250,10 +264,15 @@ class ToolLoopRunner:
                         chat,
                         has_executor=executor is not None,
                     ):
-                        column_messages.append({"role": "assistant", "content": chat.answer or ""})
+                        column_messages.append(
+                            {
+                                "role": "assistant",
+                                "content": _sanitize_assistant_content(chat.answer or ""),
+                            }
+                        )
                         break
 
-                    assistant_content = strip_empty_thinking_tags(chat.answer or "")
+                    assistant_content = _sanitize_assistant_content(chat.answer or "")
                     tool_results: list[tuple[str, str]] = []
                     call_ids = [_generate_tool_call_id() for _ in chat.tool_calls]
                     for call_id, call in zip(call_ids, chat.tool_calls, strict=True):
@@ -270,9 +289,14 @@ class ToolLoopRunner:
                                 break
                         if self._tool_loop_dedupe and key in executed_cache:
                             result = executed_cache[key]
+                            mcp_status = read_executor_mcp_status(executor)
+                            latency_ms = 0
                         elif repeated_error_result is not None:
                             result = repeated_error_result
+                            mcp_status = read_executor_mcp_status(executor)
+                            latency_ms = 0
                         else:
+                            started = time.monotonic()
                             try:
                                 result = await _execute_tool_call(
                                     executor,
@@ -301,6 +325,8 @@ class ToolLoopRunner:
                                     "name": normalized_call.name,
                                     "message": str(exc),
                                 }
+                            latency_ms = int((time.monotonic() - started) * 1000)
+                            mcp_status = read_executor_mcp_status(executor)
                             if self._tool_loop_dedupe:
                                 executed_cache[key] = result
                         if result.startswith("error:"):
@@ -314,8 +340,29 @@ class ToolLoopRunner:
                                 }
                             fp = _tool_error_fingerprint(normalized_call.name, result)
                             error_fingerprint_counts[fp] = error_fingerprint_counts.get(fp, 0) + 1
-                            if error_fingerprint_counts[fp] >= _MAX_REPEAT_TOOL_ERROR:
+                            retry_count = error_fingerprint_counts[fp]
+                            tool_meta.record_error(
+                                name=normalized_call.name,
+                                arguments=dict(normalized_call.arguments),
+                                status=tool_error.get("status")
+                                if isinstance(tool_error.get("status"), int)
+                                else None,
+                                body=tool_error.get("body")
+                                if isinstance(tool_error.get("body"), str)
+                                else None,
+                                retry_count=retry_count,
+                                mcp_status=mcp_status,
+                            )
+                            if retry_count >= _MAX_REPEAT_TOOL_ERROR:
                                 abort_tool_loop = True
+                        else:
+                            tool_meta.record_success(
+                                name=normalized_call.name,
+                                arguments=dict(normalized_call.arguments),
+                                result=result,
+                                latency_ms=latency_ms,
+                                mcp_status=mcp_status,
+                            )
                         yield {
                             "type": "tool_call",
                             "column": column_id,
@@ -386,18 +433,31 @@ class ToolLoopRunner:
                 )
 
             if final_chat is not None:
+                final_chat = _sanitize_chat_result(final_chat)
                 yield {
                     "type": "_tool_loop_done",
                     "final_chat": final_chat,
                     "turns": turns,
+                    "tool_meta": {
+                        "tool_calls": tool_meta.tool_calls,
+                        "tool_errors": tool_meta.tool_errors,
+                        "mcp_status": tool_meta.mcp_status,
+                    },
                 }
                 tool_loop_done_emitted = True
         finally:
             if not tool_loop_done_emitted:
                 if final_chat is None:
                     final_chat = _error_chat_result()
+                else:
+                    final_chat = _sanitize_chat_result(final_chat)
                 yield {
                     "type": "_tool_loop_done",
                     "final_chat": final_chat,
                     "turns": turns,
+                    "tool_meta": {
+                        "tool_calls": tool_meta.tool_calls,
+                        "tool_errors": tool_meta.tool_errors,
+                        "mcp_status": tool_meta.mcp_status,
+                    },
                 }

@@ -10,6 +10,11 @@ _BULLET_LINE = re.compile(r"^\s*[-*+]\s+\S", re.MULTILINE)
 _NUMBERED_LINE = re.compile(r"^\s*\d+\.\s+\S", re.MULTILINE)
 _BOLD = re.compile(r"\*\*.+?\*\*|__.+?__")
 _TABLE_LINE = re.compile(r"\|.+\|")
+_HRULE_LINE = re.compile(r"^\s*---+\s*$", re.MULTILINE)
+_THINK_TAG = re.compile(r"<(?:/)?redacted_thinking>")
+_TRIPLE_REPEAT = re.compile(r"(.{4,}?)\1\1", re.DOTALL)
+
+QA_SHORT_MAX_CHARS = 200
 
 
 def has_markdown_markers(text: str) -> bool:
@@ -26,7 +31,30 @@ def has_markdown_markers(text: str) -> bool:
         return True
     if _TABLE_LINE.search(text):
         return True
+    if _HRULE_LINE.search(text):
+        return True
     return False
+
+
+def has_prose_style_violation(text: str) -> bool:
+    """prose 列: markdown 記号・水平線を reject。"""
+    return has_markdown_markers(text)
+
+
+def has_qa_short_style_violation(text: str, *, max_chars: int = QA_SHORT_MAX_CHARS) -> bool:
+    """qa_short 列: 長文または太字 markdown を reject。"""
+    if len(text or "") > max_chars:
+        return True
+    return _BOLD.search(text or "") is not None
+
+
+def has_dialog_think_leak(text: str) -> bool:
+    return _THINK_TAG.search(text or "") is not None
+
+
+def has_phrase_triple_repeat(text: str) -> bool:
+    """同一フレーズが 3 回以上連続反復。"""
+    return _TRIPLE_REPEAT.search(text or "") is not None
 
 
 def sentence_count(text: str) -> int:

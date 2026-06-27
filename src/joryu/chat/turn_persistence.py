@@ -6,6 +6,7 @@ from typing import Any
 
 from joryu.chat.persistence import build_chat_record
 from joryu.chat.session import ChatSession
+from joryu.chat.thinking_guard import strip_think_blocks
 from joryu.prompt_dedup import PromptDedupGuard
 from joryu.responses_store import record_id
 from joryu.vllm_client import ChatResult
@@ -36,11 +37,13 @@ class TurnPersistence:
         final_chat: ChatResult,
         turns: list[dict[str, Any]],
         sampling: dict[str, Any],
+        tool_meta: dict[str, Any] | None = None,
     ) -> tuple[dict[str, Any], str] | tuple[None, str]:
         guard = TurnPersistence._dedup_guard
         if guard is not None and guard.should_skip(prompt=user_text, style_id=style_id):
             return None, ""
-        final_answer = (final_chat.answer or "").strip()
+        final_answer = strip_think_blocks((final_chat.answer or "").strip())
+        meta = tool_meta or {}
         record = build_chat_record(
             prompt=user_text,
             style_id=style_id,
@@ -56,12 +59,16 @@ class TurnPersistence:
             sampling=sampling,
             tools=session.tools,
             tool_ids=session.tool_ids,
+            tool_errors=meta.get("tool_errors"),
+            mcp_status=meta.get("mcp_status"),
+            persisted_tool_calls=meta.get("tool_calls"),
         )
         with JsonlAppendWriter(session.out_path) as writer:
             writer.write(record)
-        from joryu.preflight import sync_dashboard_responses_copy
+        from joryu.preflight import ensure_stats_json, sync_dashboard_responses_copy
 
         sync_dashboard_responses_copy(session.repo_root)
+        ensure_stats_json(session.repo_root, force=True)
         if guard is not None:
             guard.record(prompt=user_text, style_id=style_id)
         return record, record_id(record)

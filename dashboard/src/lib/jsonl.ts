@@ -16,7 +16,9 @@ export interface DistilledRecord {
   finish_reason?: string | null;
   prompt_tokens?: number | null;
   completion_tokens?: number | null;
-  tool_calls?: Array<{ name?: string; arguments?: unknown }>;
+  tool_calls?: Array<{ name?: string; arguments?: unknown; result_summary?: string; latency_ms?: number; mcp_status?: string }>;
+  tool_errors?: Array<{ name?: string; arguments?: unknown; status?: number; body?: string; retry_count?: number }>;
+  mcp_status?: string | null;
   turns?: Array<{
     role?: string;
     name?: string;
