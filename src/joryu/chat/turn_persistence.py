@@ -6,6 +6,7 @@ from typing import Any
 
 from joryu.chat.persistence import build_chat_record
 from joryu.chat.session import ChatSession
+from joryu.chat.thinking_guard import strip_think_blocks
 from joryu.prompt_dedup import PromptDedupGuard
 from joryu.responses_store import record_id
 from joryu.vllm_client import ChatResult
@@ -40,7 +41,7 @@ class TurnPersistence:
         guard = TurnPersistence._dedup_guard
         if guard is not None and guard.should_skip(prompt=user_text, style_id=style_id):
             return None, ""
-        final_answer = (final_chat.answer or "").strip()
+        final_answer = strip_think_blocks((final_chat.answer or "").strip())
         record = build_chat_record(
             prompt=user_text,
             style_id=style_id,

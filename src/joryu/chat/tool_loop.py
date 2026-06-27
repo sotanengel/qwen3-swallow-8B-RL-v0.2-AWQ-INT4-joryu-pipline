@@ -5,13 +5,13 @@ from __future__ import annotations
 import asyncio
 import uuid
 from collections.abc import AsyncIterator
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from typing import Any
 
 from joryu.chat.thinking_guard import (
     ensure_not_thinking_runaway,
     register_empty_thinking_delta,
-    strip_empty_thinking_tags,
+    strip_think_blocks,
 )
 from joryu.chat.token_stream import TokenStreamer
 from joryu.completion_normalize import normalize_chat_result
@@ -46,6 +46,17 @@ def _normalize_tool_call(call: ParsedToolCall) -> ParsedToolCall:
 
 def _tool_error_fingerprint(name: str, result: str) -> tuple[str, str]:
     return (name, result)
+
+
+def _sanitize_chat_result(chat: ChatResult) -> ChatResult:
+    sanitized = strip_think_blocks(chat.answer or "")
+    if sanitized == chat.answer:
+        return chat
+    return replace(chat, answer=sanitized)
+
+
+def _sanitize_assistant_content(content: str) -> str:
+    return strip_think_blocks(content or "")
 
 
 def _error_chat_result() -> ChatResult:
@@ -239,7 +250,7 @@ class ToolLoopRunner:
 
                     assistant_turn: dict[str, Any] = {
                         "role": "assistant",
-                        "content": chat.answer,
+                        "content": _sanitize_assistant_content(chat.answer or ""),
                         "tool_calls": [asdict(c) for c in chat.tool_calls],
                     }
                     if chat.raw_completion is not None:
@@ -250,10 +261,15 @@ class ToolLoopRunner:
                         chat,
                         has_executor=executor is not None,
                     ):
-                        column_messages.append({"role": "assistant", "content": chat.answer or ""})
+                        column_messages.append(
+                            {
+                                "role": "assistant",
+                                "content": _sanitize_assistant_content(chat.answer or ""),
+                            }
+                        )
                         break
 
-                    assistant_content = strip_empty_thinking_tags(chat.answer or "")
+                    assistant_content = _sanitize_assistant_content(chat.answer or "")
                     tool_results: list[tuple[str, str]] = []
                     call_ids = [_generate_tool_call_id() for _ in chat.tool_calls]
                     for call_id, call in zip(call_ids, chat.tool_calls, strict=True):
@@ -386,6 +402,7 @@ class ToolLoopRunner:
                 )
 
             if final_chat is not None:
+                final_chat = _sanitize_chat_result(final_chat)
                 yield {
                     "type": "_tool_loop_done",
                     "final_chat": final_chat,
@@ -396,6 +413,8 @@ class ToolLoopRunner:
             if not tool_loop_done_emitted:
                 if final_chat is None:
                     final_chat = _error_chat_result()
+                else:
+                    final_chat = _sanitize_chat_result(final_chat)
                 yield {
                     "type": "_tool_loop_done",
                     "final_chat": final_chat,

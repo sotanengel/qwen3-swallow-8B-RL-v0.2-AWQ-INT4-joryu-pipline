@@ -24,6 +24,10 @@ def lint_jsonl_file(path: Path) -> list[str]:
                 continue
             if not isinstance(row, dict):
                 errors.append(f"{path}:{lineno}: expected JSON object, got {type(row).__name__}")
+                continue
+            answer = row.get("answer")
+            if isinstance(answer, str) and ("<think>" in answer or "</think>" in answer):
+                errors.append(f"{path}:{lineno}: answer must not contain '<think>' tags")
     return errors
 
 
