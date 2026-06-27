@@ -41,3 +41,18 @@ bash scripts/setup-dev.sh
 
 - `bash scripts/check.sh` が exit 0
 - ユーザーが PR を求めた場合は PR URL を返す
+
+## Docker / joryu-up（コンテナ追加時）
+
+インフラは **docker compose** + **`uv run joryu-up`** が唯一の起動経路とする。
+
+**新しい compose サービス（コンテナ）を追加したら、必ず `joryu-up` からも起動されるように配線する。** 個別の `docker compose up <service>` や手動プロセス起動をユーザーに案内してはならない。
+
+実装時は少なくとも次を更新する:
+
+1. `docker-compose.yml` — サービス定義
+2. `src/joryu/preflight.py` — `resolve_up_services` / `should_up_*` / `path_affects_service` / `services_to_build`
+3. `src/joryu/readiness.py` — `wait_for_up_services`（health URL があれば ready 待ち）
+4. `tests/test_preflight.py` / `tests/test_cli_up_down.py` / `tests/test_readiness.py` — TDD で起動対象・待機順序を固定
+
+起動確認・ユーザーへの案内は **`uv run joryu-up`（必要なら `--detach`）** に統一する。例: MCP は `config.yaml` の `mcp.enabled` 時に `joryu-up` が `mcp` コンテナも up する。
