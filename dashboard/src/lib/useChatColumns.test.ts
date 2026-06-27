@@ -45,7 +45,8 @@ describe("useChatColumns", () => {
     });
 
     expect(result.current.columns[0]?.isStreaming).toBe(false);
-    expect(result.current.columns[1]?.turn_index).toBe(0);
+    expect(result.current.columns[1]?.isStreaming).toBe(false);
+    expect(result.current.columns[1]?.turn_index).toBe(1);
   });
 
   it("applies optimistic update and SSE events on sendGlobal", async () => {
@@ -93,5 +94,31 @@ describe("useChatColumns", () => {
     });
 
     expect(onJobBlocked).toHaveBeenCalled();
+  });
+
+  it("finalizes column when stream ends without column_done", async () => {
+    mockStreamMessage.mockImplementation(
+      async (
+        _sid: string,
+        _prompt: string,
+        onEvent: (e: { type: string; column?: string; delta?: string }) => void,
+      ) => {
+        onEvent({ type: "token", column: "prose", delta: "partial" });
+      },
+    );
+    const { result } = renderHook(() => useChatColumns());
+
+    act(() => {
+      result.current.setColumnsFromSession([
+        { style_id: "prose", label: "散文", messages: [], turn_index: 0 },
+      ]);
+    });
+
+    await act(async () => {
+      await result.current.sendGlobal("sess-1", "hello");
+    });
+
+    expect(result.current.columns[0]?.isStreaming).toBe(false);
+    expect(result.current.columns[0]?.messages.at(-1)?.content).toBe("partial");
   });
 });

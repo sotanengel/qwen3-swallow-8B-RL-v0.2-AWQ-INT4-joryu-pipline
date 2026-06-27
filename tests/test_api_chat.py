@@ -327,3 +327,113 @@ def test_messages_reject_when_job_active(client: TestClient) -> None:
     finally:
         with runner._lock:
             runner._running_id = None
+
+
+def _assert_well_terminated(events: list[tuple[str, dict]], *, column_ids: set[str]) -> None:
+    assert events[-1][0] == "done"
+    done_columns = [data["column"] for etype, data in events if etype == "column_done"]
+    for col_id in column_ids:
+        assert done_columns.count(col_id) == 1, f"missing column_done for {col_id}"
+
+
+def test_sse_single_column_unknown_column_emits_done(client: TestClient) -> None:
+    import asyncio
+
+    from joryu.chat.session import ChatSessionStore
+    from joryu.chat.sse import sse_single_column
+    from joryu.styles import StylePreset
+
+    store: ChatSessionStore = client.app.state.chat_sessions
+    styles = {"prose": StylePreset(style_id="prose", label="散文", instruction="散文で。")}
+    session = store.create(
+        styles,
+        base_system_prompt="base",
+        model_name="m",
+        config_hash="h",
+        tools=[],
+        tool_ids=[],
+        out_path=client.app.state.repo_root / "data" / "distilled" / "responses.jsonl",
+    )
+
+    async def _collect():
+        chunks = []
+        async for chunk in sse_single_column(
+            session,
+            "unknown_style",
+            "hello",
+            client=FakeVllmClient(answer="x"),
+            executor=None,
+        ):
+            chunks.append(chunk)
+        return chunks
+
+    body = asyncio.run(_collect())
+    events = _parse_sse("".join(body))
+    types = [t for t, _ in events]
+    assert "error" in types
+    assert types[-1] == "done"
+
+
+def test_sse_all_columns_done_on_inner_exception(client: TestClient, monkeypatch) -> None:
+    from joryu.chat import streamer as streamer_mod
+
+    original = streamer_mod.stream_column_turn
+
+    async def _wrapped(*args, **kwargs):
+        column = args[1] if len(args) > 1 else kwargs.get("column")
+        if column is not None and column.style_id == "report":
+            raise RuntimeError("report column failed")
+        async for event in original(*args, **kwargs):
+            yield event
+
+    monkeypatch.setattr(streamer_mod, "stream_column_turn", _wrapped)
+
+    created = client.post("/api/chat/sessions").json()
+    session_id = created["session_id"]
+    with client.stream(
+        "POST",
+        f"/api/chat/sessions/{session_id}/messages",
+        json={"prompt": "hello"},
+    ) as resp:
+        assert resp.status_code == 200
+        body = resp.read().decode("utf-8")
+    events = _parse_sse(body)
+    _assert_well_terminated(
+        events,
+        column_ids={"prose", "qa_short", "dialog", "report"},
+    )
+
+
+def test_sse_initial_broadcast_completes_under_errors(client: TestClient, monkeypatch) -> None:
+    from joryu.chat import streamer as streamer_mod
+
+    OriginalRunner = streamer_mod.ToolLoopRunner
+
+    class MixedRunner:
+        def __init__(self, **kwargs):
+            self._kwargs = kwargs
+
+        async def run(self, **kwargs):
+            column_id = kwargs["column_id"]
+            if column_id == "report":
+                yield {"type": "error", "column": column_id, "message": "simulated failure"}
+                return
+            inner = OriginalRunner(**self._kwargs)
+            async for event in inner.run(**kwargs):
+                yield event
+
+    monkeypatch.setattr(streamer_mod, "ToolLoopRunner", MixedRunner)
+
+    created = client.post("/api/chat/sessions").json()
+    session_id = created["session_id"]
+    with client.stream(
+        "POST",
+        f"/api/chat/sessions/{session_id}/messages",
+        json={"prompt": "hello"},
+    ) as resp:
+        body = resp.read().decode("utf-8")
+    events = _parse_sse(body)
+    _assert_well_terminated(
+        events,
+        column_ids={"prose", "qa_short", "dialog", "report"},
+    )

@@ -20,6 +20,10 @@ def format_sse(event: dict[str, Any]) -> str:
     return f"event: {event_type}\ndata: {json.dumps(event, ensure_ascii=False)}\n\n"
 
 
+def _finalize_done(session_id: str) -> str:
+    return format_sse({"type": "done", "session_id": session_id})
+
+
 async def merge_streams(
     streams: list[tuple[str, AsyncIterator[dict[str, Any]]]],
 ) -> AsyncIterator[dict[str, Any]]:
@@ -33,6 +37,14 @@ async def merge_streams(
         except Exception as exc:
             await queue.put(
                 {"type": "error", "column": column_id, "message": str(exc)},
+            )
+            await queue.put(
+                {
+                    "type": "column_done",
+                    "column": column_id,
+                    "finish_reason": "error",
+                    "record_id": "",
+                },
             )
         finally:
             await queue.put(None)
@@ -58,24 +70,30 @@ async def sse_all_columns(
     sampling: dict[str, Any] | None = None,
 ) -> AsyncIterator[str]:
     samp = sampling or DEFAULT_SAMPLING
-    streams = [
-        (
-            col.style_id,
-            stream_column_turn(
-                session,
-                col,
-                prompt,
-                client=client,
-                executor=executor,
-                stream_client=stream_client,
-                sampling=samp,
-            ),
-        )
-        for col in session.columns.values()
-    ]
-    async for event in merge_streams(streams):
-        yield format_sse(dict(event))
-    yield format_sse({"type": "done", "session_id": session.session_id})
+    done_emitted = False
+    try:
+        streams = [
+            (
+                col.style_id,
+                stream_column_turn(
+                    session,
+                    col,
+                    prompt,
+                    client=client,
+                    executor=executor,
+                    stream_client=stream_client,
+                    sampling=samp,
+                ),
+            )
+            for col in session.columns.values()
+        ]
+        async for event in merge_streams(streams):
+            yield format_sse(dict(event))
+        yield _finalize_done(session.session_id)
+        done_emitted = True
+    finally:
+        if not done_emitted:
+            yield _finalize_done(session.session_id)
 
 
 async def sse_single_column(
@@ -90,17 +108,24 @@ async def sse_single_column(
 ) -> AsyncIterator[str]:
     if style_id not in session.columns:
         yield format_sse({"type": "error", "message": f"unknown column: {style_id}"})
+        yield _finalize_done(session.session_id)
         return
     samp = sampling or DEFAULT_SAMPLING
     column = session.columns[style_id]
-    async for event in stream_column_turn(
-        session,
-        column,
-        prompt,
-        client=client,
-        executor=executor,
-        stream_client=stream_client,
-        sampling=samp,
-    ):
-        yield format_sse(dict(event))
-    yield format_sse({"type": "done", "session_id": session.session_id})
+    done_emitted = False
+    try:
+        async for event in stream_column_turn(
+            session,
+            column,
+            prompt,
+            client=client,
+            executor=executor,
+            stream_client=stream_client,
+            sampling=samp,
+        ):
+            yield format_sse(dict(event))
+        yield _finalize_done(session.session_id)
+        done_emitted = True
+    finally:
+        if not done_emitted:
+            yield _finalize_done(session.session_id)

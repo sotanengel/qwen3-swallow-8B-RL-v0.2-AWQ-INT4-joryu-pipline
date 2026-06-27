@@ -160,11 +160,30 @@ export function ChatColumn({ column, showInput, disabled, onSend }: ChatColumnPr
   );
 }
 
+export function finalizeColumnDefensively(
+  column: ColumnUiState,
+  fallbackText = "(応答が途中で切れました)",
+): ColumnUiState {
+  if (!column.isStreaming) return column;
+  return {
+    ...column,
+    isStreaming: false,
+    streamingText: undefined,
+    toolCalls: undefined,
+    turn_index: column.turn_index + 1,
+    messages: column.streamingText
+      ? [...column.messages, { role: "assistant", content: column.streamingText }]
+      : [...column.messages, { role: "assistant", content: fallbackText }],
+  };
+}
+
 export function applyChatEvent(
   columns: ColumnUiState[],
   event: ChatEvent,
 ): ColumnUiState[] {
-  if (event.type === "done") return columns;
+  if (event.type === "done") {
+    return columns.map((col) => finalizeColumnDefensively(col));
+  }
   if (event.type === "error" && !("column" in event && event.column)) return columns;
 
   const colId = "column" in event ? event.column : undefined;
@@ -211,6 +230,8 @@ export function applyChatEvent(
         );
         return { ...col, toolCalls };
       }
+      case "error":
+        return finalizeColumnDefensively(col, event.message);
       case "column_done":
         return {
           ...col,

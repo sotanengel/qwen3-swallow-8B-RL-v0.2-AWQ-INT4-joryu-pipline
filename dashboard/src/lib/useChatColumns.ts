@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 
-import { applyChatEvent, type ColumnUiState } from "@/components/ChatColumn";
+import { applyChatEvent, finalizeColumnDefensively, type ColumnUiState } from "@/components/ChatColumn";
 import {
   JobActiveError,
   streamColumnMessage,
@@ -69,6 +69,7 @@ export function useChatColumns(options: UseChatColumnsOptions = {}): UseChatColu
         handleStreamError(err);
       } finally {
         setGlobalSending(false);
+        setColumns((prev) => prev.map((c) => finalizeColumnDefensively(c)));
       }
     },
     [handleEvent, handleStreamError, onSuccess],
@@ -94,6 +95,10 @@ export function useChatColumns(options: UseChatColumnsOptions = {}): UseChatColu
         onSuccess?.();
       } catch (err) {
         handleStreamError(err);
+      } finally {
+        setColumns((prev) =>
+          prev.map((c) => (c.style_id === styleId ? finalizeColumnDefensively(c) : c)),
+        );
       }
     },
     [handleEvent, handleStreamError, onSuccess],

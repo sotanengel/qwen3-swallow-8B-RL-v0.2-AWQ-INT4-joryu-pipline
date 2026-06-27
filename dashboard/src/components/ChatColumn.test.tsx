@@ -93,4 +93,26 @@ describe("applyChatEvent", () => {
     expect(cols[0]?.turn_index).toBe(1);
     expect(cols[0]?.messages.at(-1)?.content).toBe("answer");
   });
+
+  it("applyChatEvent on done resolves stuck isStreaming columns", () => {
+    const cols: ColumnUiState[] = [
+      { ...baseColumn(), isStreaming: true, streamingText: "partial" },
+      { ...baseColumn(), style_id: "qa_short", label: "短答", isStreaming: true },
+    ];
+    const next = applyChatEvent(cols, { type: "done", session_id: "s1" });
+    expect(next[0]?.isStreaming).toBe(false);
+    expect(next[1]?.isStreaming).toBe(false);
+    expect(next[0]?.messages.at(-1)?.content).toBe("partial");
+    expect(next[1]?.messages.at(-1)?.content).toBe("(応答が途中で切れました)");
+  });
+
+  it("clears streaming state on column error event", () => {
+    let cols = applyChatEvent([{ ...baseColumn(), isStreaming: true }], {
+      type: "error",
+      column: "prose",
+      message: "boom",
+    });
+    expect(cols[0]?.isStreaming).toBe(false);
+    expect(cols[0]?.messages.at(-1)?.content).toBe("boom");
+  });
 });

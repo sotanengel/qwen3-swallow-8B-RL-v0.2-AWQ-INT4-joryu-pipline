@@ -122,3 +122,40 @@ def test_stream_tool_loop_exhausted(tmp_path: Path) -> None:
     events = _run(_collect(session, column, "x", client, max_turns=1))
     done = next(e for e in events if e["type"] == "column_done")
     assert done["finish_reason"] == "tool_loop_exhausted"
+
+
+class _ErrorOnlyRunner:
+    async def run(self, **kwargs):
+        yield {"type": "error", "column": kwargs["column_id"], "message": "boom"}
+
+
+def test_stream_emits_column_done_on_inner_error(tmp_path: Path, monkeypatch) -> None:
+    from joryu.chat import streamer as streamer_mod
+
+    session = _make_session(tmp_path)
+    column = session.columns["prose"]
+    client = FakeVllmClient(answer="hi", thinking=None)
+    monkeypatch.setattr(streamer_mod, "ToolLoopRunner", lambda **kw: _ErrorOnlyRunner())
+
+    events = _run(_collect(session, column, "hi", client))
+    assert events[-1]["type"] == "column_done"
+    assert events[-1]["finish_reason"] == "error"
+    assert any(e.get("type") == "error" for e in events)
+
+
+def test_stream_emits_column_done_when_final_chat_none(tmp_path: Path, monkeypatch) -> None:
+    from joryu.chat import streamer as streamer_mod
+
+    class _EmptyDoneRunner:
+        async def run(self, **kwargs):
+            if False:
+                yield {}
+
+    session = _make_session(tmp_path)
+    column = session.columns["prose"]
+    client = FakeVllmClient(answer="hi", thinking=None)
+    monkeypatch.setattr(streamer_mod, "ToolLoopRunner", lambda **kw: _EmptyDoneRunner())
+
+    events = _run(_collect(session, column, "hi", client))
+    assert events[-1]["type"] == "column_done"
+    assert events[-1]["finish_reason"] == "error"
