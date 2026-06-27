@@ -75,6 +75,7 @@ async def stream_column_turn(
         persistence = TurnPersistence()
         final_chat = None
         turns: list[dict[str, Any]] = []
+        tool_meta: dict[str, Any] | None = None
 
         turn_messages_len = len(column.messages)
 
@@ -101,6 +102,7 @@ async def stream_column_turn(
             if event.get("type") == "_tool_loop_done":
                 final_chat = event["final_chat"]
                 turns = event["turns"]
+                tool_meta = event.get("tool_meta")
                 continue
             if event.get("type") == "error":
                 yield event
@@ -132,6 +134,7 @@ async def stream_column_turn(
             final_chat=final_chat,
             turns=turns,
             sampling=sampling,
+            tool_meta=tool_meta,
         )
 
         yield {

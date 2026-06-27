@@ -89,6 +89,7 @@ class _UpstreamErrorExecutor:
 
 
 async def _persist_column(tmp_path: Path, answers: list[str]) -> dict:
+    TurnPersistence.reset_dedup()
     session = _make_dialog_session(tmp_path)
     column = session.columns["dialog"]
     client = FakeVllmClient(answers=answers, thinking=None)

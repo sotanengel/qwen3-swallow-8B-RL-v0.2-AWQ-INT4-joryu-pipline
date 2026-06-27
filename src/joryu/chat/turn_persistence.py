@@ -37,11 +37,13 @@ class TurnPersistence:
         final_chat: ChatResult,
         turns: list[dict[str, Any]],
         sampling: dict[str, Any],
+        tool_meta: dict[str, Any] | None = None,
     ) -> tuple[dict[str, Any], str] | tuple[None, str]:
         guard = TurnPersistence._dedup_guard
         if guard is not None and guard.should_skip(prompt=user_text, style_id=style_id):
             return None, ""
         final_answer = strip_think_blocks((final_chat.answer or "").strip())
+        meta = tool_meta or {}
         record = build_chat_record(
             prompt=user_text,
             style_id=style_id,
@@ -57,6 +59,9 @@ class TurnPersistence:
             sampling=sampling,
             tools=session.tools,
             tool_ids=session.tool_ids,
+            tool_errors=meta.get("tool_errors"),
+            mcp_status=meta.get("mcp_status"),
+            persisted_tool_calls=meta.get("tool_calls"),
         )
         with JsonlAppendWriter(session.out_path) as writer:
             writer.write(record)

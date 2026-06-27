@@ -164,14 +164,21 @@ class McpToolExecutor:
         self._connect_timeout = connect_timeout
         self._read_timeout = read_timeout
         self._local = build_default_executor()
+        self._last_mcp_status = "down" if not self._url else "up"
+
+    @property
+    def last_mcp_status(self) -> str:
+        return self._last_mcp_status
 
     def run(self, call: ParsedToolCall) -> str:
         if call.name == "calc":
+            self._last_mcp_status = "down"
             return self._local.run(call)
         if call.name not in _MCP_TOOL_NAMES:
             raise KeyError(f"unknown tool: {call.name!r}")
         if self._url:
             return self._run_remote(call)
+        self._last_mcp_status = "down"
         return self._local.run(call)
 
     def _run_remote(self, call: ParsedToolCall) -> str:
@@ -196,17 +203,21 @@ class McpToolExecutor:
                 payload = resp.json()
         except httpx.ConnectError as exc:
             log_mcp_fallback(url=self._url, reason=str(exc))
+            self._last_mcp_status = "fallback_local"
             return self._local.run(call)
         except httpx.HTTPStatusError as exc:
             if exc.response.status_code >= 500:
                 log_mcp_fallback(url=self._url, reason=str(exc))
+                self._last_mcp_status = "fallback_local"
                 return self._local.run(call)
             body = _response_error_body(exc.response)
+            self._last_mcp_status = "degraded"
             raise ToolUpstreamError(
                 status=exc.response.status_code,
                 body=body,
                 url=str(exc.request.url),
             ) from exc
+        self._last_mcp_status = "up"
         if isinstance(payload, dict) and "result" in payload:
             result = payload["result"]
             return str(result)

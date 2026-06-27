@@ -6,6 +6,7 @@ from dataclasses import asdict
 from datetime import UTC, datetime
 from typing import Any
 
+from joryu.tool_pipeline.pipeline import aggregate_tool_calls_from_turns
 from joryu.vllm_client import ChatResult
 
 CHAT_CATEGORY = "人間との対話"
@@ -27,12 +28,17 @@ def build_chat_record(
     sampling: dict[str, Any],
     tools: list[dict[str, Any]],
     tool_ids: list[str],
+    tool_errors: list[dict[str, Any]] | None = None,
+    mcp_status: str | None = None,
+    persisted_tool_calls: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """distill._build_record と互換のスキーマ + session_id / turn_index。"""
     eff_sampling = dict(sampling)
     if chat.effective_max_tokens is not None:
         eff_sampling["effective_max_tokens"] = chat.effective_max_tokens
     suspected = list(chat.suspected_unparsed_tool_calls)
+    aggregated = aggregate_tool_calls_from_turns(turns)
+    tool_calls_out = persisted_tool_calls or aggregated or [asdict(c) for c in chat.tool_calls]
     return {
         "prompt": prompt,
         "category": CHAT_CATEGORY,
@@ -49,7 +55,9 @@ def build_chat_record(
         "completion_tokens": chat.completion_tokens,
         "tools": tools,
         "tool_ids_requested": tool_ids,
-        "tool_calls": [asdict(c) for c in chat.tool_calls],
+        "tool_calls": tool_calls_out,
+        "tool_errors": list(tool_errors or []),
+        "mcp_status": mcp_status or "down",
         "turns": turns,
         "raw_completion": chat.raw_completion,
         "suspected_unparsed_tool_calls": suspected,
