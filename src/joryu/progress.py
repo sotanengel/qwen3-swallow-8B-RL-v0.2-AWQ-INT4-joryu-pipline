@@ -83,13 +83,3 @@ def load_truncated_run_keys(path: str | Path) -> set[str]:
         if key is not None:
             keys.add(key)
     return keys
-
-
-def load_done_prompts(path: str | Path) -> set[str]:
-    """後方互換: prompt 文字列のみの処理済集合（非推奨）。"""
-    done: set[str] = set()
-    for record in iter_jsonl(Path(path)):
-        prompt = record.get("prompt")
-        if isinstance(prompt, str) and prompt:
-            done.add(prompt)
-    return done
