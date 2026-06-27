@@ -48,14 +48,10 @@ def test_mcp_http_unknown_tool(bridge_client: TestClient) -> None:
 def test_mcp_http_timeout_error_returns_504(
     bridge_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    def _timeout(_args: dict) -> str:
+    def _timeout(_location: str, _date: str | None = None) -> str:
         raise TimeoutError("upstream timed out")
 
-    monkeypatch.setitem(
-        __import__("joryu.mcp.http_bridge", fromlist=["_TOOL_HANDLERS"])._TOOL_HANDLERS,
-        "weather",
-        _timeout,
-    )
+    monkeypatch.setattr("joryu.mcp.http_bridge.weather_impl", _timeout)
     resp = bridge_client.post("/tools/weather", json={"location": "Tokyo"})
     assert resp.status_code == 504
     assert "timed out" in resp.json()["detail"]
@@ -66,14 +62,18 @@ def test_mcp_http_httpx_error_returns_502(
 ) -> None:
     import httpx
 
-    def _http_fail(_args: dict) -> str:
+    def _http_fail(_location: str, _date: str | None = None) -> str:
         raise httpx.ConnectError("connection refused")
 
-    monkeypatch.setitem(
-        __import__("joryu.mcp.http_bridge", fromlist=["_TOOL_HANDLERS"])._TOOL_HANDLERS,
-        "weather",
-        _http_fail,
-    )
+    monkeypatch.setattr("joryu.mcp.http_bridge.weather_impl", _http_fail)
     resp = bridge_client.post("/tools/weather", json={"location": "Tokyo"})
     assert resp.status_code == 502
     assert "connection refused" in resp.json()["detail"]
+
+
+def test_mcp_http_invalid_body_returns_422(bridge_client: TestClient) -> None:
+    resp = bridge_client.post("/tools/web_search", json={"top_k": "not-a-number"})
+    assert resp.status_code == 422
+    detail = resp.json()["detail"]
+    assert isinstance(detail, list)
+    assert detail[0]["type"] == "int_parsing"

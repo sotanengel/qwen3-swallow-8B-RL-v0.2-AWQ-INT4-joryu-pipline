@@ -12,7 +12,7 @@ import sys
 import time
 import uuid
 from collections.abc import Callable
-from dataclasses import asdict, replace
+from dataclasses import asdict
 from datetime import UTC, datetime
 from functools import partial
 from pathlib import Path
@@ -506,7 +506,9 @@ def run_distill(
     rows = load_prompt_bank(bank_p)
     if override_tool_ids:
         rows = [
-            replace(row, tool_ids=list(override_tool_ids)) if not row.tool_ids else row
+            row.model_copy(update={"tool_ids": list(override_tool_ids)})
+            if not row.tool_ids
+            else row
             for row in rows
         ]
     tools_path = _resolve_tools_path(config, config_path=config_path, out_p=out_p)
