@@ -4,7 +4,6 @@ import {
   curationFetchUrls,
   fetchAllLiveJson,
   fetchBestLiveText,
-  fetchLiveJson,
   responsesFetchUrls,
   statsFetchUrls,
 } from "./live-data";
@@ -41,21 +40,6 @@ describe("fetchAllLiveJson", () => {
 
     const url = String(fetchMock.mock.calls[0][0]);
     expect(url).toMatch(/^\/stats\.json\?t=\d+$/);
-  });
-});
-
-describe("fetchLiveJson", () => {
-  it("returns first successful response", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce({ ok: false })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ total: 3 }) });
-    vi.stubGlobal("fetch", fetchMock);
-
-    const res = await fetchLiveJson(["/a", "/b"]);
-    expect(res).not.toBeNull();
-    expect(await res!.json()).toEqual({ total: 3 });
-    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });
 

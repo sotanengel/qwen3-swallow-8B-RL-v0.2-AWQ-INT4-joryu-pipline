@@ -141,10 +141,6 @@ export async function createJob(body: CreateJobRequest): Promise<JobRecord> {
   return parseJobRecord(row);
 }
 
-export async function getJob(id: string): Promise<JobRecord> {
-  return parseJobRecord(await apiFetch<unknown>(`/api/jobs/${id}`));
-}
-
 export async function getJobLogs(id: string, offset = 0): Promise<LogResponse> {
   return apiFetch<LogResponse>(`/api/jobs/${id}/logs?offset=${offset}`);
 }
