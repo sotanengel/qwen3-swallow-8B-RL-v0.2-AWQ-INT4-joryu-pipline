@@ -79,7 +79,8 @@ def fetch_url(url: str, *, max_bytes: int | None = None, timeout: float | None =
     )
     to = timeout if timeout is not None else _env_float("JORYU_FETCH_TIMEOUT", DEFAULT_TIMEOUT)
     headers = {"User-Agent": USER_AGENT}
-    with httpx.Client(timeout=httpx.Timeout(to), follow_redirects=True) as client:
+    httpx_timeout = httpx.Timeout(connect=5.0, read=to, write=5.0, pool=5.0)
+    with httpx.Client(timeout=httpx_timeout, follow_redirects=True) as client:
         resp = client.get(validated, headers=headers)
         resp.raise_for_status()
         raw = resp.content[:limit]

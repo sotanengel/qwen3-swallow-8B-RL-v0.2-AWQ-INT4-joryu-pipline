@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import os
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -11,10 +13,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from joryu.api.routes import chat, curate, dashboard, jobs, search
 from joryu.chat.session import ChatSessionStore
 from joryu.config import load_config
+from joryu.http_client import close_shared_async_client
 from joryu.jobs.runner import JobRunner, default_jobs_dir
 from joryu.jobs.store import JobStore
 from joryu.mcp_runtime import probe_mcp_health
 from joryu.tools_impl.weather import apply_weather_config
+
+
+@asynccontextmanager
+async def _app_lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    yield
+    await close_shared_async_client()
 
 
 def repo_root_from_env() -> Path:
@@ -30,7 +39,7 @@ def create_app(*, repo_root: Path | None = None) -> FastAPI:
     runner = JobRunner(store, root)
     runner.reconcile_stale_jobs()
 
-    app = FastAPI(title="joryu API", version="0.1.0")
+    app = FastAPI(title="joryu API", version="0.1.0", lifespan=_app_lifespan)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[

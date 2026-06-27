@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from collections.abc import AsyncIterator
@@ -11,6 +12,7 @@ from typing import Any, Literal
 import httpx
 
 from joryu.completion_normalize import normalize_chat_result
+from joryu.http_client import build_httpx_timeout, get_shared_async_client
 from joryu.tool_calls import ParsedToolCall
 from joryu.vllm_client import ChatResult, VllmError, extract_known_tool_names
 from joryu.vllm_serve_client import (
@@ -182,13 +184,15 @@ class VllmServeStreamClient:
         model: str = _DEFAULT_MODEL,
         timeout_s: float = 600.0,
         transport: httpx.AsyncBaseTransport | None = None,
+        http_client: httpx.AsyncClient | None = None,
     ) -> None:
         self._base_url = normalize_vllm_serve_base_url(base_url)
         self._model = model
         self._timeout_s = timeout_s
         self._transport = transport
+        self._http_client = http_client
 
-    async def chat_stream(
+    async def _iter_stream_chunks(
         self,
         messages: list[dict[str, Any]],
         *,
@@ -217,40 +221,51 @@ class VllmServeStreamClient:
         finish_reason: str | None = None
         tool_acc = ToolCallStreamAccumulator()
 
-        async with httpx.AsyncClient(
-            transport=self._transport,
-            timeout=self._timeout_s,
-        ) as http:
-            try:
-                async with http.stream("POST", url, json=payload) as response:
-                    response.raise_for_status()
-                    async for line in response.aiter_lines():
-                        if not line.startswith("data: "):
-                            continue
-                        data = line[6:].strip()
-                        for chunk in openai_sse_data_to_chunks(data):
-                            if chunk.kind == "thinking":
-                                thinking_parts.append(chunk.delta)
-                                yield chunk
-                            elif chunk.kind == "content":
-                                content_parts.append(chunk.delta)
-                                yield chunk
-                            elif chunk.kind == "tool_call_partial":
-                                if chunk.tool_call_index is not None:
-                                    tool_acc.feed(
-                                        tool_call_index=chunk.tool_call_index,
-                                        call_id=chunk.tool_call_id,
-                                        name=chunk.tool_call_name,
-                                        arguments_delta=chunk.tool_call_arguments_delta,
-                                    )
-                            elif chunk.kind == "done":
-                                if chunk.finish_reason:
-                                    finish_reason = chunk.finish_reason
-            except httpx.HTTPStatusError as exc:
-                detail = exc.response.text
-                raise VllmError(f"vLLM serve HTTP {exc.response.status_code}: {detail}") from exc
-            except httpx.RequestError as exc:
-                raise VllmError(f"vLLM serve unreachable at {self._base_url}: {exc}") from exc
+        owns_client = False
+        if self._http_client is not None:
+            http = self._http_client
+        elif self._transport is not None:
+            http = httpx.AsyncClient(
+                transport=self._transport,
+                timeout=build_httpx_timeout(read_s=self._timeout_s),
+            )
+            owns_client = True
+        else:
+            http = get_shared_async_client(read_timeout_s=self._timeout_s)
+
+        try:
+            async with http.stream("POST", url, json=payload) as response:
+                response.raise_for_status()
+                async for line in response.aiter_lines():
+                    if not line.startswith("data: "):
+                        continue
+                    data = line[6:].strip()
+                    for chunk in openai_sse_data_to_chunks(data):
+                        if chunk.kind == "thinking":
+                            thinking_parts.append(chunk.delta)
+                            yield chunk
+                        elif chunk.kind == "content":
+                            content_parts.append(chunk.delta)
+                            yield chunk
+                        elif chunk.kind == "tool_call_partial":
+                            if chunk.tool_call_index is not None:
+                                tool_acc.feed(
+                                    tool_call_index=chunk.tool_call_index,
+                                    call_id=chunk.tool_call_id,
+                                    name=chunk.tool_call_name,
+                                    arguments_delta=chunk.tool_call_arguments_delta,
+                                )
+                        elif chunk.kind == "done":
+                            if chunk.finish_reason:
+                                finish_reason = chunk.finish_reason
+        except httpx.HTTPStatusError as exc:
+            detail = exc.response.text
+            raise VllmError(f"vLLM serve HTTP {exc.response.status_code}: {detail}") from exc
+        except httpx.RequestError as exc:
+            raise VllmError(f"vLLM serve unreachable at {self._base_url}: {exc}") from exc
+        finally:
+            if owns_client:
+                await http.aclose()
 
         thinking = "".join(thinking_parts).strip() or None
         content = "".join(content_parts)
@@ -270,6 +285,30 @@ class VllmServeStreamClient:
             tools=tools,
         )
         yield StreamChunk(kind="done", finish_reason=finish_reason, result=result)
+
+    async def chat_stream(
+        self,
+        messages: list[dict[str, Any]],
+        *,
+        enable_thinking: bool = True,
+        tools: list[dict[str, Any]] | None = None,
+        tool_choice: dict[str, Any] | str | None = None,
+        **sampling_overrides: Any,
+    ) -> AsyncIterator[StreamChunk]:
+        try:
+            async with asyncio.timeout(self._timeout_s):
+                async for chunk in self._iter_stream_chunks(
+                    messages,
+                    enable_thinking=enable_thinking,
+                    tools=tools,
+                    tool_choice=tool_choice,
+                    **sampling_overrides,
+                ):
+                    yield chunk
+        except TimeoutError as exc:
+            raise VllmError(
+                f"vLLM stream timed out after {self._timeout_s}s at {self._base_url}",
+            ) from exc
 
 
 __all__ = [
