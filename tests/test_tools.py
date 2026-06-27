@@ -11,7 +11,7 @@ from joryu.tools import ToolDefinition, load_tools, merge_tools, resolve_tool_id
 
 def test_load_tools_reads_repo_tools_yaml() -> None:
     reg = load_tools("tools.yaml")
-    assert set(reg) == {"search", "calc", "fetch_url"}
+    assert set(reg) == {"search", "calc", "fetch_url", "weather"}
 
 
 def test_resolve_tool_ids_returns_two() -> None:
