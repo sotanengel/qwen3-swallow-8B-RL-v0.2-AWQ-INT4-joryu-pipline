@@ -90,11 +90,17 @@ class FakeStreamClient:
         *,
         finish_reason: str = "stop",
         answers: list[str] | None = None,
+        omit_done_chunk: bool = False,
+        raise_runtime_error: bool = False,
+        raise_after_n_chunks: int | None = None,
     ) -> None:
         self.answer = answer
         self.thinking = thinking
         self.finish_reason = finish_reason
         self.answers = answers
+        self.omit_done_chunk = omit_done_chunk
+        self.raise_runtime_error = raise_runtime_error
+        self.raise_after_n_chunks = raise_after_n_chunks
         self.calls: list[dict[str, Any]] = []
         self._call_index = 0
 
@@ -129,8 +135,16 @@ class FakeStreamClient:
             answer,
             known_tool_names=known or None,
         )
+        if self.raise_runtime_error:
+            raise RuntimeError("streaming chat failed")
+        chunk_count = 0
         for i in range(0, len(cleaned_answer), 4):
+            if self.raise_after_n_chunks is not None and chunk_count >= self.raise_after_n_chunks:
+                raise RuntimeError("streaming chat interrupted")
             yield StreamChunk(kind="content", delta=cleaned_answer[i : i + 4])
+            chunk_count += 1
+        if self.omit_done_chunk:
+            return
         result = ChatResult(
             thinking=self.thinking if enable_thinking is not False else None,
             answer=cleaned_answer,
