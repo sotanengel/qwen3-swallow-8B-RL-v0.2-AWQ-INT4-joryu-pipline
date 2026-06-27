@@ -2,11 +2,18 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncIterator
 from pathlib import Path
+from typing import Any
 
 from joryu.chat.session import ChatSession, ChatSessionStore
-from joryu.chat.sse import sse_all_columns, sse_single_column
+from joryu.chat.sse import (
+    monitor_client_disconnect,
+    sse_all_columns,
+    sse_single_column,
+    with_heartbeat,
+)
 from joryu.config import load_config
 from joryu.datetime_context import format_date_context_ja, now_jst
 from joryu.styles import StylePreset, load_styles
@@ -66,28 +73,66 @@ class ChatService:
         self,
         session: ChatSession,
         prompt: str,
+        *,
+        request: Any | None = None,
     ) -> AsyncIterator[str]:
-        async for chunk in sse_all_columns(
-            session,
-            prompt,
-            client=self._chat_client,
-            executor=self._executor,
-            stream_client=self._stream_client,
-        ):
-            yield chunk
+        cancel_event = asyncio.Event()
+        monitor_task: asyncio.Task[None] | None = None
+        if request is not None:
+            monitor_task = asyncio.create_task(
+                monitor_client_disconnect(request, cancel_event),
+            )
+        try:
+            async for chunk in with_heartbeat(
+                sse_all_columns(
+                    session,
+                    prompt,
+                    client=self._chat_client,
+                    executor=self._executor,
+                    stream_client=self._stream_client,
+                    cancel_event=cancel_event,
+                ),
+            ):
+                if cancel_event.is_set():
+                    break
+                yield chunk
+        finally:
+            cancel_event.set()
+            if monitor_task is not None:
+                monitor_task.cancel()
+                await asyncio.gather(monitor_task, return_exceptions=True)
 
     async def stream_single_column(
         self,
         session: ChatSession,
         style_id: str,
         prompt: str,
+        *,
+        request: Any | None = None,
     ) -> AsyncIterator[str]:
-        async for chunk in sse_single_column(
-            session,
-            style_id,
-            prompt,
-            client=self._chat_client,
-            executor=self._executor,
-            stream_client=self._stream_client,
-        ):
-            yield chunk
+        cancel_event = asyncio.Event()
+        monitor_task: asyncio.Task[None] | None = None
+        if request is not None:
+            monitor_task = asyncio.create_task(
+                monitor_client_disconnect(request, cancel_event),
+            )
+        try:
+            async for chunk in with_heartbeat(
+                sse_single_column(
+                    session,
+                    style_id,
+                    prompt,
+                    client=self._chat_client,
+                    executor=self._executor,
+                    stream_client=self._stream_client,
+                    cancel_event=cancel_event,
+                ),
+            ):
+                if cancel_event.is_set():
+                    break
+                yield chunk
+        finally:
+            cancel_event.set()
+            if monitor_task is not None:
+                monitor_task.cancel()
+                await asyncio.gather(monitor_task, return_exceptions=True)
