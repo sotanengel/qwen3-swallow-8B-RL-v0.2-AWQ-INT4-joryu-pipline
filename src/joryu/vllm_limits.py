@@ -9,6 +9,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
+from joryu.atomic_io import atomic_write_text
 from joryu.config import Config
 
 logger = logging.getLogger(__name__)
@@ -154,4 +155,4 @@ def write_probe_limits(
     }
     if extra:
         payload.update(extra)
-    p.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    atomic_write_text(p, json.dumps(payload, ensure_ascii=False, indent=2) + "\n")

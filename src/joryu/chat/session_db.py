@@ -146,8 +146,10 @@ class SessionDatabase:
             _ensure_schema(conn)
 
     def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self._db_path, timeout=30.0)
+        conn = sqlite3.connect(self._db_path, timeout=60.0)
         conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA busy_timeout=60000")
         return conn
 
     def upsert(self, session: ChatSession) -> None:

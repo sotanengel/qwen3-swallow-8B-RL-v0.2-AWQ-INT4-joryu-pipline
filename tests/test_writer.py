@@ -45,3 +45,19 @@ def test_flush_per_line(tmp_path: Path) -> None:
 
     lines = [json.loads(ln) for ln in p.read_text(encoding="utf-8").splitlines() if ln.strip()]
     assert len(lines) == 2
+
+
+def test_normalize_jsonl_line_strips_control_chars() -> None:
+    from joryu.writer import normalize_jsonl_line
+
+    assert normalize_jsonl_line("a\u0001b") == "ab"
+    assert normalize_jsonl_line("a\r\nb") == "a\nb"
+
+
+def test_write_strips_control_chars_from_values(tmp_path: Path) -> None:
+    p = tmp_path / "out.jsonl"
+    with JsonlAppendWriter(p) as w:
+        w.write({"prompt": "a\u0001b"})
+    line = p.read_text(encoding="utf-8").strip()
+    assert "\u0001" not in line
+    assert json.loads(line)["prompt"] == "ab"
