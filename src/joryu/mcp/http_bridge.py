@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
+import httpx
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
@@ -58,6 +59,10 @@ def create_http_app() -> FastAPI:
             return ToolResult(result=handler(body))
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except TimeoutError as exc:
+            raise HTTPException(status_code=504, detail=str(exc)) from exc
+        except httpx.HTTPError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     return app
 

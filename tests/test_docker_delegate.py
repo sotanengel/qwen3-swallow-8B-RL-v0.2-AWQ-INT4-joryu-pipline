@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from joryu.docker_delegate import build_docker_command, should_use_docker
 
 
@@ -123,6 +125,41 @@ def test_build_docker_command_mounts_tools_when_provided(tmp_path: Path) -> None
 
     flat = " ".join(cmd)
     assert f"{tools_path}:/app/tools.yaml:ro" in flat
+
+
+def test_run_in_docker_captures_stderr_on_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """returncode != 0 のとき subprocess stderr が capture され stderr に出力される。"""
+    from joryu import docker_delegate
+
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text("model: {}\ndistill:\n  styles_file: styles.yaml\n", encoding="utf-8")
+    (tmp_path / "src").mkdir()
+    (tmp_path / "data").mkdir()
+    (tmp_path / "styles.yaml").write_text("styles: {}\n", encoding="utf-8")
+
+    monkeypatch.chdir(tmp_path)
+
+    def fake_run(cmd, **kwargs):
+        assert kwargs.get("capture_output") is True
+        assert kwargs.get("text") is True
+        return type(
+            "Proc",
+            (),
+            {"returncode": 1, "stdout": "", "stderr": "docker-stderr-marker\n"},
+        )()
+
+    monkeypatch.setattr(docker_delegate.subprocess, "run", fake_run)
+    monkeypatch.setattr(docker_delegate, "stop_docker_container", lambda *_a, **_k: None)
+
+    rc = docker_delegate.run_in_docker(
+        config="config.yaml",
+        extra_args=["--count", "1"],
+    )
+    assert rc == 1
+    captured = capsys.readouterr()
+    assert "docker-stderr-marker" in captured.err
 
 
 def test_build_docker_command_allocates_tty_when_requested(tmp_path: Path) -> None:
