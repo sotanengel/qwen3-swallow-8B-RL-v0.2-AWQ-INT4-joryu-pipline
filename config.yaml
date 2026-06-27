@@ -60,6 +60,10 @@ search:
   top_k_default: 50
   snippet_chars: 200
 
+mcp:
+  enabled: false
+  url: ""
+
 export:
   out_dir: "exports"
   compression: "zstd"

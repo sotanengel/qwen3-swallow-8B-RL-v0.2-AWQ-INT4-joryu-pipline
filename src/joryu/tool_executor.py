@@ -123,3 +123,39 @@ def build_default_executor() -> RegistryToolExecutor:
     executor.register("fetch_url", _fetch_url_fn)
     executor.register("weather", _weather_fn)
     return executor
+
+
+_MCP_TOOL_NAMES = frozenset({"search", "weather", "fetch_url"})
+
+
+class McpToolExecutor:
+    """MCP 経由 (または同一実装への in-process bridge) のツール実行。"""
+
+    def __init__(self, *, url: str = "") -> None:
+        self._url = url.rstrip("/")
+        self._local = build_default_executor()
+
+    def run(self, call: ParsedToolCall) -> str:
+        if call.name == "calc":
+            return self._local.run(call)
+        if call.name not in _MCP_TOOL_NAMES:
+            raise KeyError(f"unknown tool: {call.name!r}")
+        if self._url:
+            return self._run_remote(call)
+        return self._local.run(call)
+
+    def _run_remote(self, call: ParsedToolCall) -> str:
+        import httpx
+
+        mcp_tool = "web_search" if call.name == "search" else call.name
+        with httpx.Client(timeout=httpx.Timeout(30.0)) as client:
+            resp = client.post(
+                f"{self._url}/tools/{mcp_tool}",
+                json=call.arguments,
+            )
+            resp.raise_for_status()
+            payload = resp.json()
+        if isinstance(payload, dict) and "result" in payload:
+            result = payload["result"]
+            return str(result)
+        return str(payload)
