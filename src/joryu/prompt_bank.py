@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
 from joryu.config import Config
 from joryu.io.jsonl import iter_jsonl
 from joryu.tools import ToolDefinition, merge_tools, resolve_tool_ids
+
+logger = logging.getLogger(__name__)
 
 _SAMPLING_KEYS = ("temperature", "top_p", "top_k", "max_tokens", "repetition_penalty")
 
@@ -19,17 +24,53 @@ _TOOL_USAGE_HINT = (
 )
 
 
-@dataclass
-class PromptRow:
+class PromptRow(BaseModel):
     """JSONL 1 行 = 1 プロンプト。`prompt` 以外は任意上書き。"""
+
+    model_config = ConfigDict(extra="ignore")
 
     prompt: str
     category: str | None = None
     style_id: str | None = None
     system_prompt: str | None = None
-    sampling: dict[str, Any] = field(default_factory=dict)
-    tool_ids: list[str] = field(default_factory=list)
-    tools: list[dict[str, Any]] = field(default_factory=list)
+    sampling: dict[str, Any] = Field(default_factory=dict)
+    tool_ids: list[str] = Field(default_factory=list)
+    tools: list[dict[str, Any]] = Field(default_factory=list)
+
+    @field_validator("prompt")
+    @classmethod
+    def _prompt_non_empty(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("prompt bank row missing required 'prompt' string")
+        return stripped
+
+    @field_validator("sampling", mode="before")
+    @classmethod
+    def _normalize_sampling(cls, value: Any) -> dict[str, Any]:
+        if value is None:
+            return {}
+        if not isinstance(value, dict):
+            raise ValueError("sampling must be a JSON object")
+        return {k: v for k, v in value.items() if k in _SAMPLING_KEYS}
+
+    @field_validator("tool_ids", mode="before")
+    @classmethod
+    def _normalize_tool_ids(cls, value: Any) -> list[str]:
+        if value is None:
+            return []
+        if not isinstance(value, list) or not all(isinstance(x, str) for x in value):
+            raise ValueError("tool_ids must be a list of strings")
+        return list(value)
+
+    @field_validator("tools", mode="before")
+    @classmethod
+    def _normalize_tools(cls, value: Any) -> list[dict[str, Any]]:
+        if value is None:
+            return []
+        if not isinstance(value, list) or not all(isinstance(x, dict) for x in value):
+            raise ValueError("tools must be a list of objects")
+        return list(value)
 
 
 @dataclass
@@ -43,39 +84,17 @@ class EffectiveSampling:
     tools: list[dict[str, Any]] = field(default_factory=list)
 
 
-def _parse_row(obj: dict[str, Any]) -> PromptRow:
-    if "prompt" not in obj or not isinstance(obj["prompt"], str) or not obj["prompt"].strip():
-        raise ValueError("prompt bank row missing required 'prompt' string")
-    # mode フィールドは #94 で蒸留側から削除。レガシー JSONL に含まれていても無視する。
-    sampling_raw = obj.get("sampling") or {}
-    if not isinstance(sampling_raw, dict):
-        raise ValueError("sampling must be a JSON object")
-    sampling = {k: v for k, v in sampling_raw.items() if k in _SAMPLING_KEYS}
-    tool_ids_raw = obj.get("tool_ids") or []
-    if not isinstance(tool_ids_raw, list) or not all(isinstance(x, str) for x in tool_ids_raw):
-        raise ValueError("tool_ids must be a list of strings")
-    tools_raw = obj.get("tools") or []
-    if not isinstance(tools_raw, list) or not all(isinstance(x, dict) for x in tools_raw):
-        raise ValueError("tools must be a list of objects")
-    return PromptRow(
-        prompt=obj["prompt"],
-        category=obj.get("category"),
-        style_id=obj.get("style_id"),
-        system_prompt=obj.get("system_prompt"),
-        sampling=sampling,
-        tool_ids=list(tool_ids_raw),
-        tools=list(tools_raw),
-    )
-
-
 def load_prompt_bank(path: str | Path) -> list[PromptRow]:
     """JSONL から PromptRow のリストを返す。空行・JSON 解釈失敗行はスキップ。"""
     p = Path(path)
     if not p.exists():
         raise FileNotFoundError(f"prompt bank not found: {p}")
     rows: list[PromptRow] = []
-    for obj in iter_jsonl(p):
-        rows.append(_parse_row(obj))
+    for obj in iter_jsonl(p, logger=logger, log_prefix="prompt bank"):
+        try:
+            rows.append(PromptRow.model_validate(obj))
+        except Exception as exc:
+            logger.warning("prompt bank skip invalid row: %s", exc)
     return rows
 
 

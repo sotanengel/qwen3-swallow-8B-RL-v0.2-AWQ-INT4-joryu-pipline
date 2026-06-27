@@ -72,11 +72,32 @@ def test_blank_and_garbage_lines_skipped(tmp_path: Path) -> None:
     assert [r.prompt for r in rows] == ["a", "b"]
 
 
+def test_invalid_row_skipped_with_warning(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    import logging
+
+    p = tmp_path / "b.jsonl"
+    _write_jsonl(
+        p,
+        [
+            '{"category":"x"}',
+            '{"prompt":"ok"}',
+            '{"prompt":""}',
+        ],
+    )
+    with caplog.at_level(logging.WARNING, logger="joryu.prompt_bank"):
+        rows = load_prompt_bank(p)
+    assert [r.prompt for r in rows] == ["ok"]
+    assert any("skip" in rec.message.lower() for rec in caplog.records)
+
+
 def test_missing_prompt_raises(tmp_path: Path) -> None:
+    """単独行の model_validate は失敗する（load では skip）。"""
+    from pydantic import ValidationError
+
     p = tmp_path / "b.jsonl"
     _write_jsonl(p, ['{"category":"x"}'])
-    with pytest.raises(ValueError, match="prompt"):
-        load_prompt_bank(p)
+    with pytest.raises(ValidationError):
+        PromptRow.model_validate({"category": "x"})
 
 
 def test_merge_with_defaults_fills_missing_fields() -> None:

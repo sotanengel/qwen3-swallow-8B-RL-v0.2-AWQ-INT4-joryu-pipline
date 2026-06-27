@@ -89,3 +89,14 @@ def test_search_post_empty_query_lists_all(client: TestClient) -> None:
     )
     assert res.status_code == 200
     assert res.json()["total"] == 2
+
+
+def test_search_post_invalid_limit_returns_422(client: TestClient) -> None:
+    res = client.post(
+        "/api/dashboard/search",
+        json={"query": "x", "limit": 0},
+    )
+    assert res.status_code == 422
+    detail = res.json()["detail"]
+    assert isinstance(detail, list)
+    assert detail[0]["loc"] == ["body", "limit"]
