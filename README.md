@@ -82,7 +82,21 @@ uv run joryu-down                # 停止 (volume は残す)
 uv run joryu-down --volumes      # HF キャッシュ含めて完全に削除
 ```
 
-`joryu-up` は git 作業ツリーの差分と、前回起動時の HEAD からのコミット差分（`git pull` 後など）から rebuild 対象を自動判定する。初回起動時は up 対象をすべて build する。**初回または `Dockerfile.vllm-base` 変更時**は `joryu-vllm-base:latest`（torch + git vLLM コンパイル）を先に build し、その後 `joryu:latest` はアプリ層のみ追加する（`src/` 変更だけなら数分）。BuildKit cache (`joryu-uv-cu130`) で wheel DL を再利用する。**Docker Desktop (WSL2) ではメモリ 16GB 以上を推奨** — vLLM コンパイル中に不足するとデーモンが落ちることがある。**api / joryu を up する場合**、`data/vllm_limits.json` が無い・設定変更・joryu イメージ rebuild 時は起動前に `joryu-probe-vllm` を自動実行する。`--detach` 時は compose up 後に API (`/api/health`)、vLLM デーモン (`:8100/health`)、dashboard が ready になるまで待機する（`--no-wait` でスキップ）。ジョブは常駐 `vllm serve` へ HTTP 接続し、GPU `docker run` を毎回起動しない。**デーモン稼働中に `joryu-distill --docker` を手動実行すると GPU OOM の恐れあり。**
+`joryu-up` は git 作業ツリーの差分と、前回起動時の HEAD からのコミット差分（`git pull` 後など）から rebuild 対象を自動判定する。初回起動時は up 対象をすべて build する。**初回または `Dockerfile.vllm-base` 変更時**は `joryu-vllm-base:latest`（torch + git vLLM コンパイル）を先に build する。BuildKit cache (`joryu-uv-cu130`) で wheel DL を再利用する。**Docker Desktop (WSL2) ではメモリ 16GB 以上を推奨** — vLLM コンパイル中に不足するとデーモンが落ちることがある。
+
+image 構成 (PR #330 で分離):
+
+| image | 用途 | 中身 |
+|---|---|---|
+| `joryu-vllm-base:latest` | torch + git vLLM コンパイル済みベース | `Dockerfile.vllm-base` |
+| `joryu` / `joryu-seed` サービス | 常駐 vLLM サーバ | `joryu-vllm-base:latest` を**直接参照** (src/ なし、`vllm serve` のみ) |
+| `joryu-job:latest` | api からの `compose run` でジョブ実行 | `Dockerfile.job` (vllm-base + src + uv sync) |
+| `joryu-judge:latest` | スクリーニング | `Dockerfile.judge` (llama.cpp + GGUF) |
+| `joryu-api:latest` | API / MCP | `Dockerfile.api` (vLLM なし軽量) |
+
+これにより `src/joryu/*` を変更しても rebuild されるのは `joryu-job:latest` のみで、常駐 `joryu` / `joryu-seed` は再起動も rebuild も不要になる。
+
+**api / joryu を up する場合**、`data/vllm_limits.json` が無い・設定変更・`joryu-job` イメージ rebuild 時は起動前に `joryu-probe-vllm` を自動実行する。`--detach` 時は compose up 後に API (`/api/health`)、vLLM デーモン (`:8100/health`)、dashboard が ready になるまで待機する（`--no-wait` でスキップ）。ジョブは常駐 `vllm serve` へ HTTP 接続し、GPU `docker run` を毎回起動しない。**デーモン稼働中に `joryu-distill --docker` を手動実行すると GPU OOM の恐れあり。**
 
 ### 推論バックエンド (`config.yaml` → `vllm.backend`)
 
