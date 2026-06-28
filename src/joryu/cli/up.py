@@ -40,6 +40,7 @@ from joryu.compose import (
     run_pre_browser_image_cleanup,
     run_up_startup_cleanup,
     staged_build_commands,
+    vllm_base_build_command,
 )
 from joryu.docker_delegate import stop_orphan_joryu_containers
 from joryu.preflight import (
@@ -53,6 +54,7 @@ from joryu.preflight import (
     ensure_vllm_limits,
     git_head_at,
     is_first_up_run,
+    needs_vllm_base_build,
     resolve_up_services,
     save_up_state,
     services_to_build,
@@ -144,9 +146,20 @@ def main(argv: list[str] | None = None) -> int:
         first_run=first_run,
         repo_root=repo_root,
     )
+    build_vllm_base = needs_vllm_base_build(
+        repo_root,
+        build_services,
+        first_run=first_run,
+        force_build=args.build,
+    )
 
     try:
-        check_disk_space(build_services, repo_root, force=args.force)
+        check_disk_space(
+            build_services,
+            repo_root,
+            force=args.force,
+            include_vllm_base=build_vllm_base,
+        )
     except PreflightError as exc:
         # 容量が足りなくても build 対象がある時は、まず dangling image / 旧 build cache を
         # 自動で回収して再チェックする (joryu-up が世代毎に積み上げた中間層が主因のため)。
@@ -154,7 +167,12 @@ def main(argv: list[str] | None = None) -> int:
             logger.warning("[joryu-up] 容量不足のため `docker builder prune` を試行します")
             run_builder_cache_cleanup()
             try:
-                check_disk_space(build_services, repo_root, force=args.force)
+                check_disk_space(
+                    build_services,
+                    repo_root,
+                    force=args.force,
+                    include_vllm_base=build_vllm_base,
+                )
             except PreflightError as exc2:
                 logger.error("%s", exc2)
                 return 1
@@ -186,7 +204,21 @@ def main(argv: list[str] | None = None) -> int:
         return rc
 
     if build_services:
-        for build_cmd in staged_build_commands(build_services):
+        compose_profiles = ["always", *(args.profiles or ["distill"])]
+        if build_vllm_base:
+            logger.info(
+                "[joryu-up] building joryu-vllm-base (torch + vLLM compile). "
+                "進捗は --progress=plain で stdout に流れます (時間が掛かる場合は "
+                "`bash scripts/build-vllm-base.sh` 単体でビルドし "
+                "`data/logs/build-vllm-base-<UTC>.log` を確認してください)",
+            )
+            rc = run(vllm_base_build_command(repo_root=str(repo_root)))
+            if rc != 0:
+                return rc
+        for build_cmd in staged_build_commands(
+            build_services,
+            profiles=compose_profiles,
+        ):
             rc = run(build_cmd)
             if rc != 0:
                 return rc

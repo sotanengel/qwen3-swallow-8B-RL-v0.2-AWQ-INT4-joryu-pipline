@@ -21,6 +21,7 @@ from typing import Any, Protocol
 DISK_REQUIRED_GB: dict[str, float] = {
     "dashboard": 2.0,
     "api": 1.0,
+    "joryu-vllm-base": 10.0,
     "joryu": 10.0,
     "joryu-seed": 10.0,
     "joryu-judge": 3.0,
@@ -29,6 +30,7 @@ DISK_REQUIRED_GB: dict[str, float] = {
 _JORYU_PATHS = frozenset(
     {
         "Dockerfile",
+        "Dockerfile.vllm-base",
         "Dockerfile.api",
         "pyproject.toml",
         "uv.lock",
@@ -102,6 +104,8 @@ class _InspectRunner(Protocol):
 
 
 JORYU_JOB_IMAGE = "joryu:latest"
+JORYU_VLLM_BASE_IMAGE = "joryu-vllm-base:latest"
+VLLM_BASE_DOCKERFILE = "Dockerfile.vllm-base"
 
 
 def docker_image_exists(
@@ -319,6 +323,39 @@ def resolve_up_services(
     return services
 
 
+def changed_paths_from_git(
+    repo_root: Path,
+    *,
+    git_runner: _GitRunner | None = None,
+) -> set[str]:
+    """rebuild 判定に使う変更ファイルパス (正規化済み)。"""
+    runner = git_runner or subprocess.run
+    head = git_head_at(repo_root, git_runner=runner)
+    state = load_up_state(repo_root)
+    paths = _paths_from_working_tree(repo_root, runner)
+    paths.update(_paths_since_last_up(repo_root, git_runner=runner, state=state, head=head))
+    return {p.replace("\\", "/") for p in paths}
+
+
+def needs_vllm_base_build(
+    repo_root: Path,
+    build_services: list[str],
+    *,
+    first_run: bool,
+    force_build: bool,
+    git_runner: _GitRunner | None = None,
+    inspect_runner: _InspectRunner | None = None,
+) -> bool:
+    """``joryu-vllm-base:latest`` の docker build が必要か。"""
+    if not ({"joryu", "joryu-seed"} & set(build_services)):
+        return False
+    if force_build or first_run:
+        return True
+    if not docker_image_exists(JORYU_VLLM_BASE_IMAGE, inspect_runner=inspect_runner):
+        return True
+    return VLLM_BASE_DOCKERFILE in changed_paths_from_git(repo_root, git_runner=git_runner)
+
+
 def services_to_build(
     up_services: list[str],
     changed: set[str],
@@ -387,9 +424,12 @@ def should_force_recreate(
     return False
 
 
-def required_disk_gb(services: list[str]) -> float:
+def required_disk_gb(services: list[str], *, include_vllm_base: bool = False) -> float:
     """ビルド対象サービスに必要なホスト空き容量 (GB)。"""
-    return sum(DISK_REQUIRED_GB[svc] for svc in services)
+    total = sum(DISK_REQUIRED_GB[svc] for svc in services)
+    if include_vllm_base and "joryu-vllm-base" not in services:
+        total += DISK_REQUIRED_GB["joryu-vllm-base"]
+    return total
 
 
 def check_disk_space(
@@ -397,6 +437,7 @@ def check_disk_space(
     repo_root: Path,
     *,
     force: bool,
+    include_vllm_base: bool = False,
     disk_usage_fn: Callable[[Path], tuple[int, int, int]] | None = None,
 ) -> None:
     """空き容量不足なら PreflightError。force=True ならスキップ。"""
@@ -405,12 +446,14 @@ def check_disk_space(
 
     usage = (disk_usage_fn or shutil.disk_usage)(repo_root)
     free_gb = usage[2] / (1024**3)
-    need_gb = required_disk_gb(services)
+    need_gb = required_disk_gb(services, include_vllm_base=include_vllm_base)
 
     if free_gb >= need_gb:
         return
 
     service_list = ", ".join(services)
+    if include_vllm_base:
+        service_list = f"joryu-vllm-base, {service_list}" if service_list else "joryu-vllm-base"
     msg = (
         f"[joryu-up] 空き容量不足: {free_gb:.1f} GB 空き / {need_gb:.0f} GB 必要 ({service_list})\n"
         "  Docker Desktop の Disk image size を確認するか、"

@@ -30,8 +30,8 @@ bash scripts/check.sh       # コミット前に必ず通す
 # 1. プロンプトCSVを取り込んで JSONL バンクへ
 uv run python scripts/migrate_csv_to_jsonl.py --src <path-to-csv> --dst data/prompts/training_prompts.jsonl
 
-# 2. Docker イメージビルド
-docker compose build joryu
+# 2. 起動 (初回は joryu-vllm-base の vLLM コンパイル含む — 30分〜1時間程度)
+uv run joryu-up --detach
 
 # 2.5. GPU 上限プローブ（`joryu-up` 起動時に未作成・設定変更・joryu rebuild 時は自動実行）
 # 手動のみ必要な場合:
@@ -82,7 +82,7 @@ uv run joryu-down                # 停止 (volume は残す)
 uv run joryu-down --volumes      # HF キャッシュ含めて完全に削除
 ```
 
-`joryu-up` は git 作業ツリーの差分と、前回起動時の HEAD からのコミット差分（`git pull` 後など）から rebuild 対象を自動判定する。初回起動時は up 対象をすべて build する。**api / joryu を up する場合**、`data/vllm_limits.json` が無い・設定変更・joryu イメージ rebuild 時は起動前に `joryu-probe-vllm` を自動実行する。`--detach` 時は compose up 後に API (`/api/health`)、vLLM デーモン (`:8100/health`)、dashboard が ready になるまで待機する（`--no-wait` でスキップ）。ジョブは常駐 `vllm serve` へ HTTP 接続し、GPU `docker run` を毎回起動しない。**デーモン稼働中に `joryu-distill --docker` を手動実行すると GPU OOM の恐れあり。**
+`joryu-up` は git 作業ツリーの差分と、前回起動時の HEAD からのコミット差分（`git pull` 後など）から rebuild 対象を自動判定する。初回起動時は up 対象をすべて build する。**初回または `Dockerfile.vllm-base` 変更時**は `joryu-vllm-base:latest`（torch + git vLLM コンパイル）を先に build し、その後 `joryu:latest` はアプリ層のみ追加する（`src/` 変更だけなら数分）。BuildKit cache (`joryu-uv-cu130`) で wheel DL を再利用する。**Docker Desktop (WSL2) ではメモリ 16GB 以上を推奨** — vLLM コンパイル中に不足するとデーモンが落ちることがある。**api / joryu を up する場合**、`data/vllm_limits.json` が無い・設定変更・joryu イメージ rebuild 時は起動前に `joryu-probe-vllm` を自動実行する。`--detach` 時は compose up 後に API (`/api/health`)、vLLM デーモン (`:8100/health`)、dashboard が ready になるまで待機する（`--no-wait` でスキップ）。ジョブは常駐 `vllm serve` へ HTTP 接続し、GPU `docker run` を毎回起動しない。**デーモン稼働中に `joryu-distill --docker` を手動実行すると GPU OOM の恐れあり。**
 
 ### 推論バックエンド (`config.yaml` → `vllm.backend`)
 

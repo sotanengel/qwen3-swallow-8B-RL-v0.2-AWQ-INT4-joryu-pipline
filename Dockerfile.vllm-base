@@ -1,0 +1,73 @@
+# joryu-vllm-base: torch + git vLLM コンパイル済みベース (joryu / joryu-seed 共通)。
+# 再ビルド: Dockerfile.vllm-base または vLLM pin 変更時のみ。
+# devel イメージ (nvcc 同梱) は fp8 KV 用 (ADR 0005)。
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS builder
+
+WORKDIR /app
+
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy
+
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev --no-install-project
+
+COPY src ./src
+COPY scripts ./scripts
+COPY config.yaml ./config.yaml
+COPY styles.yaml ./styles.yaml
+COPY tools.yaml ./tools.yaml
+COPY README.md ./README.md
+RUN uv sync --frozen --no-dev --extra api
+
+FROM nvidia/cuda:13.0.0-devel-ubuntu24.04
+
+LABEL org.opencontainers.image.source="https://github.com/sotanengel/qwen3-swallow-8B-RL-v0.2-AWQ-INT4-joryu-pipline"
+
+WORKDIR /app
+
+# ccache: vLLM 再ビルド時に CUDA カーネルの再コンパイルを抑える (試行 1 で
+# 同じ wheel を 2 時間掛けて 3 回ビルドする悲劇を防ぐ)。
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    ninja-build \
+    ccache \
+    curl \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /usr/local /usr/local
+COPY --from=builder /app /app
+
+# 並列度・対象 arch:
+#   - MAX_JOBS=4 / NVCC_THREADS=2: 12 論理 CPU の半分以下を上限。
+#     試行 1 の MAX_JOBS=1 は nvcc 直列で 2 時間+でも未完となった反省。
+#   - CMAKE_BUILD_PARALLEL_LEVEL=4: CMake 側も同じ並列度に揃える。
+#   - TORCH_CUDA_ARCH_LIST="8.6": RTX 3060 Ti 専用。vLLM 既定は SM_70-120
+#     全ビルドで 6〜8 倍の時間を浪費していた (config.yaml の想定 GPU は固定)。
+#   - CCACHE_DIR は BuildKit cache mount と組み合わせて再ビルド時の hit を狙う。
+ENV UV_TORCH_BACKEND=cu130 \
+    UV_HTTP_TIMEOUT=300 \
+    MAX_JOBS=4 \
+    NVCC_THREADS=2 \
+    CMAKE_BUILD_PARALLEL_LEVEL=4 \
+    TORCH_CUDA_ARCH_LIST="8.6" \
+    CCACHE_DIR=/root/.cache/ccache
+
+RUN --mount=type=cache,id=joryu-uv-cu130,sharing=locked,target=/root/.cache/uv \
+    uv pip install "torch>=2.12.1" --python /app/.venv/bin/python \
+       --index-url https://download.pytorch.org/whl/cu130
+
+# `-v` で setup.py bdist_wheel の進捗を stderr に出させる
+# (試行 1 では `Building vllm @ ...` の 1 行で進捗が完全に隠れていた)。
+RUN --mount=type=cache,id=joryu-uv-cu130,sharing=locked,target=/root/.cache/uv \
+    --mount=type=cache,id=joryu-ccache,sharing=locked,target=/root/.cache/ccache \
+    uv pip install -v "vllm @ git+https://github.com/vllm-project/vllm@v0.23.1rc0" \
+       --python /app/.venv/bin/python
+
+ENV PATH="/app/.venv/bin:/usr/local/bin:$PATH" \
+    PYTHONPATH=/app/src \
+    PYTHONUNBUFFERED=1 \
+    LD_LIBRARY_PATH=/usr/local/cuda/lib64:${LD_LIBRARY_PATH} \
+    VLLM_USE_DEEP_GEMM=0 \
+    VLLM_DEEP_GEMM_WARMUP=skip \
+    VLLM_USE_FLASHINFER_SAMPLER=0
