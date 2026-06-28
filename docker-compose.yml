@@ -21,10 +21,9 @@ x-joryu-gpu: &joryu_gpu
 services:
   joryu:
     profiles: [distill]
-    build:
-      context: .
-      dockerfile: Dockerfile.job
-    image: joryu:latest
+    # 常駐 vLLM サーバは joryu-vllm-base:latest を直接参照する (src/ を持たない)。
+    # ジョブ実行用イメージは joryu-job サービス側 (Dockerfile.job) で別 build する。
+    image: joryu-vllm-base:latest
     container_name: joryu
     <<: *joryu_gpu
     ports:
@@ -66,7 +65,7 @@ services:
 
   joryu-seed:
     profiles: [seed_gen]
-    image: joryu:latest
+    image: joryu-vllm-base:latest
     container_name: joryu-seed
     <<: *joryu_gpu
     ports:
@@ -119,6 +118,28 @@ services:
       timeout: 5s
       retries: 24
       start_period: 120s
+
+  # joryu-job: api コンテナが `docker compose run --rm joryu-job ...` で起動する
+  # ジョブ実行用イメージ。`profiles: [never]` で常駐 up 対象には含めない。
+  # src/ + uv sync を持つため、src 差分でこの image だけが rebuild される。
+  joryu-job:
+    profiles: [never]
+    build:
+      context: .
+      dockerfile: Dockerfile.job
+    image: joryu-job:latest
+    container_name: joryu-job
+    <<: *joryu_gpu
+    environment:
+      - JORYU_REPO_ROOT=/app
+    volumes:
+      - ./data:/app/data
+      - ./exports:/app/exports
+      - ./dashboard/public:/app/dashboard/public
+      - ./config.yaml:/app/config.yaml:ro
+      - ./styles.yaml:/app/styles.yaml:ro
+      - ./tools.yaml:/app/tools.yaml:ro
+      - hf-cache:/root/.cache/huggingface
 
   dashboard:
     profiles: [always]
