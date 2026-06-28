@@ -37,7 +37,7 @@ def test_compose_joryu_service_runs_vllm_serve() -> None:
 
 
 def test_dockerfile_cmd_runs_vllm_serve() -> None:
-    dockerfile = (REPO_ROOT / "Dockerfile").read_text(encoding="utf-8")
+    dockerfile = (REPO_ROOT / "Dockerfile.job").read_text(encoding="utf-8")
     assert 'CMD ["vllm", "serve"' in dockerfile
     assert "--enable-auto-tool-choice" in dockerfile
     assert "--tool-call-parser=hermes" in dockerfile

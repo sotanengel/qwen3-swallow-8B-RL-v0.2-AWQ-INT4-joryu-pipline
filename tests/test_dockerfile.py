@@ -8,7 +8,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_dockerfile_app_stage_from_vllm_base() -> None:
-    dockerfile = (REPO_ROOT / "Dockerfile").read_text(encoding="utf-8")
+    dockerfile = (REPO_ROOT / "Dockerfile.job").read_text(encoding="utf-8")
     assert "FROM joryu-vllm-base:latest" in dockerfile
     assert "git+https://github.com/vllm-project/vllm" not in dockerfile
     assert "vllm==0.23.0" not in dockerfile
@@ -51,7 +51,7 @@ def test_dockerfile_vllm_base_verbose_pip_install() -> None:
 
 
 def test_dockerfile_app_syncs_on_top_of_base_venv() -> None:
-    dockerfile = (REPO_ROOT / "Dockerfile").read_text(encoding="utf-8")
+    dockerfile = (REPO_ROOT / "Dockerfile.job").read_text(encoding="utf-8")
     assert "uv sync --frozen --no-dev --extra api" in dockerfile
     assert "COPY --from=builder /app/src /app/src" in dockerfile
 

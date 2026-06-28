@@ -29,7 +29,7 @@ DISK_REQUIRED_GB: dict[str, float] = {
 
 _JORYU_PATHS = frozenset(
     {
-        "Dockerfile",
+        "Dockerfile.job",
         "Dockerfile.vllm-base",
         "Dockerfile.api",
         "pyproject.toml",

@@ -1,4 +1,7 @@
-# joryu app コンテナ。joryu-vllm-base 上にアプリ層のみ追加 (vLLM 再コンパイル回避)。
+# joryu-job:latest: api からの `docker compose run --rm joryu-job ...` で起動される
+# ジョブ実行用イメージ。常駐 vLLM サーバ (joryu / joryu-seed) は joryu-vllm-base:latest
+# を直接参照するため、ここに src/uv sync があっても常駐側には影響しない。
+# joryu-vllm-base 上にアプリ層 (src + uv sync --extra api) のみ追加 (vLLM 再コンパイル回避)。
 FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS builder
 
 WORKDIR /app
