@@ -19,8 +19,10 @@ def test_dockerfile_vllm_base_has_torch_and_git_vllm() -> None:
     dockerfile = (REPO_ROOT / "Dockerfile.vllm-base").read_text(encoding="utf-8")
     assert "git+https://github.com/vllm-project/vllm@v0.23.1rc0" in dockerfile
     assert "torch>=" in dockerfile
+    assert "MAX_JOBS=1" in dockerfile
     assert "UV_TORCH_BACKEND=cu130" in dockerfile
     assert "id=joryu-uv-cu130,sharing=locked" in dockerfile
+    assert dockerfile.count("uv pip install") >= 2
 
 
 def test_dockerfile_app_syncs_on_top_of_base_venv() -> None:
