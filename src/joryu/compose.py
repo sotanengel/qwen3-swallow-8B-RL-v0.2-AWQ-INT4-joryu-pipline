@@ -7,15 +7,43 @@ import subprocess
 
 logger = logging.getLogger(__name__)
 
+VLLM_BASE_DOCKERFILE = "Dockerfile.vllm-base"
+JORYU_VLLM_BASE_IMAGE = "joryu-vllm-base:latest"
 
-def compose_build_command(*, services: list[str]) -> list[str]:
+
+def vllm_base_build_command(*, repo_root: str) -> list[str]:
+    """``docker build -f Dockerfile.vllm-base -t joryu-vllm-base:latest`` を構築。"""
+    return [
+        "docker",
+        "build",
+        "-f",
+        VLLM_BASE_DOCKERFILE,
+        "-t",
+        JORYU_VLLM_BASE_IMAGE,
+        repo_root,
+    ]
+
+
+def compose_build_command(
+    *,
+    services: list[str],
+    profiles: list[str] | None = None,
+) -> list[str]:
     """`docker compose build [services...]` を構築。"""
-    cmd: list[str] = ["docker", "compose", "build"]
+    cmd: list[str] = ["docker", "compose"]
+    if profiles:
+        for profile in profiles:
+            cmd.extend(["--profile", profile])
+    cmd.append("build")
     cmd.extend(services)
     return cmd
 
 
-def staged_build_commands(services: list[str]) -> list[list[str]]:
+def staged_build_commands(
+    services: list[str],
+    *,
+    profiles: list[str] | None = None,
+) -> list[list[str]]:
     """joryu GPU イメージを先に単独 build し、残りを並列 build する。
 
     並列 build 時の CPU 競合 (api/dashboard uv sync タイムアウト) を避ける。
@@ -26,9 +54,9 @@ def staged_build_commands(services: list[str]) -> list[list[str]]:
     light = [s for s in services if s not in heavy]
     cmds: list[list[str]] = []
     for svc in heavy:
-        cmds.append(compose_build_command(services=[svc]))
+        cmds.append(compose_build_command(services=[svc], profiles=profiles))
     if light:
-        cmds.append(compose_build_command(services=light))
+        cmds.append(compose_build_command(services=light, profiles=profiles))
     return cmds
 
 
