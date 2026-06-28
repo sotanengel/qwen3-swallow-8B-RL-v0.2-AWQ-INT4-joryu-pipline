@@ -54,14 +54,30 @@ ENV UV_TORCH_BACKEND=cu130 \
     CCACHE_DIR=/root/.cache/ccache
 
 RUN --mount=type=cache,id=joryu-uv-cu130,sharing=locked,target=/root/.cache/uv \
-    uv pip install "torch>=2.12.1" --python /app/.venv/bin/python \
+    uv pip install "torch==2.12.1+cu130" --python /app/.venv/bin/python \
        --index-url https://download.pytorch.org/whl/cu130
+
+# precompiled wheel / stale uv git wheel cache だと torch ABI mismatch になる (#342)。
+# VLLM_USE_PRECOMPILED=0 + --no-build-isolation でインストール済み torch に対して
+# 必ずソースビルドする。uv cache mount は vllm step では使わない (ccache のみ)。
+ENV VLLM_USE_PRECOMPILED=0
+
+# --no-build-isolation 時は build backend の依存を venv に事前投入する
+# (vllm pyproject.toml [build-system] requires を mirror)。
+RUN uv pip install \
+    "cmake>=3.26.1" \
+    "packaging>=24.2" \
+    "setuptools>=77.0.3,<81.0.0" \
+    "setuptools-scm>=8.0" \
+    "setuptools-rust>=1.9.0" \
+    wheel jinja2 \
+    --python /app/.venv/bin/python
 
 # `-v` で setup.py bdist_wheel の進捗を stderr に出させる
 # (試行 1 では `Building vllm @ ...` の 1 行で進捗が完全に隠れていた)。
-RUN --mount=type=cache,id=joryu-uv-cu130,sharing=locked,target=/root/.cache/uv \
-    --mount=type=cache,id=joryu-ccache,sharing=locked,target=/root/.cache/ccache \
-    uv pip install -v "vllm @ git+https://github.com/vllm-project/vllm@v0.23.1rc0" \
+RUN --mount=type=cache,id=joryu-ccache,sharing=locked,target=/root/.cache/ccache \
+    uv pip install -v --no-build-isolation --reinstall-package vllm \
+       "vllm @ git+https://github.com/vllm-project/vllm@v0.23.1rc0" \
        --python /app/.venv/bin/python
 
 ENV PATH="/app/.venv/bin:/usr/local/bin:$PATH" \
@@ -71,3 +87,5 @@ ENV PATH="/app/.venv/bin:/usr/local/bin:$PATH" \
     VLLM_USE_DEEP_GEMM=0 \
     VLLM_DEEP_GEMM_WARMUP=skip \
     VLLM_USE_FLASHINFER_SAMPLER=0
+
+RUN python -c "import torch; import vllm._C; print('vllm+torch OK', torch.__version__)"
