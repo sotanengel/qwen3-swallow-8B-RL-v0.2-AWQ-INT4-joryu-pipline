@@ -52,7 +52,7 @@ from joryu.preflight import (
         ("src/joryu/jobs/models.py", {"api", "mcp"}),
         ("src/joryu/api/app.py", {"api", "mcp"}),
         ("Dockerfile.api", {"api", "mcp"}),
-        ("Dockerfile", {"joryu", "joryu-seed"}),
+        ("Dockerfile.job", {"joryu", "joryu-seed"}),
         ("Dockerfile.vllm-base", {"joryu", "joryu-seed"}),
         ("Dockerfile.judge", {"joryu-judge"}),
         ("pyproject.toml", {"joryu", "joryu-seed"}),

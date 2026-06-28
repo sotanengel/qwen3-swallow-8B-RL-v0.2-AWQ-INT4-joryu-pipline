@@ -23,7 +23,7 @@ services:
     profiles: [distill]
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.job
     image: joryu:latest
     container_name: joryu
     <<: *joryu_gpu
