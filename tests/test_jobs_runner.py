@@ -64,7 +64,7 @@ def test_build_job_command_api_delegate(tmp_path: Path, monkeypatch) -> None:
     record = JobRecord.create(spec)
     cmd = build_job_command(tmp_path, record)
     assert cmd[0:3] == ["/usr/bin/docker", "run", "--rm"]
-    assert "joryu:latest" in cmd
+    assert "joryu-job:latest" in cmd
     assert "hf-cache:/root/.cache/huggingface" in cmd
     assert "joryu.cli.distill" in cmd
     assert "--count" in cmd and "3" in cmd
@@ -501,7 +501,7 @@ def test_run_subprocess_logged_passes_process_to_callback(tmp_path: Path) -> Non
 
 
 def test_inject_container_name_docker_run() -> None:
-    cmd = ["docker", "run", "--rm", "--gpus", "all", "joryu:latest", "python"]
+    cmd = ["docker", "run", "--rm", "--gpus", "all", "joryu-job:latest", "python"]
     result = _inject_container_name(cmd, "joryu-job-abc")
     assert result == [
         "docker",
@@ -511,7 +511,7 @@ def test_inject_container_name_docker_run() -> None:
         "joryu-job-abc",
         "--gpus",
         "all",
-        "joryu:latest",
+        "joryu-job:latest",
         "python",
     ]
 
@@ -526,7 +526,7 @@ def test_inject_container_name_docker_compose_run() -> None:
         "/repo",
         "run",
         "--rm",
-        "joryu",
+        "joryu-job",
         "joryu-distill",
     ]
     result = _inject_container_name(cmd, "joryu-job-xyz")
@@ -541,7 +541,7 @@ def test_inject_container_name_docker_compose_run() -> None:
         "--rm",
         "--name",
         "joryu-job-xyz",
-        "joryu",
+        "joryu-job",
         "joryu-distill",
     ]
 

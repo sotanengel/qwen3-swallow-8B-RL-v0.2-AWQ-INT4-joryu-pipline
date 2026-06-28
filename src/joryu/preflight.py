@@ -750,8 +750,8 @@ def ensure_vllm_limits(
 
     if not docker_image_exists(JORYU_JOB_IMAGE):
         raise PreflightError(
-            "[joryu-up] joryu:latest が見つかりません。"
-            " VRAM プローブの前に joryu イメージを build してください。"
+            "[joryu-up] joryu-job:latest が見つかりません。"
+            " VRAM プローブの前に joryu-job イメージを build してください。"
         )
 
     from joryu.docker_delegate import stop_orphan_joryu_containers
