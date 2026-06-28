@@ -73,6 +73,42 @@ def test_vllm_health_body_ready_rejects_json_body() -> None:
     assert vllm_health_body_ready(body) is False
 
 
+def test_llama_server_health_ready() -> None:
+    from joryu.orchestrator.profile import ProfileSpec
+    from joryu.readiness import is_profile_healthy, llama_server_health_ready
+
+    assert llama_server_health_ready(json.dumps({"status": "ok"}).encode()) is True
+    assert llama_server_health_ready(b"{}") is False
+
+    spec = ProfileSpec(
+        name="screening",
+        service="joryu-judge",
+        port=8080,
+        kind="llama_server",
+    )
+
+    def _urlopen(url: str, timeout: int = 0) -> _FakeResponse:
+        return _FakeResponse(200, json.dumps({"status": "ok"}).encode())
+
+    assert is_profile_healthy(spec, urlopen_fn=_urlopen) is True
+
+
+def test_wait_for_profile_daemon_success() -> None:
+    from joryu.orchestrator.profile import ProfileSpec
+    from joryu.readiness import wait_for_profile_daemon
+
+    spec = ProfileSpec(name="distill", service="joryu", port=8100)
+    calls = {"n": 0}
+
+    def _urlopen(url: str, timeout: int = 0) -> _FakeResponse:
+        calls["n"] += 1
+        if calls["n"] < 2:
+            raise urllib.error.URLError("down")
+        return _FakeResponse(200, b"")
+
+    assert wait_for_profile_daemon(spec, urlopen_fn=_urlopen, poll_interval_s=0, timeout_s=1)
+
+
 def test_wait_for_vllm_health_accepts_empty_200_body() -> None:
     calls = {"n": 0}
 

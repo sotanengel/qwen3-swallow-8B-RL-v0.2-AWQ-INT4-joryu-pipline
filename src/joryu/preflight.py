@@ -22,6 +22,8 @@ DISK_REQUIRED_GB: dict[str, float] = {
     "dashboard": 2.0,
     "api": 1.0,
     "joryu": 10.0,
+    "joryu-seed": 10.0,
+    "joryu-judge": 3.0,
 }
 
 _JORYU_PATHS = frozenset(
@@ -67,7 +69,7 @@ _DASHBOARD_RUNTIME_PATHS = frozenset(
     }
 )
 
-_COMPOSE_SERVICE_ORDER = ("dashboard", "mcp", "api", "joryu")
+_COMPOSE_SERVICE_ORDER = ("dashboard", "mcp", "api", "joryu", "joryu-seed", "joryu-judge")
 _DEFAULT_UP = ("dashboard", "api", "joryu")
 _UP_STATE_REL = Path("data") / ".joryu" / "up-state.json"
 
@@ -128,13 +130,15 @@ def path_affects_service(path: str) -> set[str]:
     if normalized.startswith("src/joryu/mcp/"):
         return {"api", "mcp"}
     if normalized == "docker-compose.yml":
-        return {"api", "joryu", "mcp"}
+        return {"api", "joryu", "joryu-seed", "joryu-judge", "mcp"}
+    if normalized == "Dockerfile.judge":
+        return {"joryu-judge"}
     if normalized in _JORYU_JOB_RUNTIME_PATHS:
         return {"api", "joryu"}
     if normalized.startswith(_DASHBOARD_PREFIX):
         return {"dashboard"}
     if normalized in _JORYU_PATHS or normalized.startswith(_JORYU_PREFIXES):
-        return {"joryu"}
+        return {"joryu", "joryu-seed"}
     return set()
 
 
@@ -354,6 +358,11 @@ def services_to_build(
         candidate_set.discard("mcp")
         if "api" in up_services:
             candidate_set.add("api")
+
+    # lazy GPU サービス: 初回 / 強制 build 時は up 対象外でもイメージを構築
+    if first_run or force_build:
+        for lazy_svc in ("joryu-seed", "joryu-judge"):
+            candidate_set.add(lazy_svc)
 
     return [svc for svc in _COMPOSE_SERVICE_ORDER if svc in candidate_set]
 

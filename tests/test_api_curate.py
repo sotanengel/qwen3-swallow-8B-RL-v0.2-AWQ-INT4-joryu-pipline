@@ -50,10 +50,9 @@ def test_curate_options(client: TestClient) -> None:
     assert "defaults" in body
 
 
-def test_create_curate_job_without_vllm(client: TestClient, monkeypatch) -> None:
-    monkeypatch.setattr("joryu.api.routes.curate.is_vllm_daemon_ready", lambda **_: False)
+def test_create_curate_job_without_vllm(client: TestClient) -> None:
     resp = client.post("/api/curate/jobs", json={"skip_llm": False})
-    assert resp.status_code == 400
+    assert resp.status_code == 201
 
     resp = client.post("/api/curate/jobs", json={"skip_llm": True})
     assert resp.status_code == 201
@@ -62,8 +61,7 @@ def test_create_curate_job_without_vllm(client: TestClient, monkeypatch) -> None
     assert job["spec"]["skip_llm"] is True
 
 
-def test_create_screening_prompt_bank_job(client: TestClient, repo_root: Path, monkeypatch) -> None:
-    monkeypatch.setattr("joryu.api.routes.curate.is_vllm_daemon_ready", lambda **_: False)
+def test_create_screening_prompt_bank_job(client: TestClient, repo_root: Path) -> None:
     bank = repo_root / "data" / "prompts" / "training_prompts.jsonl"
     bank.parent.mkdir(parents=True)
     bank.write_text('{"prompt":"テスト質問","domain":"general_qa"}\n', encoding="utf-8")
@@ -84,19 +82,17 @@ def test_create_screening_prompt_bank_job(client: TestClient, repo_root: Path, m
     assert job["spec"]["src"] == "data/prompts/training_prompts.jsonl"
 
 
-def test_list_curate_jobs(client: TestClient, monkeypatch) -> None:
-    monkeypatch.setattr("joryu.api.routes.curate.is_vllm_daemon_ready", lambda **_: False)
+def test_list_curate_jobs(client: TestClient) -> None:
     created = client.post("/api/curate/jobs", json={"skip_llm": True}).json()
     listed = client.get("/api/curate/jobs").json()
     assert len(listed) == 1
     assert listed[0]["id"] == created["id"]
 
 
-def test_curate_job_logs_and_cancel(client: TestClient, monkeypatch) -> None:
+def test_curate_job_logs_and_cancel(client: TestClient) -> None:
     from joryu.jobs.models import CurateJobSpec, JobRecord
     from joryu.jobs.runner import JobRunner
 
-    monkeypatch.setattr("joryu.api.routes.curate.is_vllm_daemon_ready", lambda **_: False)
     runner: JobRunner = client.app.state.job_runner
     store = client.app.state.job_store
 

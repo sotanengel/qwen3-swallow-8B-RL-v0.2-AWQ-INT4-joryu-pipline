@@ -13,7 +13,7 @@ from joryu.api.deps import (
     get_executor,
     get_session_store,
     get_stream_chat_client,
-    require_idle,
+    require_chat_profile,
 )
 from joryu.chat.service import ChatService
 from joryu.chat.session import ChatSession, ChatSessionStore
@@ -180,7 +180,7 @@ _SSE_HEADERS = {
 
 @router.post(
     "/sessions/{session_id}/messages",
-    dependencies=[Depends(require_idle)],
+    dependencies=[Depends(require_chat_profile)],
 )
 def post_all_messages(
     session_id: str,
@@ -206,7 +206,7 @@ def post_all_messages(
 
 @router.post(
     "/sessions/{session_id}/columns/{style_id}/messages",
-    dependencies=[Depends(require_idle)],
+    dependencies=[Depends(require_chat_profile)],
 )
 def post_column_message(
     session_id: str,
@@ -230,7 +230,7 @@ def post_column_message(
 
 @router.post(
     "/sessions/{session_id}/_probe",
-    dependencies=[Depends(require_idle)],
+    dependencies=[Depends(require_chat_profile)],
 )
 def probe_idle(session_id: str, service: ChatServiceDep) -> dict[str, str]:
     """409 ガード確認用。"""

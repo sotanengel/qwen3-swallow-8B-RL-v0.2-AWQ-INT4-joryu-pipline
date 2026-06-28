@@ -206,3 +206,19 @@ responses.high_quality.jsonl              ← SFT 教師データ
 | `STYLE-FMT` | prose/qa_short/dialog で markdown 記号・箇条書き |
 
 CI 検証: [`scripts/verify_distill_quality.sh`](../scripts/verify_distill_quality.sh)（[`verify_pipeline.sh`](../scripts/verify_pipeline.sh) から呼び出し）。回帰テスト: [`tests/test_distill_quality_regression.py`](../tests/test_distill_quality_regression.py) — [#237](https://github.com/sotanengel/qwen3-swallow-8B-RL-v0.2-AWQ-INT4-joryu-pipline/issues/237).
+
+## マルチ LLM ModelProfile FSM (8GB GPU 排他)
+
+`config.yaml` の `models.profiles[]` が compose service / port / health / kind の単一情報源。
+`ModelOrchestrator` (API プロセス内シングルトン) が FSM で GPU profile を排他切替する。
+
+| Profile | Compose service | 用途 |
+|---|---|---|
+| `distill` | `joryu` (vLLM Qwen3) | 蒸留・チャット |
+| `seed_gen` | `joryu-seed` (vLLM Qwen2.5) | プロンプト生成 |
+| `screening` | `joryu-judge` (llama-server GGUF) | 健全性 judge |
+
+- `joryu-up` は `--profile always --profile distill` で api/dashboard + 蒸留 LLM を起動
+- seed_gen / screening はジョブ enqueue 時に lazy 起動 (`JobRunner.ensure_profile`)
+- 状態は `GET /api/system/models` と SSE `/api/system/models/stream` で配信
+- 詳細: [ADR-0005](adr/0005-multi-llm-profiles.md)

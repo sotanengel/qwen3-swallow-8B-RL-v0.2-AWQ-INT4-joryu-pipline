@@ -15,15 +15,37 @@ def compose_build_command(*, services: list[str]) -> list[str]:
     return cmd
 
 
+def staged_build_commands(services: list[str]) -> list[list[str]]:
+    """joryu GPU イメージを先に単独 build し、残りを並列 build する。
+
+    並列 build 時の CPU 競合 (api/dashboard uv sync タイムアウト) を避ける。
+    """
+    if not services:
+        return []
+    heavy = [s for s in services if s in ("joryu", "joryu-seed", "joryu-judge")]
+    light = [s for s in services if s not in heavy]
+    cmds: list[list[str]] = []
+    for svc in heavy:
+        cmds.append(compose_build_command(services=[svc]))
+    if light:
+        cmds.append(compose_build_command(services=light))
+    return cmds
+
+
 def compose_up_command(
     *,
     services: list[str] | None,
     detach: bool,
     build: bool,
     force_recreate: bool = False,
+    profiles: list[str] | None = None,
 ) -> list[str]:
     """`docker compose up [--build] [--force-recreate] [-d] [services...]` を構築。"""
-    cmd: list[str] = ["docker", "compose", "up"]
+    cmd: list[str] = ["docker", "compose"]
+    if profiles:
+        for profile in profiles:
+            cmd.extend(["--profile", profile])
+    cmd.append("up")
     if build:
         cmd.append("--build")
     if force_recreate:

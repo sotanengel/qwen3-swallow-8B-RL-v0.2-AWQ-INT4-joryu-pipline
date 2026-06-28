@@ -173,6 +173,29 @@ mcp:
     assert cfg.mcp.timeout.read == pytest.approx(6.0)
 
 
+def test_load_config_models_profiles(tmp_path: Path) -> None:
+    path = tmp_path / "config.yaml"
+    path.write_text(
+        """
+models:
+  auto_restore: distill
+  profiles:
+    - name: distill
+      service: joryu
+      port: 8100
+    - name: seed_gen
+      service: joryu-seed
+      port: 8110
+""".strip(),
+        encoding="utf-8",
+    )
+    cfg = load_config(path)
+    assert cfg.models.auto_restore == "distill"
+    assert len(cfg.models.profiles) == 2
+    assert cfg.models.profiles[0].name == "distill"
+    assert cfg.models.profiles[1].port == 8110
+
+
 def test_load_config_tools_weather(tmp_path: Path) -> None:
     path = tmp_path / "tools.yaml"
     path.write_text(

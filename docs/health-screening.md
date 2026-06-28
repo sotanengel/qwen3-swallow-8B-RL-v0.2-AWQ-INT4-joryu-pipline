@@ -8,7 +8,15 @@
 - 既定 Judge: **Llama-3.1-Swallow-8B-Instruct-v0.5** (Qwen3 セルフバイアス回避)
 - 実行環境目安: RTX 3060 Ti (VRAM 8GB) + Q4_K_M GGUF
 
-## Llama-Swallow judge の起動 (llama-server)
+## Llama-Swallow judge の起動
+
+### 推奨: compose profile 自動起動 (ブラウザ / API ジョブ)
+
+`joryu-up --detach` 後、ダッシュボード `/prompts` からスクリーニング curate ジョブを投入すると、
+`ModelOrchestrator` が compose profile `screening` の `joryu-judge` (llama-server + GGUF) を lazy 起動する。
+`config.yaml` の `curate.screening.judge.base_url` はコンテナ内 URL `http://joryu-judge:8080` を指す。
+
+### 手動: llama-server (開発・デバッグ)
 
 1. GGUF をダウンロード (例: Hugging Face から Q4_K_M)
 2. llama.cpp の `llama-server` を起動:

@@ -165,6 +165,63 @@ def is_vllm_daemon_ready(**kwargs: Any) -> bool:
         return False
 
 
+def llama_server_health_ready(body: bytes) -> bool:
+    try:
+        data = json.loads(body.decode("utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return False
+    return data.get("status") == "ok"
+
+
+def is_profile_healthy(spec: Any, *, urlopen_fn: _UrlOpen | None = None) -> bool:
+    """ProfileSpec の kind に応じて 1 回 health チェック。"""
+    from joryu.orchestrator.profile import ProfileSpec
+
+    if not isinstance(spec, ProfileSpec):
+        return False
+    url = spec.health_url()
+    opener = urlopen_fn or urllib.request.urlopen
+    try:
+        with opener(url, timeout=2) as resp:
+            if resp.status != 200:
+                return False
+            body = resp.read()
+            if spec.kind == "llama_server":
+                return llama_server_health_ready(body)
+            return vllm_health_body_ready(body)
+    except (urllib.error.URLError, OSError, TimeoutError, ValueError):
+        return False
+
+
+def is_profile_ready(profile_name: str, profiles: dict[Any, Any], **kwargs: Any) -> bool:
+    """名前指定で profile ready を判定。"""
+    from joryu.orchestrator.profile import ModelProfile
+
+    try:
+        mp = ModelProfile(profile_name)
+    except ValueError:
+        return False
+    spec = profiles.get(mp)
+    if spec is None:
+        return False
+    return is_profile_healthy(spec, urlopen_fn=kwargs.get("urlopen_fn"))
+
+
+def wait_for_profile_daemon(spec: Any, **kwargs: Any) -> bool:
+    """ProfileSpec の health が ready になるまで待つ。"""
+    timeout_s = kwargs.pop("timeout_s", DEFAULT_READY_TIMEOUT_S)
+    poll_interval_s = kwargs.pop("poll_interval_s", DEFAULT_POLL_INTERVAL_S)
+    urlopen_fn = kwargs.get("urlopen_fn")
+    deadline = time.monotonic() + timeout_s
+    attempt = 0
+    while time.monotonic() < deadline:
+        if is_profile_healthy(spec, urlopen_fn=urlopen_fn):
+            return True
+        time.sleep(_poll_backoff_delay(attempt, poll_interval_s=poll_interval_s))
+        attempt += 1
+    return False
+
+
 def wait_for_up_services(
     up_services: list[str],
     *,

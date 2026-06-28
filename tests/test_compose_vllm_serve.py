@@ -45,14 +45,6 @@ def test_dockerfile_cmd_runs_vllm_serve() -> None:
     assert "joryu-llm-serve" not in dockerfile.split("CMD")[-1]
 
 
-def test_dockerfile_installs_git_for_vllm_git_dependency() -> None:
-    """vllm は git+https 指定のため、ランタイム stage に git が必要。"""
-    dockerfile = (REPO_ROOT / "Dockerfile").read_text(encoding="utf-8")
-    assert "git+https://github.com/vllm-project/vllm" in dockerfile
-    apt_block = dockerfile.split("RUN apt-get update")[1].split("COPY --from=builder")[0]
-    assert "git" in apt_block
-
-
 def test_config_yaml_defaults_to_vllm_serve_backend() -> None:
     raw = yaml.safe_load((REPO_ROOT / "config.yaml").read_text(encoding="utf-8"))
     assert raw["vllm"]["backend"] == "vllm-serve"

@@ -31,7 +31,6 @@ from pathlib import Path
 
 from joryu.browser import open_dashboard_when_ready, schedule_open_dashboard
 from joryu.compose import (
-    compose_build_command,
     compose_down_command,
     compose_up_command,
     image_prune_command,
@@ -40,6 +39,7 @@ from joryu.compose import (
     run_builder_cache_cleanup,
     run_pre_browser_image_cleanup,
     run_up_startup_cleanup,
+    staged_build_commands,
 )
 from joryu.docker_delegate import stop_orphan_joryu_containers
 from joryu.preflight import (
@@ -108,6 +108,13 @@ def build_parser() -> argparse.ArgumentParser:
         "--no-wait",
         action="store_true",
         help="compose up 後の API / vLLM / dashboard ready 待ちをスキップ",
+    )
+    p.add_argument(
+        "--profile",
+        action="append",
+        dest="profiles",
+        metavar="NAME",
+        help="compose profile (既定: distill)。複数指定可。",
     )
     return p
 
@@ -179,9 +186,10 @@ def main(argv: list[str] | None = None) -> int:
         return rc
 
     if build_services:
-        rc = run(compose_build_command(services=build_services))
-        if rc != 0:
-            return rc
+        for build_cmd in staged_build_commands(build_services):
+            rc = run(build_cmd)
+            if rc != 0:
+                return rc
         # 旧ビルドの dangling image / 中間キャッシュ層を即時回収。
         run_build_artifact_cleanup()
 
@@ -207,6 +215,7 @@ def main(argv: list[str] | None = None) -> int:
             build_services,
             first_run=first_run,
         ),
+        profiles=["always", *(args.profiles or ["distill"])],
     )
     open_browser = _should_open_browser(args, up_services)
     pre_browser_cleanup = run_pre_browser_image_cleanup if build_services else None
@@ -243,6 +252,11 @@ def main(argv: list[str] | None = None) -> int:
     if not args.no_wait and args.detach:
         if not wait_for_up_services(up_services):
             return 1
+
+    if "joryu" in up_services:
+        from joryu.orchestrator.factory import build_orchestrator
+
+        build_orchestrator(repo_root).init_distill_active()
 
     if open_browser and args.detach:
         open_dashboard_when_ready(pre_open_fn=pre_browser_cleanup)

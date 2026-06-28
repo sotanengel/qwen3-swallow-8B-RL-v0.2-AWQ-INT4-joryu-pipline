@@ -120,6 +120,7 @@ class CurateJobSpec:
     screening: bool = False
     prompt_bank: bool = False
     src: str = ""
+    judge_base_url: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)
@@ -135,6 +136,7 @@ class CurateJobSpec:
             screening=bool(data.get("screening", False)),
             prompt_bank=bool(data.get("prompt_bank", False)),
             src=str(data.get("src") or ""),
+            judge_base_url=str(data.get("judge_base_url") or ""),
         )
 
     def to_curate_argv(self) -> list[str]:
@@ -150,6 +152,8 @@ class CurateJobSpec:
             argv.append("--prompt-bank")
         if self.src:
             argv.extend(["--src", self.src])
+        if self.judge_base_url:
+            argv.extend(["--judge-base-url", self.judge_base_url])
         return argv
 
 
@@ -167,6 +171,7 @@ class SeedGenJobSpec:
     resume: bool = False
     sim_threshold: float = 0.85
     batch_size: int = 8
+    llm_base_url: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -184,6 +189,7 @@ class SeedGenJobSpec:
             resume=bool(data.get("resume", False)),
             sim_threshold=float(data.get("sim_threshold", 0.85)),
             batch_size=int(data.get("batch_size", 8)),
+            llm_base_url=str(data.get("llm_base_url") or ""),
         )
 
     def to_seed_gen_argv(self) -> list[str]:
@@ -203,6 +209,8 @@ class SeedGenJobSpec:
             argv.append("--dry-run")
         if self.resume:
             argv.append("--resume")
+        if self.llm_base_url:
+            argv.extend(["--llm-base-url", self.llm_base_url])
         return argv
 
 
