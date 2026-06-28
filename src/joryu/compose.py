@@ -117,7 +117,7 @@ def builder_prune_command() -> list[str]:
     `-a` も付けると「current image 群から参照されていない全 cache」を
     削除でき、世代を跨いだ累積を断ち切れる。
 
-    build 直後に呼ぶ前提なので、現行 `joryu:latest` 等の参照層は残り、
+    build 直後に呼ぶ前提なので、現行 `joryu-job:latest` 等の参照層は残り、
     次回の incremental build は通常通り cache hit する。
     """
     return ["docker", "builder", "prune", "-a", "-f"]
@@ -126,7 +126,7 @@ def builder_prune_command() -> list[str]:
 def image_prune_command() -> list[str]:
     """`docker image prune -f`。タグなし (dangling) イメージのみ削除する。
 
-    タグ付きで稼働中の `joryu:latest` などは影響を受けない。
+    タグ付きで稼働中の `joryu-vllm-base:latest` / `joryu-job:latest` などは影響を受けない。
     disk preflight が落ちた時の自動 reclaim 用。
     """
     return ["docker", "image", "prune", "-f"]

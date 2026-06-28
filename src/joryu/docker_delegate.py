@@ -11,10 +11,12 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-DEFAULT_IMAGE = "joryu:latest"
+# ジョブ実行用 image (api コンテナが `docker compose run --rm joryu-job ...` で起動)。
+# 常駐 vLLM サーバ (joryu / joryu-seed) は `joryu-vllm-base:latest` を直接参照する。
+DEFAULT_IMAGE = "joryu-job:latest"
 JORYU_PROBE_CONTAINER = "joryu-probe-vllm"
 JORYU_DISTILL_HOST_CONTAINER = "joryu-distill-host"
-JORYU_COMPOSE_CONTAINER_NAMES = frozenset({"joryu", "joryu-api", "joryu-dashboard"})
+JORYU_COMPOSE_CONTAINER_NAMES = frozenset({"joryu", "joryu-seed", "joryu-api", "joryu-dashboard"})
 JORYU_MANAGED_PREFIXES = ("joryu-job-", "joryu-probe-", "joryu-distill-")
 
 logger = logging.getLogger(__name__)
@@ -54,7 +56,7 @@ def stop_orphan_joryu_containers(
     image: str = DEFAULT_IMAGE,
     docker_run: Callable[..., Any] | None = None,
 ) -> None:
-    """Docker 自動命名 (intelligent_jemison 等) の joryu:latest 一時コンテナを停止。"""
+    """Docker 自動命名 (intelligent_jemison 等) の joryu-job:latest 一時コンテナを停止。"""
     runner = docker_run or subprocess.run
     try:
         proc = runner(
