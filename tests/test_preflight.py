@@ -40,25 +40,26 @@ from joryu.preflight import (
 @pytest.mark.parametrize(
     ("path", "expected"),
     [
-        ("src/joryu/cli/up.py", {"joryu"}),
+        ("src/joryu/cli/up.py", {"joryu", "joryu-seed"}),
         ("src/joryu/distill.py", {"api", "joryu"}),
         ("src/joryu/preflight.py", {"api", "joryu"}),
         ("src/joryu/jobs/runner.py", {"api", "mcp"}),
         ("src/joryu/docker_delegate.py", {"api", "joryu"}),
         ("src/joryu/docker_runtime.py", {"api", "joryu"}),
         ("src/joryu/stats.py", {"api", "joryu"}),
-        ("docker-compose.yml", {"api", "joryu", "mcp"}),
+        ("docker-compose.yml", {"api", "joryu", "joryu-seed", "joryu-judge", "mcp"}),
         ("src/joryu/jobs/models.py", {"api", "mcp"}),
         ("src/joryu/api/app.py", {"api", "mcp"}),
         ("Dockerfile.api", {"api", "mcp"}),
-        ("Dockerfile", {"joryu"}),
-        ("pyproject.toml", {"joryu"}),
+        ("Dockerfile", {"joryu", "joryu-seed"}),
+        ("Dockerfile.judge", {"joryu-judge"}),
+        ("pyproject.toml", {"joryu", "joryu-seed"}),
         ("dashboard/src/app/page.tsx", {"dashboard"}),
         ("dashboard/Dockerfile", {"dashboard"}),
         ("dashboard/public/.gitkeep", {"dashboard"}),
         ("dashboard/public/responses.jsonl", set()),
         ("dashboard/public/stats.json", set()),
-        ("README.md", {"joryu"}),
+        ("README.md", {"joryu", "joryu-seed"}),
         ("docs/architecture.md", set()),
     ],
 )
@@ -79,7 +80,7 @@ def test_changed_services_from_git_merges_sources() -> None:
         return _GitResult(stdout="")
 
     changed = changed_services_from_git(Path("."), git_runner=_fake_git)
-    assert changed == {"joryu", "dashboard"}
+    assert changed == {"joryu", "joryu-seed", "dashboard"}
 
 
 def test_changed_services_includes_commits_since_last_up(tmp_path: Path) -> None:
@@ -107,7 +108,7 @@ def test_services_to_build_first_run_builds_all_up_targets() -> None:
         set(),
         no_build=False,
         first_run=True,
-    ) == ["dashboard", "api", "joryu"]
+    ) == ["dashboard", "api", "joryu", "joryu-seed", "joryu-judge"]
 
 
 def test_services_to_build_builds_joryu_when_image_missing() -> None:
@@ -186,7 +187,7 @@ def test_services_to_build_force_build() -> None:
         set(),
         no_build=False,
         force_build=True,
-    ) == ["dashboard", "api", "joryu"]
+    ) == ["dashboard", "api", "joryu", "joryu-seed", "joryu-judge"]
 
 
 def test_resolve_up_services_default_no_changes() -> None:
@@ -266,6 +267,8 @@ def test_services_to_build_intersection() -> None:
         "dashboard",
         "api",
         "joryu",
+        "joryu-seed",
+        "joryu-judge",
     ]
 
 

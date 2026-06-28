@@ -1,0 +1,28 @@
+# joryu-judge: llama.cpp server for screening profile (ADR 0005).
+FROM nvidia/cuda:13.0.0-runtime-ubuntu24.04
+
+LABEL org.opencontainers.image.source="https://github.com/sotanengel/qwen3-swallow-8B-RL-v0.2-AWQ-INT4-joryu-pipline"
+
+ARG LLAMACPP_TAG=b4282
+ARG TARGETARCH=amd64
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    ca-certificates \
+    unzip \
+    python3-pip \
+    && rm -rf /var/lib/apt/lists/* \
+    && pip3 install --no-cache-dir "huggingface_hub[cli]>=0.26"
+
+RUN curl -fsSL "https://github.com/ggerganov/llama.cpp/releases/download/${LLAMACPP_TAG}/llama-${LLAMACPP_TAG}-bin-ubuntu-x64-cuda.zip" \
+    -o /tmp/llama.zip \
+    && unzip /tmp/llama.zip -d /opt/llama \
+    && rm /tmp/llama.zip \
+    && ln -sf /opt/llama/llama-server /usr/local/bin/llama-server
+
+WORKDIR /models
+COPY scripts/judge_entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+EXPOSE 8080
+ENTRYPOINT ["/entrypoint.sh"]

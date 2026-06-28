@@ -32,6 +32,8 @@ JORYU_CURATE_FAKE_JUDGE=1 uv run joryu-curate \
 
 `/prompts` 画面から seed-gen ジョブ起動・分野進捗・手動追記・スクリーニング起動が可能。
 
+**ブラウザ完結時**: `joryu-up` 後、seed-gen ジョブ投入で `ModelOrchestrator` が compose profile `seed_gen` の `joryu-seed` (Qwen2.5 / vLLM) を lazy 起動する。完了後は `config.yaml` の `models.auto_restore` (既定 `distill`) で Qwen3 蒸留用 profile に戻る。
+
 ## チェックポイント
 
 - `data/seed_gen/state.json` — 分野別カウント・棄却率

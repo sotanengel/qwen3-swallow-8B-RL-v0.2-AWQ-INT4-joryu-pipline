@@ -27,6 +27,25 @@ def test_build_multiple_services() -> None:
     assert cmd == ["docker", "compose", "build", "dashboard", "joryu"]
 
 
+def test_up_with_compose_profiles() -> None:
+    cmd = compose_up_command(
+        services=["dashboard", "api", "joryu"],
+        detach=True,
+        build=False,
+        profiles=["always", "distill"],
+    )
+    assert cmd[:7] == [
+        "docker",
+        "compose",
+        "--profile",
+        "always",
+        "--profile",
+        "distill",
+        "up",
+    ]
+    assert "-d" in cmd
+
+
 def test_up_default_brings_up_full_stack_with_build() -> None:
     cmd = compose_up_command(services=None, detach=False, build=True)
     assert cmd[:3] == ["docker", "compose", "up"]

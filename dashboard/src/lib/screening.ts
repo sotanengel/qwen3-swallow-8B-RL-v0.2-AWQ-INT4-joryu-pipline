@@ -37,7 +37,7 @@ export function screeningDataChanged(
 }
 
 export async function loadScreening(): Promise<ScreeningStats> {
-  const res = await fetch("/screening.json", { cache: "no-store" });
+  const res = await fetch("/api/live/screening", { cache: "no-store" });
   if (!res.ok) {
     return EMPTY_SCREENING;
   }

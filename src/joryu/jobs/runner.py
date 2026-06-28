@@ -10,8 +10,10 @@ import subprocess
 import sys
 import threading
 from collections.abc import Callable
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from joryu.distill import STATS_REFRESH_INTERVAL_SEC
 from joryu.docker_paths import map_path_for_docker, resolve_host_repo_root
@@ -25,6 +27,10 @@ from joryu.jobs.models import (
     SeedGenJobSpec,
 )
 from joryu.jobs.store import JobStore
+
+if TYPE_CHECKING:
+    from joryu.orchestrator.profile import ModelProfile
+    from joryu.orchestrator.service import ModelOrchestrator
 
 logger = logging.getLogger(__name__)
 
@@ -301,6 +307,46 @@ def build_curate_command(repo_root: Path, spec: CurateJobSpec, *, job_id: str) -
     return build_compose_run_curate_command(repo_root, spec, job_id=job_id)
 
 
+@contextmanager
+def _temporary_env(updates: dict[str, str]):
+    """ジョブ実行中のみ環境変数を上書きする。"""
+    old: dict[str, str | None] = {}
+    try:
+        for key, value in updates.items():
+            old[key] = os.environ.get(key)
+            os.environ[key] = value
+        yield
+    finally:
+        for key, previous in old.items():
+            if previous is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = previous
+
+
+def _prepare_record_for_profile(
+    record: JobRecord,
+    profile: ModelProfile,
+    orchestrator: ModelOrchestrator,
+) -> dict[str, str]:
+    """profile 別 URL を spec / env に注入。"""
+    from joryu.orchestrator.profile import ModelProfile as MP
+
+    spec = orchestrator.profiles.get(profile)
+    env: dict[str, str] = {}
+    if spec is None:
+        return env
+    if profile == MP.DISTILL:
+        env["JORYU_VLLM_URL"] = f"http://{spec.service}:{spec.port}"
+    elif profile == MP.SEED_GEN and isinstance(record.spec, SeedGenJobSpec):
+        if not record.spec.llm_base_url:
+            record.spec.llm_base_url = f"http://{spec.service}:{spec.port}/v1"
+    elif profile == MP.SCREENING and isinstance(record.spec, CurateJobSpec):
+        if not record.spec.judge_base_url:
+            record.spec.judge_base_url = f"http://{spec.service}:{spec.port}"
+    return env
+
+
 def _inject_container_name(cmd: list[str], name: str) -> list[str]:
     """docker run / docker compose run コマンドに --name を挿入する。"""
     result = list(cmd)
@@ -383,6 +429,7 @@ class JobRunner:
         store: JobStore,
         repo_root: Path,
         *,
+        orchestrator: ModelOrchestrator | None = None,
         run_command: RunCommand | None = None,
         refresh_stats: Callable[[DistillJobSpec], int] | None = None,
         refresh_curation: Callable[[CurateJobSpec, str], int] | None = None,
@@ -390,6 +437,7 @@ class JobRunner:
     ) -> None:
         self.store = store
         self.repo_root = repo_root
+        self._orchestrator = orchestrator
         self._run_command: RunCommand = run_command or _default_run_command(repo_root)
         self._refresh_stats = refresh_stats or make_refresh_stats(repo_root)
         self._refresh_curation = refresh_curation or make_refresh_curation(repo_root)
@@ -482,10 +530,35 @@ class JobRunner:
         threading.Thread(target=_stop, daemon=True).start()
 
     def _run_job(self, job_id: str) -> None:
+        from joryu.orchestrator.required import required_profile
+
         record = self.store.load(job_id)
         record.status = JobStatus.RUNNING
         record.started_at = datetime.now(UTC).isoformat()
         self.store.save(record)
+
+        profile = required_profile(record)
+        profile_env: dict[str, str] = {}
+        if self._orchestrator is not None:
+
+            def _probe_log(message: str) -> None:
+                self.store.append_log(job_id, message + "\n")
+
+            try:
+                self._orchestrator.ensure_profile(profile, log=_probe_log)
+            except RuntimeError as exc:
+                self.store.append_log(job_id, f"[joryu-runner] {exc}\n")
+                record.status = JobStatus.FAILED
+                record.error = str(exc)
+                record.exit_code = 1
+                record.finished_at = datetime.now(UTC).isoformat()
+                self.store.save(record)
+                with self._lock:
+                    self._running_id = None
+                    self._running_process = None
+                self._maybe_start_next()
+                return
+            profile_env = _prepare_record_for_profile(record, profile, self._orchestrator)
 
         container_name = f"joryu-job-{job_id}"
         with self._lock:
@@ -551,7 +624,10 @@ class JobRunner:
         try:
             cmd = self._command_builder(self.repo_root, record)
             cmd = _inject_container_name(cmd, container_name)
-            exit_code = self._run_command(cmd, self.repo_root, log_path, self._set_running_process)
+            with _temporary_env(profile_env):
+                exit_code = self._run_command(
+                    cmd, self.repo_root, log_path, self._set_running_process
+                )
             record.exit_code = exit_code
             if exit_code != 0:
                 label = (
@@ -595,6 +671,15 @@ class JobRunner:
             self._refresh_stats(record.spec)
         elif record.kind == JobKind.CURATE and isinstance(record.spec, CurateJobSpec):
             self._refresh_curation(record.spec, job_id)
+
+        if self._orchestrator is not None:
+            try:
+                self._orchestrator.maybe_auto_restore(
+                    log=lambda msg: self.store.append_log(job_id, msg + "\n"),
+                )
+            except RuntimeError as exc:
+                logger.error("auto_restore failed", exc_info=True)
+                self.store.append_log(job_id, f"[joryu-runner] auto_restore failed: {exc}\n")
 
         with self._lock:
             self._running_id = None

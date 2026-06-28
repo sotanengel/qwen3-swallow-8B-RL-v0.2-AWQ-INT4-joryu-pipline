@@ -10,13 +10,14 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from joryu.api.routes import chat, curate, dashboard, jobs, search, seed_gen
+from joryu.api.routes import chat, curate, dashboard, jobs, search, seed_gen, system
 from joryu.chat.session import ChatSessionStore
 from joryu.config import load_config
 from joryu.http_client import close_shared_async_client
 from joryu.jobs.runner import JobRunner, default_jobs_dir
 from joryu.jobs.store import JobStore
 from joryu.mcp_runtime import probe_mcp_health
+from joryu.orchestrator.factory import build_orchestrator
 from joryu.tools_impl.weather import apply_weather_config
 
 
@@ -36,7 +37,10 @@ def repo_root_from_env() -> Path:
 def create_app(*, repo_root: Path | None = None) -> FastAPI:
     root = repo_root or repo_root_from_env()
     store = JobStore(default_jobs_dir(root))
-    runner = JobRunner(store, root)
+    orchestrator = build_orchestrator(root)
+    if orchestrator.get_state().status.value == "stopped":
+        orchestrator.init_distill_active()
+    runner = JobRunner(store, root, orchestrator=orchestrator)
     runner.reconcile_stale_jobs()
 
     app = FastAPI(title="joryu API", version="0.1.0", lifespan=_app_lifespan)
@@ -53,6 +57,7 @@ def create_app(*, repo_root: Path | None = None) -> FastAPI:
     app.state.repo_root = root
     app.state.job_store = store
     app.state.job_runner = runner
+    app.state.orchestrator = orchestrator
     app.state.search_indexes = {}
     app.state.chat_sessions = ChatSessionStore(
         db_path=root / "data" / "chat" / "sessions.db",
@@ -85,4 +90,6 @@ def create_app(*, repo_root: Path | None = None) -> FastAPI:
     app.include_router(seed_gen.status_router, prefix="/api/seed-gen", tags=["seed_gen"])
     app.include_router(dashboard.router, prefix="/api/dashboard", tags=["dashboard"])
     app.include_router(search.router, prefix="/api/dashboard", tags=["dashboard"])
+    app.include_router(system.router, prefix="/api/system", tags=["system"])
+    app.include_router(system.live_router, prefix="/api/live", tags=["system"])
     return app

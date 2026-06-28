@@ -7,13 +7,14 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Body, HTTPException, Request
 from pydantic import BaseModel
 
+from joryu.api.deps import assert_profile_enqueueable, get_orchestrator
 from joryu.jobs.models import CurateJobSpec, JobKind, JobRecord
 from joryu.jobs.runner import JobRunner
 from joryu.jobs.store import JobStore
 from joryu.jobs.validate import validate_curate_job_spec
+from joryu.orchestrator.required import required_profile_from_spec
 from joryu.paths import DEFAULT_CONFIG
 from joryu.preflight import jsonl_has_content, resolve_distill_jsonl
-from joryu.readiness import is_vllm_daemon_ready
 
 router = APIRouter()
 
@@ -67,10 +68,14 @@ def _curate_jobs(store: JobStore) -> list[JobRecord]:
 def curate_options(request: Request) -> dict[str, Any]:
     repo_root = request.app.state.repo_root
     jsonl = resolve_distill_jsonl(repo_root)
+    orchestrator = get_orchestrator(request)
+    distill_ready = orchestrator.profile_ready(
+        required_profile_from_spec(JobKind.DISTILL, CurateJobSpec())
+    )
     return {
         "defaults": {"config": DEFAULT_CONFIG, "skip_llm": False},
         "input_ready": jsonl_has_content(jsonl),
-        "vllm_available": is_vllm_daemon_ready(),
+        "vllm_available": distill_ready,
     }
 
 
@@ -86,14 +91,10 @@ def create_curate_job(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    if not spec.skip_llm and not is_vllm_daemon_ready():
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "vLLM デーモンが ready ではありません。"
-                " `uv run joryu-up --detach` で joryu を起動し ready 待ちが完了するまで待つか、"
-                "skip_llm=true を指定してください。"
-            ),
+    if not spec.skip_llm:
+        assert_profile_enqueueable(
+            get_orchestrator(request),
+            required_profile_from_spec(JobKind.CURATE, spec),
         )
 
     record = JobRecord.create(spec)

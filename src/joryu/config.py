@@ -222,6 +222,24 @@ class ToolsConfig:
 
 
 @dataclass
+class ProfileSpecConfig:
+    name: str
+    service: str
+    port: int
+    health: str = "/health"
+    kind: str = "openai_v1"
+    model: str = ""
+    compose_profile: str = ""
+
+
+@dataclass
+class ModelsConfig:
+    auto_restore: str = "distill"
+    default_profile: str = "distill"
+    profiles: list[ProfileSpecConfig] = field(default_factory=list)
+
+
+@dataclass
 class Config:
     model: ModelConfig = field(default_factory=ModelConfig)
     vllm: VllmConfig = field(default_factory=VllmConfig)
@@ -231,6 +249,7 @@ class Config:
     search: SearchConfig = field(default_factory=SearchConfig)
     mcp: McpConfig = field(default_factory=McpConfig)
     tools: ToolsConfig = field(default_factory=ToolsConfig)
+    models: ModelsConfig = field(default_factory=ModelsConfig)
 
     def fingerprint(self) -> str:
         """設定の SHA256 ハッシュ。出力レコードの再現性記録に使う。
@@ -333,4 +352,16 @@ def load_config(path: str | Path) -> Config:
     cfg.tools = _merge_section(cfg.tools, tools_raw if isinstance(tools_raw, dict) else None)
     if isinstance(weather_raw, dict):
         cfg.tools.weather = _merge_section(cfg.tools.weather, weather_raw)
+    models_raw = raw.get("models") or {}
+    if isinstance(models_raw, dict):
+        profiles_raw = models_raw.pop("profiles", None)
+        cfg.models = _merge_section(cfg.models, models_raw)
+        if isinstance(profiles_raw, list):
+            cfg.models.profiles = [
+                ProfileSpecConfig(
+                    **{k: v for k, v in p.items() if k in ProfileSpecConfig.__dataclass_fields__}
+                )
+                for p in profiles_raw
+                if isinstance(p, dict)
+            ]
     return cfg

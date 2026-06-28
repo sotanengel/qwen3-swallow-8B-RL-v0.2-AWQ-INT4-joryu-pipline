@@ -17,11 +17,11 @@ COPY tools.yaml ./tools.yaml
 COPY README.md ./README.md
 RUN uv sync --frozen --no-dev --extra api
 
-# cu130 + vLLM ランタイム。
-# devel イメージ (nvcc 同梱) を使うのは FlashInfer が FP8 KV キャッシュ用の
-# attention カーネルを JIT ビルドする際に /usr/local/cuda/bin/nvcc を必要とするため。
-# runtime イメージだと kv_cache_dtype="fp8" の vLLM 起動が exit 127 で死ぬ。
+# cu130 + vLLM ランタイム (PyPI prebuilt wheel, git source ビルド回避)。
+# devel イメージ (nvcc 同梱) は fp8 KV 検証後 runtime へ移行可能 (ADR 0005)。
 FROM nvidia/cuda:13.0.0-devel-ubuntu24.04
+
+LABEL org.opencontainers.image.source="https://github.com/sotanengel/qwen3-swallow-8B-RL-v0.2-AWQ-INT4-joryu-pipline"
 
 WORKDIR /app
 
@@ -35,10 +35,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=builder /usr/local /usr/local
 COPY --from=builder /app /app
 
-RUN uv pip install "torch>=2.12.1" --python /app/.venv/bin/python \
-       --index-url https://download.pytorch.org/whl/cu130 && \
-    uv pip install "vllm @ git+https://github.com/vllm-project/vllm@v0.23.1rc0" \
-       --python /app/.venv/bin/python
+ENV UV_TORCH_BACKEND=cu130
+
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install "torch>=2.12.1" --python /app/.venv/bin/python \
+       --index-url https://download.pytorch.org/whl/cu130
+
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install "vllm==0.23.0" --python /app/.venv/bin/python \
+       --extra-index-url https://download.pytorch.org/whl/cu130
 
 ENV PATH="/app/.venv/bin:/usr/local/bin:$PATH" \
     PYTHONPATH=/app/src \

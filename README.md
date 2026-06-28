@@ -52,7 +52,12 @@ uv run joryu-export --bundle-tar
 # 6. ダッシュボード + API + vLLM 常駐デーモン起動
 uv run joryu-up --detach
 
-# 6b. ブラウザで http://localhost:3000/jobs から蒸留ジョブを投入
+# 6b. ブラウザワークフロー (ウィザードなし)
+#     1. /jobs — 蒸留 (distill / Qwen3)
+#     2. /prompts — プロンプト生成 (seed_gen / Qwen2.5, orchestrator が joryu-seed を lazy 起動)
+#     3. /prompts — スクリーニング (screening / Llama GGUF, joryu-judge を lazy 起動)
+#     4. /jobs — 再蒸留
+#     ヘッダの LLM ステータスバーと GET /api/system/models で profile 状態を確認
 #     または http://localhost:3000/chat でスタイル別並列対話（蒸留データ化）
 #     API: http://localhost:8000  (ローカル専用・認証なし)
 #     vLLM デーモン: http://localhost:8100/health (`vllm serve`, ready まで joryu-up が待機)

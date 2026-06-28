@@ -7,11 +7,13 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Body, HTTPException, Request
 from pydantic import BaseModel
 
+from joryu.api.deps import assert_profile_enqueueable, get_orchestrator
 from joryu.config import load_config
 from joryu.jobs.models import DistillJobSpec, JobRecord
 from joryu.jobs.runner import JobRunner
 from joryu.jobs.store import JobStore
 from joryu.jobs.validate import validate_job_spec
+from joryu.orchestrator.profile import ModelProfile
 from joryu.paths import DEFAULT_CONFIG
 from joryu.styles import load_styles
 from joryu.tools import load_tools
@@ -90,6 +92,8 @@ def create_job(
         validate_job_spec(spec, repo_root=repo_root)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    assert_profile_enqueueable(get_orchestrator(request), ModelProfile.DISTILL)
 
     record = JobRecord.create(spec)
     _store(request).save(record)

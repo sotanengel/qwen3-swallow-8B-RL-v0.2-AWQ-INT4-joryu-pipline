@@ -128,4 +128,31 @@ curate:
     judge:
       provider: llama_cpp
       model: Llama-3.1-Swallow-8B-Instruct-v0.5
-      base_url: http://localhost:8080
+      base_url: http://joryu-judge:8080
+
+# GPU ModelProfile 定義 (ADR 0005)。compose サービス / health / モデル ID の単一情報源。
+models:
+  auto_restore: distill
+  default_profile: distill
+  profiles:
+    - name: distill
+      service: joryu
+      port: 8100
+      health: /health
+      kind: openai_v1
+      model: tokyotech-llm/Qwen3-Swallow-8B-RL-v0.2-AWQ-INT4
+      compose_profile: distill
+    - name: seed_gen
+      service: joryu-seed
+      port: 8110
+      health: /health
+      kind: openai_v1
+      model: Qwen/Qwen2.5-7B-Instruct-AWQ
+      compose_profile: seed_gen
+    - name: screening
+      service: joryu-judge
+      port: 8080
+      health: /health
+      kind: llama_server
+      model: Llama-3.1-Swallow-8B-Instruct-v0.5-Q4_K_M.gguf
+      compose_profile: screening

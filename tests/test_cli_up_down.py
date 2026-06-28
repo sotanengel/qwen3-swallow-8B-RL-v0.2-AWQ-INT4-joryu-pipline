@@ -10,6 +10,18 @@ import pytest
 from joryu.cli import down as cli_down
 from joryu.cli import up as cli_up
 
+_UP_WITH_DISTILL = ["docker", "compose", "--profile", "always", "--profile", "distill", "up"]
+
+
+def _compose_up_cmd(*services: str, detach: bool = False, force_recreate: bool = True) -> list[str]:
+    cmd = list(_UP_WITH_DISTILL)
+    if force_recreate:
+        cmd.append("--force-recreate")
+    if detach:
+        cmd.append("-d")
+    cmd.extend(services)
+    return cmd
+
 
 def _patch_runner(
     monkeypatch: pytest.MonkeyPatch,
@@ -54,6 +66,10 @@ def _patch_runner(
     monkeypatch.setattr("joryu.preflight.git_head_at", lambda *_a, **_k: "test-head")
     monkeypatch.setattr("joryu.cli.up.save_up_state", lambda *_args, **_kwargs: None)
     monkeypatch.setattr("joryu.preflight.docker_image_exists", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(
+        "joryu.orchestrator.factory.build_orchestrator",
+        lambda *_args, **_kwargs: type("Orch", (), {"init_distill_active": lambda self: None})(),
+    )
     return calls
 
 
@@ -69,7 +85,7 @@ def test_up_prunes_dangling_images_at_startup_without_build(
     rc = cli_up.main([])
     assert rc == 0
     assert calls[0] == _STARTUP_IMAGE_PRUNE
-    assert calls[1] == ["docker", "compose", "up", "dashboard", "api", "joryu"]
+    assert calls[1] == [*_UP_WITH_DISTILL, "dashboard", "api", "joryu"]
 
 
 def test_up_default_no_changes_builds_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -80,7 +96,7 @@ def test_up_default_no_changes_builds_nothing(monkeypatch: pytest.MonkeyPatch) -
     assert rc == 0
     assert len(calls) == 2
     assert calls[0] == _STARTUP_IMAGE_PRUNE
-    assert calls[1] == ["docker", "compose", "up", "dashboard", "api", "joryu"]
+    assert calls[1] == [*_UP_WITH_DISTILL, "dashboard", "api", "joryu"]
 
 
 def test_up_stops_joryu_before_compose_up(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -97,7 +113,7 @@ def test_up_stops_joryu_before_compose_up(monkeypatch: pytest.MonkeyPatch) -> No
     assert rc == 0
     assert order == ["stop_joryu"]
     assert calls[0] == _STARTUP_IMAGE_PRUNE
-    assert calls[1][0:3] == ["docker", "compose", "up"]
+    assert calls[1][0:7] == _UP_WITH_DISTILL
 
 
 def test_up_frontend_only_does_not_stop_joryu(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -112,7 +128,7 @@ def test_up_frontend_only_does_not_stop_joryu(monkeypatch: pytest.MonkeyPatch) -
     assert rc == 0
     assert stop_calls == []
     assert calls[0] == _STARTUP_IMAGE_PRUNE
-    assert calls[1] == ["docker", "compose", "up", "dashboard"]
+    assert calls[1] == [*_UP_WITH_DISTILL, "dashboard"]
 
 
 def test_up_joryu_diff_triggers_build_then_up(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -126,15 +142,7 @@ def test_up_joryu_diff_triggers_build_then_up(monkeypatch: pytest.MonkeyPatch) -
     assert calls[1] == ["docker", "compose", "build", "api"]
     assert calls[2] == ["docker", "image", "prune", "-f"]
     assert calls[3] == ["docker", "builder", "prune", "-a", "-f"]
-    assert calls[4] == [
-        "docker",
-        "compose",
-        "up",
-        "--force-recreate",
-        "dashboard",
-        "api",
-        "joryu",
-    ]
+    assert calls[4] == _compose_up_cmd("dashboard", "api", "joryu")
 
 
 def test_up_default_brings_up_all_builds_only_changed(
@@ -149,15 +157,7 @@ def test_up_default_brings_up_all_builds_only_changed(
     assert calls[1] == ["docker", "compose", "build", "dashboard"]
     assert calls[2] == ["docker", "image", "prune", "-f"]
     assert calls[3] == ["docker", "builder", "prune", "-a", "-f"]
-    assert calls[4] == [
-        "docker",
-        "compose",
-        "up",
-        "--force-recreate",
-        "dashboard",
-        "api",
-        "joryu",
-    ]
+    assert calls[4] == _compose_up_cmd("dashboard", "api", "joryu")
 
 
 def test_up_frontend_only_alias(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -167,7 +167,7 @@ def test_up_frontend_only_alias(monkeypatch: pytest.MonkeyPatch) -> None:
     assert rc == 0
     assert len(calls) == 2
     assert calls[0] == _STARTUP_IMAGE_PRUNE
-    assert calls[1] == ["docker", "compose", "up", "dashboard"]
+    assert calls[1] == [*_UP_WITH_DISTILL, "dashboard"]
 
 
 def test_up_backend_only(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -179,14 +179,7 @@ def test_up_backend_only(monkeypatch: pytest.MonkeyPatch) -> None:
     assert calls[1] == ["docker", "compose", "build", "joryu"]
     assert calls[2] == ["docker", "image", "prune", "-f"]
     assert calls[3] == ["docker", "builder", "prune", "-a", "-f"]
-    assert calls[4] == [
-        "docker",
-        "compose",
-        "up",
-        "--force-recreate",
-        "-d",
-        "joryu",
-    ]
+    assert calls[4] == _compose_up_cmd("joryu", detach=True)
     assert calls[5] == ["docker", "image", "prune", "-f"]
 
 
@@ -217,7 +210,7 @@ def test_up_refresh_stats_before_compose(monkeypatch: pytest.MonkeyPatch, tmp_pa
     assert rc == 0
     assert stats_calls == [True]
     assert calls[0] == _STARTUP_IMAGE_PRUNE
-    assert calls[1] == ["docker", "compose", "up", "dashboard"]
+    assert calls[1] == [*_UP_WITH_DISTILL, "dashboard"]
 
 
 def test_up_aborts_when_curation_fails(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -243,7 +236,7 @@ def test_up_no_build_flag(monkeypatch: pytest.MonkeyPatch) -> None:
     cli_up.main(["--no-build"])
     assert len(calls) == 2
     assert calls[0] == _STARTUP_IMAGE_PRUNE
-    assert calls[1] == ["docker", "compose", "up", "dashboard", "api", "joryu"]
+    assert calls[1] == [*_UP_WITH_DISTILL, "dashboard", "api", "joryu"]
 
 
 def test_up_no_build_flag_force_recreate_when_joryu_runtime_changed(
@@ -258,15 +251,7 @@ def test_up_no_build_flag_force_recreate_when_joryu_runtime_changed(
     cli_up.main(["--no-build"])
     assert len(calls) == 2
     assert calls[0] == _STARTUP_IMAGE_PRUNE
-    assert calls[1] == [
-        "docker",
-        "compose",
-        "up",
-        "--force-recreate",
-        "dashboard",
-        "api",
-        "joryu",
-    ]
+    assert calls[1] == _compose_up_cmd("dashboard", "api", "joryu")
 
 
 def test_up_build_flag_forces_rebuild(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -275,18 +260,13 @@ def test_up_build_flag_forces_rebuild(monkeypatch: pytest.MonkeyPatch) -> None:
     rc = cli_up.main(["--build"])
     assert rc == 0
     assert calls[0] == _STARTUP_IMAGE_PRUNE
-    assert calls[1] == ["docker", "compose", "build", "dashboard", "api", "joryu"]
-    assert calls[2] == ["docker", "image", "prune", "-f"]
-    assert calls[3] == ["docker", "builder", "prune", "-a", "-f"]
-    assert calls[4] == [
-        "docker",
-        "compose",
-        "up",
-        "--force-recreate",
-        "dashboard",
-        "api",
-        "joryu",
-    ]
+    assert calls[1] == ["docker", "compose", "build", "joryu"]
+    assert calls[2] == ["docker", "compose", "build", "joryu-seed"]
+    assert calls[3] == ["docker", "compose", "build", "joryu-judge"]
+    assert calls[4] == ["docker", "compose", "build", "dashboard", "api"]
+    assert calls[5] == ["docker", "image", "prune", "-f"]
+    assert calls[6] == ["docker", "builder", "prune", "-a", "-f"]
+    assert calls[7] == _compose_up_cmd("dashboard", "api", "joryu")
 
 
 def test_up_first_run_builds_up_targets(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -296,18 +276,11 @@ def test_up_first_run_builds_up_targets(monkeypatch: pytest.MonkeyPatch) -> None
     rc = cli_up.main([])
     assert rc == 0
     assert calls[0] == _STARTUP_IMAGE_PRUNE
-    assert calls[1] == ["docker", "compose", "build", "dashboard", "api", "joryu"]
-    assert calls[2] == ["docker", "image", "prune", "-f"]
-    assert calls[3] == ["docker", "builder", "prune", "-a", "-f"]
-    assert calls[-1] == [
-        "docker",
-        "compose",
-        "up",
-        "--force-recreate",
-        "dashboard",
-        "api",
-        "joryu",
-    ]
+    assert calls[1] == ["docker", "compose", "build", "joryu"]
+    assert calls[2] == ["docker", "compose", "build", "joryu-seed"]
+    assert calls[3] == ["docker", "compose", "build", "joryu-judge"]
+    assert calls[4] == ["docker", "compose", "build", "dashboard", "api"]
+    assert calls[-1] == _compose_up_cmd("dashboard", "api", "joryu")
 
 
 def test_up_builds_joryu_when_image_missing(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -320,15 +293,7 @@ def test_up_builds_joryu_when_image_missing(monkeypatch: pytest.MonkeyPatch) -> 
     assert calls[1] == ["docker", "compose", "build", "joryu"]
     assert calls[2] == ["docker", "image", "prune", "-f"]
     assert calls[3] == ["docker", "builder", "prune", "-a", "-f"]
-    assert calls[4] == [
-        "docker",
-        "compose",
-        "up",
-        "--force-recreate",
-        "dashboard",
-        "api",
-        "joryu",
-    ]
+    assert calls[4] == _compose_up_cmd("dashboard", "api", "joryu")
 
 
 def test_up_prunes_dangling_images_after_successful_up_with_build(
@@ -407,7 +372,7 @@ def test_up_auto_prunes_and_continues_when_disk_recovered(
     assert calls[2] == ["docker", "compose", "build", "joryu"]
     assert calls[3] == ["docker", "image", "prune", "-f"]
     assert calls[4] == ["docker", "builder", "prune", "-a", "-f"]
-    assert calls[5][:3] == ["docker", "compose", "up"]
+    assert calls[5][:7] == _UP_WITH_DISTILL
 
 
 def test_up_force_bypasses_disk_check(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -426,15 +391,7 @@ def test_up_force_bypasses_disk_check(monkeypatch: pytest.MonkeyPatch) -> None:
     assert calls[1] == ["docker", "compose", "build", "joryu"]
     assert calls[2] == ["docker", "image", "prune", "-f"]
     assert calls[3] == ["docker", "builder", "prune", "-a", "-f"]
-    assert calls[4] == [
-        "docker",
-        "compose",
-        "up",
-        "--force-recreate",
-        "dashboard",
-        "api",
-        "joryu",
-    ]
+    assert calls[4] == _compose_up_cmd("dashboard", "api", "joryu")
 
 
 def test_up_detach_waits_for_services(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -468,7 +425,7 @@ def test_up_detach_opens_browser_after_dashboard_up(monkeypatch: pytest.MonkeyPa
     )
     rc = cli_up.main(["--detach"])
     assert rc == 0
-    assert calls[-1] == ["docker", "compose", "up", "-d", "dashboard", "api", "joryu"]
+    assert calls[-1] == [*_UP_WITH_DISTILL, "-d", "dashboard", "api", "joryu"]
     assert opened == [True]
 
 
@@ -486,16 +443,7 @@ def test_up_detach_prunes_dangling_images_before_browser_after_build(
     monkeypatch.setattr("joryu.cli.up.open_dashboard_when_ready", _open_when_ready)
     rc = cli_up.main(["--detach"])
     assert rc == 0
-    assert calls[4] == [
-        "docker",
-        "compose",
-        "up",
-        "--force-recreate",
-        "-d",
-        "dashboard",
-        "api",
-        "joryu",
-    ]
+    assert calls[4] == _compose_up_cmd("dashboard", "api", "joryu", detach=True)
     assert len(calls) == 5
     assert browser_kwargs == [{"pre_open_fn": cli_up.run_pre_browser_image_cleanup}]
 
@@ -593,7 +541,7 @@ def test_up_frontend_only_skips_prompt_bank(monkeypatch: pytest.MonkeyPatch) -> 
     assert rc == 0
     assert prompt_calls == []
     assert calls[0] == _STARTUP_IMAGE_PRUNE
-    assert calls[1] == ["docker", "compose", "up", "dashboard"]
+    assert calls[1] == [*_UP_WITH_DISTILL, "dashboard"]
 
 
 def test_down_default(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -619,7 +567,7 @@ def test_serve_alias_still_works(monkeypatch: pytest.MonkeyPatch) -> None:
     rc = cli_serve.main([])
     assert rc == 0
     assert calls[0] == _STARTUP_IMAGE_PRUNE
-    assert calls[1] == ["docker", "compose", "up", "dashboard"]
+    assert calls[1] == [*_UP_WITH_DISTILL, "dashboard"]
 
 
 def test_up_compose_failure_runs_rollback(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -632,7 +580,7 @@ def test_up_compose_failure_runs_rollback(monkeypatch: pytest.MonkeyPatch) -> No
         if kwargs.get("capture_output"):
             return type("R", (), {"returncode": 0, "stdout": "test-head\n"})()
         calls.append(cmd)
-        if len(cmd) >= 3 and cmd[0:3] == ["docker", "compose", "up"]:
+        if len(cmd) >= 7 and cmd[0:7] == _UP_WITH_DISTILL:
             return _FailUp()
         return type("R", (), {"returncode": 0})()
 
@@ -650,4 +598,4 @@ def test_up_includes_mcp_when_config_enabled(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setattr("joryu.preflight.should_up_mcp", lambda _root: True)
     rc = cli_up.main([])
     assert rc == 0
-    assert calls[1] == ["docker", "compose", "up", "dashboard", "mcp", "api", "joryu"]
+    assert calls[1] == [*_UP_WITH_DISTILL, "dashboard", "mcp", "api", "joryu"]

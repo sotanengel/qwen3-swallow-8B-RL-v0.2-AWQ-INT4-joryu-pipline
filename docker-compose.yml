@@ -1,25 +1,36 @@
 # joryu インフラ。実行環境: Windows + RTX 3060 Ti / Docker Desktop(WSL2) + NVIDIA Container Toolkit
-# 起動: docker compose build joryu
+# 起動: uv run joryu-up --detach
+# GPU profile: distill (既定) / seed_gen / screening — 同時常駐不可 (ADR 0005)
+
+x-joryu-gpu: &joryu_gpu
+  deploy:
+    resources:
+      reservations:
+        devices:
+          - driver: nvidia
+            count: all
+            capabilities: [gpu]
+  shm_size: "2gb"
+  environment:
+    - HF_HOME=/root/.cache/huggingface
+    - VLLM_USE_DEEP_GEMM=0
+    - VLLM_DEEP_GEMM_WARMUP=skip
+    - VLLM_USE_FLASHINFER_SAMPLER=0
+    - VLLM_ATTENTION_BACKEND=FLASH_ATTN
 
 services:
   joryu:
+    profiles: [distill]
     build:
       context: .
       dockerfile: Dockerfile
     image: joryu:latest
     container_name: joryu
-    # vLLM v1 はワーカ IPC で /dev/shm を使う。デフォルト 64MB だと
-    # prefix cache / KV swap が詰まることがあるため 2GiB に拡張。
-    shm_size: "2gb"
+    <<: *joryu_gpu
     ports:
       - "8100:8100"
     environment:
       - JORYU_REPO_ROOT=/app
-      - VLLM_USE_DEEP_GEMM=0
-      - VLLM_DEEP_GEMM_WARMUP=skip
-      - VLLM_USE_FLASHINFER_SAMPLER=0
-      - VLLM_ATTENTION_BACKEND=FLASH_ATTN
-      - HF_HOME=/root/.cache/huggingface
     volumes:
       - ./data:/app/data
       - ./exports:/app/exports
@@ -28,13 +39,6 @@ services:
       - ./styles.yaml:/app/styles.yaml:ro
       - ./tools.yaml:/app/tools.yaml:ro
       - hf-cache:/root/.cache/huggingface
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
     command:
       - vllm
       - serve
@@ -47,7 +51,6 @@ services:
       - --gpu-memory-utilization=0.85
       - --kv-cache-dtype=fp8
       - --enable-prefix-caching
-      # swap_space は in-process (VllmClient) / config.yaml のみ。vllm serve CLI 非対応。
       - --max-num-seqs=1
       - --enforce-eager
       - --enable-auto-tool-choice
@@ -61,7 +64,64 @@ services:
       retries: 40
       start_period: 300s
 
+  joryu-seed:
+    profiles: [seed_gen]
+    image: joryu:latest
+    container_name: joryu-seed
+    <<: *joryu_gpu
+    ports:
+      - "8110:8110"
+    environment:
+      - JORYU_REPO_ROOT=/app
+    volumes:
+      - ./data:/app/data
+      - ./config.yaml:/app/config.yaml:ro
+      - hf-cache:/root/.cache/huggingface
+    command:
+      - vllm
+      - serve
+      - Qwen/Qwen2.5-7B-Instruct-AWQ
+      - --host=0.0.0.0
+      - --port=8110
+      - --quantization=awq_marlin
+      - --dtype=bfloat16
+      - --max-model-len=4096
+      - --gpu-memory-utilization=0.80
+      - --max-num-seqs=1
+      - --enforce-eager
+    restart: "on-failure:3"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8110/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 40
+      start_period: 300s
+
+  joryu-judge:
+    profiles: [screening]
+    build:
+      context: .
+      dockerfile: Dockerfile.judge
+    image: joryu-judge:latest
+    container_name: joryu-judge
+    <<: *joryu_gpu
+    ports:
+      - "8080:8080"
+    volumes:
+      - gguf-cache:/models
+    environment:
+      - JORYU_JUDGE_MODEL=Llama-3.1-Swallow-8B-Instruct-v0.5-Q4_K_M.gguf
+      - JORYU_JUDGE_HF_REPO=tokyotech-llm/Llama-3.1-Swallow-8B-Instruct-v0.5-GGUF
+    restart: "on-failure:3"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 24
+      start_period: 120s
+
   dashboard:
+    profiles: [always]
     build:
       context: ./dashboard
       dockerfile: Dockerfile
@@ -75,13 +135,12 @@ services:
       api:
         condition: service_started
     volumes:
-      # public は rw にして responses.jsonl の bind mount マウントポイントを作成可能にする。
-      # stats.json / responses.jsonl はホスト側 (joryu-stats / 蒸留) から更新される。
       - ./dashboard/public:/app/public
       - ./data/distilled/responses.jsonl:/app/public/responses.jsonl:ro
     restart: "on-failure:3"
 
   mcp:
+    profiles: [always]
     image: joryu-api:latest
     container_name: joryu-mcp
     ports:
@@ -105,6 +164,7 @@ services:
     restart: "on-failure:3"
 
   api:
+    profiles: [always]
     build:
       context: .
       dockerfile: Dockerfile.api
@@ -123,9 +183,8 @@ services:
       - JORYU_REPO_ROOT=/workspace
       - JORYU_USE_COMPOSE_RUN=1
       - JORYU_VLLM_URL=http://joryu:8100
-      - PYTHONPATH=/workspace/src
-      # DooD: api コンテナ内 /workspace をホストパスへ解決できない場合の手動指定
       - JORYU_HOST_REPO_ROOT=${JORYU_HOST_REPO_ROOT:-}
+      - PYTHONPATH=/workspace/src
     depends_on:
       joryu:
         condition: service_healthy
@@ -133,3 +192,4 @@ services:
 
 volumes:
   hf-cache:
+  gguf-cache:

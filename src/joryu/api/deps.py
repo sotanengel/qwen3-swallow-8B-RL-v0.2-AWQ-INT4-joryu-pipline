@@ -11,6 +11,9 @@ from joryu.chat.session import ChatSessionStore
 from joryu.config import load_config
 from joryu.jobs.runner import JobRunner
 from joryu.jobs.store import JobStore
+from joryu.orchestrator.profile import ModelProfile
+from joryu.orchestrator.service import ModelOrchestrator
+from joryu.orchestrator.state import OrchestratorStatus
 from joryu.tool_executor import McpToolExecutor, ToolExecutor, build_default_executor
 from joryu.tools import load_tools, merge_tools
 from joryu.vllm_client import (
@@ -29,11 +32,16 @@ def get_runner(request: Request) -> JobRunner:
     return request.app.state.job_runner
 
 
+def get_orchestrator(request: Request) -> ModelOrchestrator:
+    return request.app.state.orchestrator
+
+
 def get_session_store(request: Request) -> ChatSessionStore:
     return request.app.state.chat_sessions
 
 
 RunnerDep = Annotated[JobRunner, Depends(get_runner)]
+OrchDep = Annotated[ModelOrchestrator, Depends(get_orchestrator)]
 
 
 def require_idle(runner: RunnerDep) -> None:
@@ -42,6 +50,43 @@ def require_idle(runner: RunnerDep) -> None:
         raise HTTPException(
             status_code=409,
             detail={"error": "job_active", "running_id": runner.running_id},
+        )
+
+
+def require_chat_profile(orchestrator: OrchDep) -> None:
+    """chat は distill profile が active なときのみ通す。"""
+    state = orchestrator.get_state()
+    if state.status != OrchestratorStatus.ACTIVE or state.active != ModelProfile.DISTILL:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "wrong_profile",
+                "active": state.active.value if state.active else None,
+                "required": ModelProfile.DISTILL.value,
+                "status": state.status.value,
+            },
+        )
+
+
+def assert_profile_enqueueable(orchestrator: ModelOrchestrator, required: ModelProfile) -> None:
+    """ジョブ enqueue 前: profile 切替中でなければ OK (起動は JobRunner が担当)。"""
+    state = orchestrator.get_state()
+    if state.status == OrchestratorStatus.SWITCHING:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "profile_switching",
+                "target": state.target.value if state.target else None,
+            },
+        )
+    if state.status == OrchestratorStatus.STARTING and state.target != required:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "profile_starting",
+                "target": state.target.value if state.target else None,
+                "required": required.value,
+            },
         )
 
 

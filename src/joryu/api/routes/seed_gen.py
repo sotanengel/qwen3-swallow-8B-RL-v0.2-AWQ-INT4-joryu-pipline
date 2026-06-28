@@ -7,13 +7,15 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Body, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from joryu.api.deps import assert_profile_enqueueable, get_orchestrator
 from joryu.jobs.models import JobKind, JobRecord, JobStatus, SeedGenJobSpec
 from joryu.jobs.runner import JobRunner
 from joryu.jobs.store import JobStore
 from joryu.jobs.validate import validate_seed_gen_job_spec
+from joryu.orchestrator.profile import ModelProfile
+from joryu.orchestrator.required import required_profile_from_spec
 from joryu.prompt_bank import load_prompt_bank
 from joryu.prompt_dedup import ExactDedup
-from joryu.readiness import is_vllm_daemon_ready
 from joryu.seed_gen.config import DEFAULT_DOMAINS_REL, SeedGenConfig, resolve_domains_config_path
 from joryu.seed_gen.counts import count_by_domain
 from joryu.seed_gen.pipeline import DEFAULT_BANK_REL
@@ -95,14 +97,17 @@ def _resolve_domains(repo_root: Any) -> SeedGenConfig:
 
 @router.get("/options")
 def seed_gen_options(request: Request) -> dict[str, Any]:
+    orchestrator = get_orchestrator(request)
+    seed_ready = orchestrator.profile_ready(ModelProfile.SEED_GEN)
     return {
         "defaults": {
             "bank": DEFAULT_BANK_REL,
             "domains_config": DEFAULT_DOMAINS_REL,
             "target_total": 230000,
-            "fake_llm": not is_vllm_daemon_ready(),
+            "fake_llm": not seed_ready,
         },
-        "vllm_available": is_vllm_daemon_ready(),
+        "vllm_available": seed_ready,
+        "seed_gen_ready": seed_ready,
     }
 
 
@@ -143,10 +148,10 @@ def create_seed_gen_job(request: Request, body: SeedGenRequestBody) -> SeedGenJo
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    if not spec.fake_llm and not spec.dry_run and not is_vllm_daemon_ready():
-        raise HTTPException(
-            status_code=400,
-            detail="vLLM 未 ready です。fake_llm=true または dry_run=true を指定してください。",
+    if not spec.fake_llm and not spec.dry_run:
+        assert_profile_enqueueable(
+            get_orchestrator(request),
+            required_profile_from_spec(JobKind.SEED_GEN, spec),
         )
 
     record = JobRecord.create(spec, kind=JobKind.SEED_GEN)

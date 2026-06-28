@@ -102,7 +102,10 @@ def test_only_one_job_runs_at_a_time(tmp_path: Path) -> None:
 
 
 def test_chat_blocked_during_running_job(repo_root: Path) -> None:
-    """enqueue 実行中 → chat 409 → 完了後 probe 200。"""
+    """ジョブ実行中に distill 以外が active → chat 409 wrong_profile。"""
+    from joryu.orchestrator.profile import ModelProfile
+    from joryu.orchestrator.state import OrchestratorState, OrchestratorStatus
+
     app = create_app(repo_root=repo_root)
     app.state.chat_client = FakeVllmClient(answer="ok", thinking=None)
     client = TestClient(app)
@@ -111,14 +114,20 @@ def test_chat_blocked_during_running_job(repo_root: Path) -> None:
     session_id = created["session_id"]
 
     runner: JobRunner = app.state.job_runner
+    orch = app.state.orchestrator
     with runner._lock:
         runner._running_id = "busy-job"
+    orch._save_state(
+        OrchestratorState(status=OrchestratorStatus.ACTIVE, active=ModelProfile.SEED_GEN)
+    )
     try:
         resp = client.post(f"/api/chat/sessions/{session_id}/_probe")
         assert resp.status_code == 409
+        assert resp.json()["detail"]["error"] == "wrong_profile"
     finally:
         with runner._lock:
             runner._running_id = None
+        orch.init_distill_active()
 
     resp = client.post(f"/api/chat/sessions/{session_id}/_probe")
     assert resp.status_code == 200

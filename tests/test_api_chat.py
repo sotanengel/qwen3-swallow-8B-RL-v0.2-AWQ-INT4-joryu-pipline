@@ -257,20 +257,27 @@ def test_probe_idle_returns_ok(client: TestClient) -> None:
 
 
 def test_probe_rejects_when_running_id_set(client: TestClient) -> None:
+    from joryu.orchestrator.profile import ModelProfile
+    from joryu.orchestrator.state import OrchestratorState, OrchestratorStatus
+
     created = client.post("/api/chat/sessions").json()
     session_id = created["session_id"]
     runner: JobRunner = client.app.state.job_runner
+    orch = client.app.state.orchestrator
     with runner._lock:
         runner._running_id = "busy-job-id"
+    orch._save_state(
+        OrchestratorState(status=OrchestratorStatus.ACTIVE, active=ModelProfile.SEED_GEN)
+    )
     try:
         resp = client.post(f"/api/chat/sessions/{session_id}/_probe")
         assert resp.status_code == 409
         body = resp.json()
-        assert body["detail"]["error"] == "job_active"
-        assert body["detail"]["running_id"] == "busy-job-id"
+        assert body["detail"]["error"] == "wrong_profile"
     finally:
         with runner._lock:
             runner._running_id = None
+        orch.init_distill_active()
 
 
 def test_probe_allows_when_queued_job_exists_in_store_only(client: TestClient) -> None:
@@ -380,20 +387,29 @@ def test_initial_broadcast_rejects_after_first_turn(client: TestClient) -> None:
 
 
 def test_messages_reject_when_job_active(client: TestClient) -> None:
+    from joryu.orchestrator.profile import ModelProfile
+    from joryu.orchestrator.state import OrchestratorState, OrchestratorStatus
+
     created = client.post("/api/chat/sessions").json()
     session_id = created["session_id"]
     runner: JobRunner = client.app.state.job_runner
+    orch = client.app.state.orchestrator
     with runner._lock:
         runner._running_id = "busy"
+    orch._save_state(
+        OrchestratorState(status=OrchestratorStatus.ACTIVE, active=ModelProfile.SEED_GEN)
+    )
     try:
         resp = client.post(
             f"/api/chat/sessions/{session_id}/messages",
             json={"prompt": "hi"},
         )
         assert resp.status_code == 409
+        assert resp.json()["detail"]["error"] == "wrong_profile"
     finally:
         with runner._lock:
             runner._running_id = None
+        orch.init_distill_active()
 
 
 def _assert_well_terminated(events: list[tuple[str, dict]], *, column_ids: set[str]) -> None:

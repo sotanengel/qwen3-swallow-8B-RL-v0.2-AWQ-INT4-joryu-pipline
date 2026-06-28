@@ -15,6 +15,7 @@ import {
   seedGenStatusLabel,
 } from "@/lib/seed-gen-jobs";
 import { createCurateJob } from "@/lib/curate-jobs";
+import { loadSystemStatus, profileReady } from "@/lib/system";
 import { useIntervalPoll } from "@/lib/useIntervalPoll";
 
 export default function PromptsPage() {
@@ -28,6 +29,16 @@ export default function PromptsPage() {
   const [dryRun, setDryRun] = useState(false);
   const [manualPrompt, setManualPrompt] = useState("");
   const [manualDomain, setManualDomain] = useState("general_qa");
+
+  useEffect(() => {
+    loadSystemStatus()
+      .then((sys) => {
+        if (!profileReady(sys, "seed_gen")) {
+          setFakeLlm(true);
+        }
+      })
+      .catch(() => undefined);
+  }, []);
 
   const polledStatus = useIntervalPoll(
     () => loadSeedGenStatus(),

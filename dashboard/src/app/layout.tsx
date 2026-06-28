@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import Link from "next/link";
 
 import { DistillLiveAlertBanner } from "@/components/DistillLiveAlertBanner";
+import { SystemStatusBar } from "@/components/SystemStatusBar";
 
 import "./globals.css";
 
@@ -32,6 +33,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <Link href="/chat">チャット</Link>
           </nav>
         </header>
+        <SystemStatusBar />
         <DistillLiveAlertBanner />
         <main className="main">{children}</main>
         <footer className="footer">
