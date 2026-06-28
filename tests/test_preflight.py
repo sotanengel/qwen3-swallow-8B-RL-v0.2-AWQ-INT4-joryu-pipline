@@ -21,6 +21,7 @@ from joryu.preflight import (
     ensure_stats_json,
     ensure_vllm_limits,
     jsonl_has_content,
+    needs_vllm_base_build,
     path_affects_service,
     required_disk_gb,
     resolve_prompt_bank_seed_path,
@@ -52,6 +53,7 @@ from joryu.preflight import (
         ("src/joryu/api/app.py", {"api", "mcp"}),
         ("Dockerfile.api", {"api", "mcp"}),
         ("Dockerfile", {"joryu", "joryu-seed"}),
+        ("Dockerfile.vllm-base", {"joryu", "joryu-seed"}),
         ("Dockerfile.judge", {"joryu-judge"}),
         ("pyproject.toml", {"joryu", "joryu-seed"}),
         ("dashboard/src/app/page.tsx", {"dashboard"}),
@@ -277,6 +279,48 @@ def test_required_disk_gb_sums_thresholds() -> None:
     assert required_disk_gb(["joryu"]) == DISK_REQUIRED_GB["joryu"]
     assert required_disk_gb(["dashboard", "joryu"]) == (
         DISK_REQUIRED_GB["dashboard"] + DISK_REQUIRED_GB["joryu"]
+    )
+    assert required_disk_gb(["joryu"], include_vllm_base=True) == (
+        DISK_REQUIRED_GB["joryu"] + DISK_REQUIRED_GB["joryu-vllm-base"]
+    )
+
+
+def test_needs_vllm_base_build_when_image_missing() -> None:
+    assert needs_vllm_base_build(
+        Path("."),
+        ["joryu"],
+        first_run=False,
+        force_build=False,
+        inspect_runner=lambda *_args, **_kwargs: _InspectResult(returncode=1),
+    )
+
+
+def test_needs_vllm_base_build_skips_without_gpu_services() -> None:
+    assert not needs_vllm_base_build(
+        Path("."),
+        ["dashboard", "api"],
+        first_run=True,
+        force_build=True,
+    )
+
+
+def test_needs_vllm_base_build_on_dockerfile_vllm_base_change(tmp_path: Path) -> None:
+    (tmp_path / "Dockerfile.vllm-base").write_text("# touch\n", encoding="utf-8")
+
+    def _fake_git(args: list[str], **_kwargs: object) -> _GitResult:
+        if args[:3] == ["git", "diff", "--name-only"] and args[-1] == "HEAD":
+            return _GitResult(stdout="Dockerfile.vllm-base\n")
+        if args[:2] == ["git", "rev-parse"]:
+            return _GitResult(stdout="head\n")
+        return _GitResult(stdout="")
+
+    assert needs_vllm_base_build(
+        tmp_path,
+        ["joryu"],
+        first_run=False,
+        force_build=False,
+        git_runner=_fake_git,
+        inspect_runner=lambda *_args, **_kwargs: _InspectResult(returncode=0),
     )
 
 

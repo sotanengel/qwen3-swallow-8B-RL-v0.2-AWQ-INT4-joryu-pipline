@@ -14,12 +14,44 @@ from joryu.compose import (
     image_prune_command,
     run_pre_browser_image_cleanup,
     run_up_startup_cleanup,
+    vllm_base_build_command,
 )
 
 
 def test_build_single_service() -> None:
     cmd = compose_build_command(services=["dashboard"])
     assert cmd == ["docker", "compose", "build", "dashboard"]
+
+
+def test_vllm_base_build_command() -> None:
+    cmd = vllm_base_build_command(repo_root="/repo")
+    assert cmd == [
+        "docker",
+        "build",
+        "-f",
+        "Dockerfile.vllm-base",
+        "-t",
+        "joryu-vllm-base:latest",
+        "/repo",
+    ]
+
+
+def test_build_with_compose_profiles() -> None:
+    cmd = compose_build_command(
+        services=["dashboard", "api"],
+        profiles=["always", "distill"],
+    )
+    assert cmd == [
+        "docker",
+        "compose",
+        "--profile",
+        "always",
+        "--profile",
+        "distill",
+        "build",
+        "dashboard",
+        "api",
+    ]
 
 
 def test_build_multiple_services() -> None:

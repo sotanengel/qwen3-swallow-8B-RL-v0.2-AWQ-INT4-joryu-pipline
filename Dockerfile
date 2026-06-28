@@ -1,4 +1,4 @@
-# joryu app コンテナ。uv ビルド + NVIDIA CUDA ランタイム + vLLM。
+# joryu app コンテナ。joryu-vllm-base 上にアプリ層のみ追加 (vLLM 再コンパイル回避)。
 FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS builder
 
 WORKDIR /app
@@ -17,33 +17,22 @@ COPY tools.yaml ./tools.yaml
 COPY README.md ./README.md
 RUN uv sync --frozen --no-dev --extra api
 
-# cu130 + vLLM ランタイム (PyPI prebuilt wheel, git source ビルド回避)。
-# devel イメージ (nvcc 同梱) は fp8 KV 検証後 runtime へ移行可能 (ADR 0005)。
-FROM nvidia/cuda:13.0.0-devel-ubuntu24.04
+FROM joryu-vllm-base:latest
 
 LABEL org.opencontainers.image.source="https://github.com/sotanengel/qwen3-swallow-8B-RL-v0.2-AWQ-INT4-joryu-pipline"
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    ninja-build \
-    curl \
-    git \
-    && rm -rf /var/lib/apt/lists/*
+COPY --from=builder /app/src /app/src
+COPY --from=builder /app/scripts /app/scripts
+COPY --from=builder /app/pyproject.toml /app/pyproject.toml
+COPY --from=builder /app/uv.lock /app/uv.lock
+COPY --from=builder /app/config.yaml /app/config.yaml
+COPY --from=builder /app/styles.yaml /app/styles.yaml
+COPY --from=builder /app/tools.yaml /app/tools.yaml
+COPY --from=builder /app/README.md /app/README.md
 
-COPY --from=builder /usr/local /usr/local
-COPY --from=builder /app /app
-
-ENV UV_TORCH_BACKEND=cu130
-
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install "torch>=2.12.1" --python /app/.venv/bin/python \
-       --index-url https://download.pytorch.org/whl/cu130
-
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install "vllm==0.23.0" --python /app/.venv/bin/python \
-       --extra-index-url https://download.pytorch.org/whl/cu130
+RUN uv sync --frozen --no-dev --extra api
 
 ENV PATH="/app/.venv/bin:/usr/local/bin:$PATH" \
     PYTHONPATH=/app/src \
