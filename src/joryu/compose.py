@@ -12,10 +12,16 @@ JORYU_VLLM_BASE_IMAGE = "joryu-vllm-base:latest"
 
 
 def vllm_base_build_command(*, repo_root: str) -> list[str]:
-    """``docker build -f Dockerfile.vllm-base -t joryu-vllm-base:latest`` を構築。"""
+    """``docker build --progress=plain -f Dockerfile.vllm-base -t joryu-vllm-base:latest`` を構築。
+
+    ``--progress=plain`` を**必ず**付ける。試行 1 (PR #329 の初版) では既定の
+    ``--progress=auto`` で setup.py の出力が完全に隠れ、ビルドが hang か進行中か
+    判別不能となった。joryu-up からの自動ビルドでも同じ理由で plain 化する。
+    """
     return [
         "docker",
         "build",
+        "--progress=plain",
         "-f",
         VLLM_BASE_DOCKERFILE,
         "-t",

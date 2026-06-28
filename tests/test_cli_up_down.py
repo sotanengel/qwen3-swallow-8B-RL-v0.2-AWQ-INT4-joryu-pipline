@@ -22,6 +22,7 @@ def _vllm_base_build(repo_root: str) -> list[str]:
     return [
         "docker",
         "build",
+        "--progress=plain",
         "-f",
         "Dockerfile.vllm-base",
         "-t",

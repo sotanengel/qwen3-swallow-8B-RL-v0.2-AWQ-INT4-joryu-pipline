@@ -206,7 +206,12 @@ def main(argv: list[str] | None = None) -> int:
     if build_services:
         compose_profiles = ["always", *(args.profiles or ["distill"])]
         if build_vllm_base:
-            logger.info("[joryu-up] building joryu-vllm-base (torch + vLLM compile)")
+            logger.info(
+                "[joryu-up] building joryu-vllm-base (torch + vLLM compile). "
+                "進捗は --progress=plain で stdout に流れます (時間が掛かる場合は "
+                "`bash scripts/build-vllm-base.sh` 単体でビルドし "
+                "`data/logs/build-vllm-base-<UTC>.log` を確認してください)",
+            )
             rc = run(vllm_base_build_command(repo_root=str(repo_root)))
             if rc != 0:
                 return rc

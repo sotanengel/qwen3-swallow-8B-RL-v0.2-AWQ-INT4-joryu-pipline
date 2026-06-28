@@ -24,10 +24,16 @@ def test_build_single_service() -> None:
 
 
 def test_vllm_base_build_command() -> None:
+    """既定で `--progress=plain` を付け setup.py のコンパイル進捗を可視化する。
+
+    試行 1 で `--progress=plain` 未指定により hang か進行中か判別不能となった
+    ため、joryu-up からも常に plain progress でビルドさせる。
+    """
     cmd = vllm_base_build_command(repo_root="/repo")
     assert cmd == [
         "docker",
         "build",
+        "--progress=plain",
         "-f",
         "Dockerfile.vllm-base",
         "-t",

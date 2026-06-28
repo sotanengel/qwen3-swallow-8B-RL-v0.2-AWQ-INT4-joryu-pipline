@@ -19,10 +19,35 @@ def test_dockerfile_vllm_base_has_torch_and_git_vllm() -> None:
     dockerfile = (REPO_ROOT / "Dockerfile.vllm-base").read_text(encoding="utf-8")
     assert "git+https://github.com/vllm-project/vllm@v0.23.1rc0" in dockerfile
     assert "torch>=" in dockerfile
-    assert "MAX_JOBS=1" in dockerfile
     assert "UV_TORCH_BACKEND=cu130" in dockerfile
     assert "id=joryu-uv-cu130,sharing=locked" in dockerfile
     assert dockerfile.count("uv pip install") >= 2
+
+
+def test_dockerfile_vllm_base_parallel_build_settings() -> None:
+    """`MAX_JOBS=1` だと nvcc 直列で実用不能 (試行 1 で 2 時間 hang を確認)。
+
+    12 論理 CPU の半分以下を上限に nvcc を並列化し、CUDA arch も実機向けに
+    絞ることでビルド時間を 1/24〜1/32 に短縮する契約。
+    """
+    dockerfile = (REPO_ROOT / "Dockerfile.vllm-base").read_text(encoding="utf-8")
+    assert "MAX_JOBS=4" in dockerfile
+    assert "NVCC_THREADS=2" in dockerfile
+    assert 'TORCH_CUDA_ARCH_LIST="8.6"' in dockerfile
+
+
+def test_dockerfile_vllm_base_uses_ccache() -> None:
+    """ccache 同梱で再ビルド時の CUDA カーネル再コンパイルを抑える。"""
+    dockerfile = (REPO_ROOT / "Dockerfile.vllm-base").read_text(encoding="utf-8")
+    assert "ccache" in dockerfile
+    assert "id=joryu-ccache" in dockerfile
+    assert "CCACHE_DIR=/root/.cache/ccache" in dockerfile
+
+
+def test_dockerfile_vllm_base_verbose_pip_install() -> None:
+    """vLLM の uv pip install を `-v` 化し setup.py の進捗を出させる。"""
+    dockerfile = (REPO_ROOT / "Dockerfile.vllm-base").read_text(encoding="utf-8")
+    assert 'uv pip install -v "vllm @ git+' in dockerfile
 
 
 def test_dockerfile_app_syncs_on_top_of_base_venv() -> None:
