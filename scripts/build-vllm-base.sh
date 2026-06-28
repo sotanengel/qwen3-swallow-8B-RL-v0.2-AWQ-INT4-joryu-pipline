@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 # joryu-vllm-base:latest を進捗ログ付きでビルドする。
 #
+# image 構成 (PR #330 で分離):
+#   - joryu-vllm-base:latest = torch + git vLLM コンパイル済みベース (本スクリプト)
+#   - joryu / joryu-seed     = 常駐 vLLM サーバ、上記 base image を直接参照 (src/ なし)
+#   - joryu-job:latest       = api からの compose run 用、base + src + uv sync
+#                              手動 build: docker build -f Dockerfile.job -t joryu-job:latest .
+#   - joryu-judge:latest     = llama.cpp + GGUF (Dockerfile.judge)
+#
 # 試行 1 (MAX_JOBS=1 + arch 全部 + progress=auto) で 2 時間以上の hang が
 # 起きた反省から、以下を強制する:
 #   - docker build --progress=plain     # setup.py の bdist_wheel 出力を可視化
