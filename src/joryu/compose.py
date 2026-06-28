@@ -56,7 +56,9 @@ def staged_build_commands(
     """
     if not services:
         return []
-    heavy = [s for s in services if s in ("joryu", "joryu-seed", "joryu-judge")]
+    # joryu / joryu-seed は image: 直参照になり build 対象外。joryu-job (新ジョブ image)
+    # と joryu-judge を heavy として単独 build する。
+    heavy = [s for s in services if s in ("joryu-job", "joryu-judge")]
     light = [s for s in services if s not in heavy]
     cmds: list[list[str]] = []
     for svc in heavy:

@@ -138,7 +138,7 @@ def test_up_stops_joryu_before_compose_up(monkeypatch: pytest.MonkeyPatch) -> No
 def test_up_frontend_only_does_not_stop_joryu(monkeypatch: pytest.MonkeyPatch) -> None:
     stop_calls: list[str] = []
     calls = _patch_runner(monkeypatch)
-    monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: {"joryu"})
+    monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: {"joryu-job"})
     monkeypatch.setattr(
         "joryu.cli.up.stop_joryu_for_up",
         lambda **_: stop_calls.append("stop"),
@@ -181,7 +181,7 @@ def test_up_default_brings_up_all_builds_only_changed(
 
 def test_up_frontend_only_alias(monkeypatch: pytest.MonkeyPatch) -> None:
     calls = _patch_runner(monkeypatch)
-    monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: {"joryu"})
+    monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: {"joryu-job"})
     rc = cli_up.main(["--frontend-only"])
     assert rc == 0
     assert len(calls) == 2
@@ -190,16 +190,13 @@ def test_up_frontend_only_alias(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_up_backend_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    """--backend-only は joryu 常駐コンテナだけ up。joryu は image: 直参照なので build しない。"""
     calls = _patch_runner(monkeypatch)
-    monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: {"joryu"})
+    monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: {"joryu-job"})
     rc = cli_up.main(["--backend-only", "--detach"])
     assert rc == 0
     assert calls[0] == _STARTUP_IMAGE_PRUNE
-    assert calls[1] == _compose_build("joryu")
-    assert calls[2] == ["docker", "image", "prune", "-f"]
-    assert calls[3] == ["docker", "builder", "prune", "-a", "-f"]
-    assert calls[4] == _compose_up_cmd("joryu", detach=True)
-    assert calls[5] == ["docker", "image", "prune", "-f"]
+    assert calls[1] == _compose_up_cmd("joryu", detach=True, force_recreate=False)
 
 
 def test_up_rejects_removed_full_flag(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -279,13 +276,14 @@ def test_up_build_flag_forces_rebuild(monkeypatch: pytest.MonkeyPatch) -> None:
     rc = cli_up.main(["--build"])
     assert rc == 0
     assert calls[0] == _STARTUP_IMAGE_PRUNE
-    assert calls[1] == _compose_build("joryu")
-    assert calls[2] == _compose_build("joryu-seed")
-    assert calls[3] == _compose_build("joryu-judge")
-    assert calls[4] == _compose_build("dashboard", "api")
-    assert calls[5] == ["docker", "image", "prune", "-f"]
-    assert calls[6] == ["docker", "builder", "prune", "-a", "-f"]
-    assert calls[7] == _compose_up_cmd("dashboard", "api", "joryu")
+    # joryu / joryu-seed は image: 直参照になったため build 対象から外れる。
+    # heavy = joryu-job, joryu-judge / light = dashboard, api。
+    assert calls[1] == _compose_build("joryu-job")
+    assert calls[2] == _compose_build("joryu-judge")
+    assert calls[3] == _compose_build("dashboard", "api")
+    assert calls[4] == ["docker", "image", "prune", "-f"]
+    assert calls[5] == ["docker", "builder", "prune", "-a", "-f"]
+    assert calls[6] == _compose_up_cmd("dashboard", "api", "joryu")
 
 
 def test_up_builds_vllm_base_before_joryu_on_first_run(
@@ -300,7 +298,7 @@ def test_up_builds_vllm_base_before_joryu_on_first_run(
     rc = cli_up.main([])
     assert rc == 0
     assert calls[1] == _vllm_base_build(str(tmp_path))
-    assert calls[2] == _compose_build("joryu")
+    assert calls[2] == _compose_build("joryu-job")
 
 
 def test_up_first_run_builds_up_targets(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -310,21 +308,21 @@ def test_up_first_run_builds_up_targets(monkeypatch: pytest.MonkeyPatch) -> None
     rc = cli_up.main([])
     assert rc == 0
     assert calls[0] == _STARTUP_IMAGE_PRUNE
-    assert calls[1] == _compose_build("joryu")
-    assert calls[2] == _compose_build("joryu-seed")
-    assert calls[3] == _compose_build("joryu-judge")
-    assert calls[4] == _compose_build("dashboard", "api")
+    assert calls[1] == _compose_build("joryu-job")
+    assert calls[2] == _compose_build("joryu-judge")
+    assert calls[3] == _compose_build("dashboard", "api")
     assert calls[-1] == _compose_up_cmd("dashboard", "api", "joryu")
 
 
 def test_up_builds_joryu_when_image_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    """joryu-job:latest が無い (api job 実行不可) なら build 対象に積む。"""
     calls = _patch_runner(monkeypatch)
     monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: set())
     monkeypatch.setattr("joryu.preflight.docker_image_exists", lambda *_args, **_kwargs: False)
     rc = cli_up.main([])
     assert rc == 0
     assert calls[0] == _STARTUP_IMAGE_PRUNE
-    assert calls[1] == _compose_build("joryu")
+    assert calls[1] == _compose_build("joryu-job")
     assert calls[2] == ["docker", "image", "prune", "-f"]
     assert calls[3] == ["docker", "builder", "prune", "-a", "-f"]
     assert calls[4] == _compose_up_cmd("dashboard", "api", "joryu")
@@ -352,7 +350,7 @@ def test_up_prunes_dangling_images_after_successful_up_with_build(
 def test_up_aborts_on_insufficient_disk(monkeypatch: pytest.MonkeyPatch) -> None:
     """空き容量不足が prune 後も解消しない時は abort する。"""
     calls = _patch_runner(monkeypatch)
-    monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: {"joryu"})
+    monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: {"joryu-job"})
 
     def _fail_disk(
         services: list[str],
@@ -381,7 +379,7 @@ def test_up_auto_prunes_and_continues_when_disk_recovered(
 ) -> None:
     """1 回目の disk check 失敗 → builder prune → 2 回目成功なら build/up を続行する。"""
     calls = _patch_runner(monkeypatch)
-    monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: {"joryu"})
+    monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: {"joryu-job"})
 
     attempts: list[int] = []
 
@@ -405,7 +403,7 @@ def test_up_auto_prunes_and_continues_when_disk_recovered(
     assert len(attempts) == 2
     assert calls[0] == _STARTUP_IMAGE_PRUNE
     assert calls[1] == ["docker", "builder", "prune", "-a", "-f"]
-    assert calls[2] == _compose_build("joryu")
+    assert calls[2] == _compose_build("joryu-job")
     assert calls[3] == ["docker", "image", "prune", "-f"]
     assert calls[4] == ["docker", "builder", "prune", "-a", "-f"]
     assert calls[5][:7] == _UP_WITH_DISTILL
@@ -413,7 +411,7 @@ def test_up_auto_prunes_and_continues_when_disk_recovered(
 
 def test_up_force_bypasses_disk_check(monkeypatch: pytest.MonkeyPatch) -> None:
     calls = _patch_runner(monkeypatch)
-    monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: {"joryu"})
+    monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: {"joryu-job"})
     recorded: list[bool] = []
 
     def _record_force(
@@ -430,7 +428,7 @@ def test_up_force_bypasses_disk_check(monkeypatch: pytest.MonkeyPatch) -> None:
     assert rc == 0
     assert recorded == [True]
     assert calls[0] == _STARTUP_IMAGE_PRUNE
-    assert calls[1] == _compose_build("joryu")
+    assert calls[1] == _compose_build("joryu-job")
     assert calls[2] == ["docker", "image", "prune", "-f"]
     assert calls[3] == ["docker", "builder", "prune", "-a", "-f"]
     assert calls[4] == _compose_up_cmd("dashboard", "api", "joryu")
@@ -492,7 +490,7 @@ def test_up_detach_prunes_dangling_images_before_browser_after_build(
 
 def test_up_backend_only_does_not_open_browser(monkeypatch: pytest.MonkeyPatch) -> None:
     _patch_runner(monkeypatch)
-    monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: {"joryu"})
+    monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: {"joryu-job"})
     opened: list[bool] = []
     monkeypatch.setattr(
         "joryu.cli.up.open_dashboard_when_ready",

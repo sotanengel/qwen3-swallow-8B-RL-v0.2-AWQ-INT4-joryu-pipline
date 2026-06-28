@@ -41,27 +41,30 @@ from joryu.preflight import (
 @pytest.mark.parametrize(
     ("path", "expected"),
     [
-        ("src/joryu/cli/up.py", {"joryu", "joryu-seed"}),
-        ("src/joryu/distill.py", {"api", "joryu"}),
-        ("src/joryu/preflight.py", {"api", "joryu"}),
+        ("src/joryu/cli/up.py", {"joryu-job"}),
+        ("src/joryu/distill.py", {"api", "joryu-job"}),
+        ("src/joryu/preflight.py", {"api", "joryu-job"}),
         ("src/joryu/jobs/runner.py", {"api", "mcp"}),
-        ("src/joryu/docker_delegate.py", {"api", "joryu"}),
-        ("src/joryu/docker_runtime.py", {"api", "joryu"}),
-        ("src/joryu/stats.py", {"api", "joryu"}),
-        ("docker-compose.yml", {"api", "joryu", "joryu-seed", "joryu-judge", "mcp"}),
+        ("src/joryu/docker_delegate.py", {"api", "joryu-job"}),
+        ("src/joryu/docker_runtime.py", {"api", "joryu-job"}),
+        ("src/joryu/stats.py", {"api", "joryu-job"}),
+        (
+            "docker-compose.yml",
+            {"api", "joryu", "joryu-seed", "joryu-job", "joryu-judge", "mcp"},
+        ),
         ("src/joryu/jobs/models.py", {"api", "mcp"}),
         ("src/joryu/api/app.py", {"api", "mcp"}),
         ("Dockerfile.api", {"api", "mcp"}),
-        ("Dockerfile.job", {"joryu", "joryu-seed"}),
-        ("Dockerfile.vllm-base", {"joryu", "joryu-seed"}),
+        ("Dockerfile.job", {"joryu-job"}),
+        ("Dockerfile.vllm-base", {"joryu", "joryu-seed", "joryu-job"}),
         ("Dockerfile.judge", {"joryu-judge"}),
-        ("pyproject.toml", {"joryu", "joryu-seed"}),
+        ("pyproject.toml", {"joryu-job"}),
         ("dashboard/src/app/page.tsx", {"dashboard"}),
         ("dashboard/Dockerfile", {"dashboard"}),
         ("dashboard/public/.gitkeep", {"dashboard"}),
         ("dashboard/public/responses.jsonl", set()),
         ("dashboard/public/stats.json", set()),
-        ("README.md", {"joryu", "joryu-seed"}),
+        ("README.md", {"joryu-job"}),
         ("docs/architecture.md", set()),
     ],
 )
@@ -82,7 +85,7 @@ def test_changed_services_from_git_merges_sources() -> None:
         return _GitResult(stdout="")
 
     changed = changed_services_from_git(Path("."), git_runner=_fake_git)
-    assert changed == {"joryu", "joryu-seed", "dashboard"}
+    assert changed == {"joryu-job", "dashboard"}
 
 
 def test_changed_services_includes_commits_since_last_up(tmp_path: Path) -> None:
@@ -110,7 +113,7 @@ def test_services_to_build_first_run_builds_all_up_targets() -> None:
         set(),
         no_build=False,
         first_run=True,
-    ) == ["dashboard", "api", "joryu", "joryu-seed", "joryu-judge"]
+    ) == ["dashboard", "api", "joryu-job", "joryu-judge"]
 
 
 def test_services_to_build_builds_joryu_when_image_missing() -> None:
@@ -119,7 +122,7 @@ def test_services_to_build_builds_joryu_when_image_missing() -> None:
         set(),
         no_build=False,
         inspect_runner=lambda *_args, **_kwargs: _InspectResult(returncode=1),
-    ) == ["joryu"]
+    ) == ["joryu-job"]
 
 
 def test_services_to_build_skips_joryu_when_image_exists_and_no_diff() -> None:
@@ -157,7 +160,7 @@ def test_services_to_build_skips_when_built_at_head(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr("joryu.preflight.git_head_at", lambda _root, **_: "head-abc")
-    save_up_state(tmp_path, "head-abc", built_services=["dashboard", "api", "joryu"])
+    save_up_state(tmp_path, "head-abc", built_services=["dashboard", "api", "joryu-job"])
     assert services_missing_build_at_head(["dashboard", "api"], tmp_path) == set()
     assert (
         services_to_build(
@@ -174,11 +177,11 @@ def test_services_to_build_skips_when_built_at_head(
 
 def test_docker_image_exists() -> None:
     assert docker_image_exists(
-        "joryu:latest",
+        "joryu-job:latest",
         inspect_runner=lambda *_args, **_kwargs: _InspectResult(returncode=0),
     )
     assert not docker_image_exists(
-        "joryu:latest",
+        "joryu-job:latest",
         inspect_runner=lambda *_args, **_kwargs: _InspectResult(returncode=1),
     )
 
@@ -189,7 +192,7 @@ def test_services_to_build_force_build() -> None:
         set(),
         no_build=False,
         force_build=True,
-    ) == ["dashboard", "api", "joryu", "joryu-seed", "joryu-judge"]
+    ) == ["dashboard", "api", "joryu-job", "joryu-judge"]
 
 
 def test_resolve_up_services_default_no_changes() -> None:
@@ -247,29 +250,30 @@ def test_services_to_build_intersection() -> None:
     def _image_exists(*_args: object, **_kwargs: object) -> _InspectResult:
         return _InspectResult(returncode=0)
 
-    assert services_to_build(["dashboard", "joryu"], {"joryu"}, no_build=False) == ["joryu"]
-    assert services_to_build(["dashboard"], {"joryu"}, no_build=False) == []
+    # joryu / joryu-seed は常駐 image: 直参照になったため、build 対象には含めない。
+    assert services_to_build(["dashboard", "joryu"], {"joryu"}, no_build=False) == []
+    assert services_to_build(["dashboard"], {"joryu-job"}, no_build=False) == []
     assert services_to_build(["dashboard"], {"dashboard"}, no_build=True) == []
+    # api を up すると joryu-job image が必要なので、image が無ければ build 対象に積む。
     assert services_to_build(
         ["dashboard", "api"],
-        {"joryu"},
+        {"joryu-job"},
         no_build=False,
         inspect_runner=_image_exists,
-    ) == ["joryu"]
+    ) == ["joryu-job"]
     assert services_to_build(
         ["dashboard", "api"],
-        {"dashboard", "joryu"},
+        {"dashboard", "joryu-job"},
         no_build=False,
         inspect_runner=_image_exists,
     ) == [
         "dashboard",
-        "joryu",
+        "joryu-job",
     ]
     assert services_to_build(["dashboard", "api"], set(), no_build=False, force_build=True) == [
         "dashboard",
         "api",
-        "joryu",
-        "joryu-seed",
+        "joryu-job",
         "joryu-judge",
     ]
 
