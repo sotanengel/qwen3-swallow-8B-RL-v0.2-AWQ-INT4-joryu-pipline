@@ -22,8 +22,12 @@ DISK_REQUIRED_GB: dict[str, float] = {
     "dashboard": 2.0,
     "api": 1.0,
     "joryu-vllm-base": 10.0,
-    "joryu": 10.0,
-    "joryu-seed": 10.0,
+    # 常駐 vLLM サーバ (joryu / joryu-seed) は joryu-vllm-base:latest を直接参照する
+    # ため、サービス単独で build 容量を見積もる必要はない (vllm-base 側で確保)。
+    "joryu": 1.0,
+    "joryu-seed": 1.0,
+    # joryu-job: vllm-base + src/uv sync の追加層のみ。
+    "joryu-job": 3.0,
     "joryu-judge": 3.0,
 }
 
@@ -71,7 +75,15 @@ _DASHBOARD_RUNTIME_PATHS = frozenset(
     }
 )
 
-_COMPOSE_SERVICE_ORDER = ("dashboard", "mcp", "api", "joryu", "joryu-seed", "joryu-judge")
+_COMPOSE_SERVICE_ORDER = (
+    "dashboard",
+    "mcp",
+    "api",
+    "joryu",
+    "joryu-seed",
+    "joryu-job",
+    "joryu-judge",
+)
 _DEFAULT_UP = ("dashboard", "api", "joryu")
 _UP_STATE_REL = Path("data") / ".joryu" / "up-state.json"
 
@@ -103,7 +115,7 @@ class _InspectRunner(Protocol):
     ) -> subprocess.CompletedProcess[str]: ...
 
 
-JORYU_JOB_IMAGE = "joryu:latest"
+JORYU_JOB_IMAGE = "joryu-job:latest"
 JORYU_VLLM_BASE_IMAGE = "joryu-vllm-base:latest"
 VLLM_BASE_DOCKERFILE = "Dockerfile.vllm-base"
 
@@ -125,7 +137,14 @@ def docker_image_exists(
 
 
 def path_affects_service(path: str) -> set[str]:
-    """build context 上、変更パスが影響する compose サービス名を返す。"""
+    """build context 上、変更パスが影響する compose サービス名を返す。
+
+    image 分離後の方針:
+    - 常駐 vLLM サーバ (joryu / joryu-seed) は src/ を持たないので、src 差分では
+      rebuild 対象に含めない。Dockerfile.vllm-base 変更時のみ vllm-base 経由で
+      影響する。
+    - ジョブ実行 image (joryu-job) は src/uv sync を持つので、src 変更で rebuild。
+    """
     normalized = path.replace("\\", "/")
     if normalized in _DASHBOARD_RUNTIME_PATHS:
         return set()
@@ -134,15 +153,18 @@ def path_affects_service(path: str) -> set[str]:
     if normalized.startswith("src/joryu/mcp/"):
         return {"api", "mcp"}
     if normalized == "docker-compose.yml":
-        return {"api", "joryu", "joryu-seed", "joryu-judge", "mcp"}
+        return {"api", "joryu", "joryu-seed", "joryu-job", "joryu-judge", "mcp"}
     if normalized == "Dockerfile.judge":
         return {"joryu-judge"}
+    if normalized == "Dockerfile.vllm-base":
+        # vllm-base は joryu / joryu-seed / joryu-job が共通参照する。
+        return {"joryu", "joryu-seed", "joryu-job"}
     if normalized in _JORYU_JOB_RUNTIME_PATHS:
-        return {"api", "joryu"}
+        return {"api", "joryu-job"}
     if normalized.startswith(_DASHBOARD_PREFIX):
         return {"dashboard"}
     if normalized in _JORYU_PATHS or normalized.startswith(_JORYU_PREFIXES):
-        return {"joryu", "joryu-seed"}
+        return {"joryu-job"}
     return set()
 
 
@@ -346,8 +368,12 @@ def needs_vllm_base_build(
     git_runner: _GitRunner | None = None,
     inspect_runner: _InspectRunner | None = None,
 ) -> bool:
-    """``joryu-vllm-base:latest`` の docker build が必要か。"""
-    if not ({"joryu", "joryu-seed"} & set(build_services)):
+    """``joryu-vllm-base:latest`` の docker build が必要か。
+
+    joryu / joryu-seed は vllm-base を直接参照、joryu-job は vllm-base を
+    `FROM` で継承する。いずれかを build する必要があれば vllm-base も用意する。
+    """
+    if not ({"joryu", "joryu-seed", "joryu-job"} & set(build_services)):
         return False
     if force_build or first_run:
         return True
@@ -379,16 +405,18 @@ def services_to_build(
             stale = services_missing_build_at_head(up_services, repo_root)
         candidates = [svc for svc in up_services if svc in changed or svc in stale]
 
-    # api を up する = ジョブが joryu:latest を docker run する。
-    if "api" in up_services and "joryu" not in candidates:
-        needs_joryu = (
-            "joryu" in changed
+    # api を up する = ジョブが joryu-job:latest を docker run する。
+    # joryu-job は profiles: [never] なので up_services に通常含まれないが、
+    # api コンテナからの compose run のために事前 build しておく必要がある。
+    if "api" in up_services:
+        needs_job = (
+            "joryu-job" in changed
             or first_run
             or force_build
             or not docker_image_exists(JORYU_JOB_IMAGE, inspect_runner=inspect_runner)
         )
-        if needs_joryu:
-            candidates.append("joryu")
+        if needs_job and "joryu-job" not in candidates:
+            candidates.append("joryu-job")
 
     candidate_set = set(candidates)
     if "mcp" in candidate_set:
@@ -396,10 +424,14 @@ def services_to_build(
         if "api" in up_services:
             candidate_set.add("api")
 
-    # lazy GPU サービス: 初回 / 強制 build 時は up 対象外でもイメージを構築
+    # 常駐 vLLM サーバ (joryu / joryu-seed) は image: 直参照なので build 対象外。
+    # joryu-judge は初回 / 強制 build 時にだけ事前 build しておく (lazy GPU)。
     if first_run or force_build:
-        for lazy_svc in ("joryu-seed", "joryu-judge"):
-            candidate_set.add(lazy_svc)
+        candidate_set.add("joryu-judge")
+
+    # 常駐 vLLM サーバは build しない (`image: joryu-vllm-base:latest` 直参照)。
+    candidate_set.discard("joryu")
+    candidate_set.discard("joryu-seed")
 
     return [svc for svc in _COMPOSE_SERVICE_ORDER if svc in candidate_set]
 
