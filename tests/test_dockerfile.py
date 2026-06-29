@@ -18,10 +18,46 @@ def test_dockerfile_app_stage_from_vllm_base() -> None:
 def test_dockerfile_vllm_base_has_torch_and_git_vllm() -> None:
     dockerfile = (REPO_ROOT / "Dockerfile.vllm-base").read_text(encoding="utf-8")
     assert "git+https://github.com/vllm-project/vllm@v0.23.1rc0" in dockerfile
-    assert "torch>=" in dockerfile
+    assert "torch==2.12.1+cu130" in dockerfile
     assert "UV_TORCH_BACKEND=cu130" in dockerfile
     assert "id=joryu-uv-cu130,sharing=locked" in dockerfile
     assert dockerfile.count("uv pip install") >= 2
+
+
+def test_dockerfile_vllm_base_forces_source_build() -> None:
+    """stale uv wheel / precompiled 経路で torch ABI mismatch になるのを防ぐ契約 (#342)。"""
+    dockerfile = (REPO_ROOT / "Dockerfile.vllm-base").read_text(encoding="utf-8")
+    assert "VLLM_USE_PRECOMPILED=0" in dockerfile
+    assert "--no-build-isolation" in dockerfile
+    assert "--reinstall-package vllm" in dockerfile
+
+
+def test_dockerfile_vllm_base_vllm_install_no_uv_cache_mount() -> None:
+    """vLLM install step は uv cache mount を使わず stale wheel 再利用を防ぐ。"""
+    dockerfile = (REPO_ROOT / "Dockerfile.vllm-base").read_text(encoding="utf-8")
+    marker = "--reinstall-package vllm"
+    start = dockerfile.index(marker)
+    vllm_run = dockerfile.rfind("RUN", 0, start)
+    vllm_block = dockerfile[vllm_run : dockerfile.find("\n\n", start)]
+    assert "joryu-uv-cu130" not in vllm_block
+    assert "joryu-ccache" in vllm_block
+
+
+def test_dockerfile_vllm_base_smoke_test_import() -> None:
+    """ビルド時に vllm._C import を検証し runtime ImportError を fail-fast する。"""
+    dockerfile = (REPO_ROOT / "Dockerfile.vllm-base").read_text(encoding="utf-8")
+    assert "import vllm._C" in dockerfile
+    assert "vllm+torch OK" in dockerfile
+
+
+def test_dockerfile_vllm_base_installs_build_deps_for_no_build_isolation() -> None:
+    """--no-build-isolation では vLLM build-system requires を venv に入れてからビルドする。"""
+    dockerfile = (REPO_ROOT / "Dockerfile.vllm-base").read_text(encoding="utf-8")
+    assert "setuptools-rust>=1.9.0" in dockerfile
+    assert "cmake>=3.26.1" in dockerfile
+    build_deps_idx = dockerfile.index("setuptools-rust>=1.9.0")
+    vllm_idx = dockerfile.index("--reinstall-package vllm")
+    assert build_deps_idx < vllm_idx
 
 
 def test_dockerfile_vllm_base_parallel_build_settings() -> None:
@@ -47,7 +83,8 @@ def test_dockerfile_vllm_base_uses_ccache() -> None:
 def test_dockerfile_vllm_base_verbose_pip_install() -> None:
     """vLLM の uv pip install を `-v` 化し setup.py の進捗を出させる。"""
     dockerfile = (REPO_ROOT / "Dockerfile.vllm-base").read_text(encoding="utf-8")
-    assert 'uv pip install -v "vllm @ git+' in dockerfile
+    assert "uv pip install -v --no-build-isolation --reinstall-package vllm" in dockerfile
+    assert '"vllm @ git+' in dockerfile
 
 
 def test_dockerfile_app_syncs_on_top_of_base_venv() -> None:
