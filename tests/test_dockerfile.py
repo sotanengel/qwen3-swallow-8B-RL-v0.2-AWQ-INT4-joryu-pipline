@@ -2,9 +2,19 @@
 
 from __future__ import annotations
 
+import importlib.util
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+TORCH_STACK_SCRIPT = REPO_ROOT / "scripts" / "vllm_base_torch_stack.py"
+
+
+def _load_torch_stack():
+    spec = importlib.util.spec_from_file_location("vllm_base_torch_stack", TORCH_STACK_SCRIPT)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def test_dockerfile_app_stage_from_vllm_base() -> None:
@@ -43,11 +53,30 @@ def test_dockerfile_vllm_base_vllm_install_no_uv_cache_mount() -> None:
     assert "joryu-ccache" in vllm_block
 
 
-def test_dockerfile_vllm_base_smoke_test_import() -> None:
-    """ビルド時に vllm._C import を検証し runtime ImportError を fail-fast する。"""
+def test_dockerfile_vllm_base_uses_smoke_script() -> None:
+    """ビルド時 smoke は scripts/vllm_base_smoke.py で vllm serve 経路を検証する。"""
     dockerfile = (REPO_ROOT / "Dockerfile.vllm-base").read_text(encoding="utf-8")
-    assert "import vllm._C" in dockerfile
-    assert "vllm+torch OK" in dockerfile
+    assert "COPY scripts/vllm_base_smoke.py scripts/vllm_base_smoke.py" in dockerfile
+    assert "RUN python scripts/vllm_base_smoke.py" in dockerfile
+
+
+def test_vllm_base_torch_stack_ssot_matches_dockerfile() -> None:
+    """SSOT と Dockerfile の torch/torchvision/torchaudio pin が一致する。"""
+    stack = _load_torch_stack()
+    dockerfile = (REPO_ROOT / "Dockerfile.vllm-base").read_text(encoding="utf-8")
+    for pkg, version in stack.TORCH_STACK.items():
+        assert f"{pkg}=={version}" in dockerfile
+    assert stack.PYTORCH_INDEX in dockerfile
+
+
+def test_dockerfile_vllm_base_realigns_torch_stack_after_vllm() -> None:
+    """vLLM install 後に torchvision 等が transitive で戻るのを防ぐ realign 契約。"""
+    dockerfile = (REPO_ROOT / "Dockerfile.vllm-base").read_text(encoding="utf-8")
+    vllm_idx = dockerfile.index("--reinstall-package vllm")
+    after_vllm = dockerfile[vllm_idx:]
+    assert "--reinstall-package torchvision" in after_vllm
+    assert "--reinstall-package torchaudio" in after_vllm
+    assert "--reinstall-package torch" in after_vllm
 
 
 def test_dockerfile_vllm_base_installs_build_deps_for_no_build_isolation() -> None:
