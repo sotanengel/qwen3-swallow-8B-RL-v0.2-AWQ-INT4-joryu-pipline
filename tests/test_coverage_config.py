@@ -23,12 +23,21 @@ def test_check_coverage_script_exists_and_is_executable() -> None:
     assert "cov" in content
 
 
-def test_pre_commit_registers_coverage_gate() -> None:
+def test_pre_commit_does_not_register_pre_push_hooks() -> None:
+    """重い pytest/カバレッジは pre-push ではなく GitHub Actions に一任する。"""
     config = (REPO_ROOT / ".pre-commit-config.yaml").read_text(encoding="utf-8")
-    assert "pytest-coverage" in config
-    assert "check_coverage.sh" in config
+    assert "stages: [pre-push]" not in config
+    assert "pytest-coverage" not in config
+    assert "ci-gate-pre-push" not in config
+    assert "default_install_hook_types: [pre-commit, pre-push]" not in config
 
 
-def test_ci_workflow_runs_coverage_check() -> None:
+def test_check_sh_runs_coverage_gate() -> None:
+    script = (REPO_ROOT / "scripts" / "check.sh").read_text(encoding="utf-8")
+    assert "check_coverage.sh" in script
+
+
+def test_ci_workflow_runs_coverage_and_verify() -> None:
     ci = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
     assert "check_coverage.sh" in ci
+    assert "verify_pipeline.sh" in ci

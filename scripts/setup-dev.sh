@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 開発環境の初期セットアップ。依存インストール + pre-commit/pre-push フック登録。
+# 開発環境の初期セットアップ。依存インストール + pre-commit フック登録。
 #
 # 用法:
 #   bash scripts/setup-dev.sh
@@ -69,7 +69,7 @@ install_pinact() {
 
 install_pinact
 
-log "pre-commit install (pre-commit + pre-push hooks)"
-uvx pre-commit install --install-hooks -t pre-commit -t pre-push
+log "pre-commit install (commit hooks only; heavy checks run on GitHub Actions)"
+uvx pre-commit install --install-hooks -t pre-commit
 
-log "done. Before every commit/PR run: bash scripts/check.sh"
+log "done. Commit uses pre-commit hooks; push and wait for GitHub Actions (optional locally: bash scripts/check.sh)"
