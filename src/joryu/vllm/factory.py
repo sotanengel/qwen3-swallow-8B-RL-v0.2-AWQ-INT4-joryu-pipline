@@ -5,11 +5,25 @@ from __future__ import annotations
 import os
 
 from joryu.config import ModelConfig, VllmConfig
+from joryu.paths import resolve_limits_probe_path
 from joryu.vllm.common import DEFAULT_LOCAL_VLLM_URL
 from joryu.vllm.inproc import VllmClient
 from joryu.vllm.protocol import SupportsChat, SupportsChatStream, VllmError
 from joryu.vllm.serve import VllmServeClient
 from joryu.vllm.stream import VllmServeStreamClient
+from joryu.vllm_limits import clamp_model_limits, load_probe_limits
+
+
+def resolve_max_model_len(model_cfg: ModelConfig) -> int:
+    """VRAM probe を反映した effective num_ctx を返す。"""
+    probe_path = resolve_limits_probe_path(model_cfg.limits_probe_file)
+    probe = load_probe_limits(probe_path)
+    num_ctx, _ = clamp_model_limits(
+        requested_ctx=model_cfg.num_ctx,
+        requested_predict=model_cfg.num_predict,
+        probe=probe,
+    )
+    return num_ctx
 
 
 def resolve_vllm_serve_url(vllm_cfg: VllmConfig) -> str | None:
@@ -31,7 +45,11 @@ def resolve_chat_client(model_cfg: ModelConfig, vllm_cfg: VllmConfig) -> Support
 
     url = resolve_vllm_serve_url(vllm_cfg)
     if backend == "vllm-serve":
-        return VllmServeClient(url or DEFAULT_LOCAL_VLLM_URL, model=vllm_cfg.model_path)
+        return VllmServeClient(
+            url or DEFAULT_LOCAL_VLLM_URL,
+            model=vllm_cfg.model_path,
+            max_model_len=resolve_max_model_len(model_cfg),
+        )
     raise VllmError(f"unknown vllm.backend: {backend!r}")
 
 
@@ -40,15 +58,19 @@ def resolve_stream_chat_client(
     vllm_cfg: VllmConfig,
 ) -> SupportsChatStream | None:
     """backend が vllm-serve のときのみ streaming クライアントを返す。"""
-    del model_cfg
     if vllm_cfg.backend != "vllm-serve":
         return None
     url = resolve_vllm_serve_url(vllm_cfg)
-    return VllmServeStreamClient(url or DEFAULT_LOCAL_VLLM_URL, model=vllm_cfg.model_path)
+    return VllmServeStreamClient(
+        url or DEFAULT_LOCAL_VLLM_URL,
+        model=vllm_cfg.model_path,
+        max_model_len=resolve_max_model_len(model_cfg),
+    )
 
 
 __all__ = [
     "resolve_chat_client",
+    "resolve_max_model_len",
     "resolve_stream_chat_client",
     "resolve_vllm_serve_url",
 ]

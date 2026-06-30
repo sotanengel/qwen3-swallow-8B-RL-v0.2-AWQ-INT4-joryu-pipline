@@ -7,6 +7,8 @@ import os
 import re
 from typing import Any
 
+from joryu.vllm.protocol import VllmError
+
 logger = logging.getLogger(__name__)
 
 _THINK_RE = re.compile(r"<think>(.*?)</think>", re.DOTALL)
@@ -46,6 +48,76 @@ def compute_effective_max_tokens(
             max_model_len,
         )
     return effective
+
+
+def clamp_max_tokens_for_context(
+    *,
+    requested_max_tokens: int,
+    max_model_len: int,
+    prompt_tokens: int | None,
+    margin: int = _PROMPT_TOKEN_MARGIN,
+) -> int:
+    """推定 prompt token 数に基づき max_tokens をクランプする。推定不能時はそのまま返す。"""
+    if prompt_tokens is None:
+        return requested_max_tokens
+    if prompt_tokens + margin + _MIN_EFFECTIVE_MAX_TOKENS > max_model_len:
+        raise VllmError(
+            f"prompt too long for num_ctx={max_model_len}: "
+            f"estimated {prompt_tokens} prompt tokens (margin={margin})"
+        )
+    return compute_effective_max_tokens(
+        requested_max_tokens=requested_max_tokens,
+        max_model_len=max_model_len,
+        prompt_tokens=prompt_tokens,
+        margin=margin,
+    )
+
+
+_CONTEXT_OVERFLOW_INPUT_RE = re.compile(
+    r"prompt contains at least (\d+) input tokens",
+    re.IGNORECASE,
+)
+
+
+def parse_context_overflow_input_tokens(error_detail: str) -> int | None:
+    """vLLM HTTP 400 の error body から input token 数を抽出する。"""
+    match = _CONTEXT_OVERFLOW_INPUT_RE.search(error_detail)
+    if match:
+        return int(match.group(1))
+    return None
+
+
+def is_context_length_error(error_detail: str) -> bool:
+    lowered = error_detail.lower()
+    return "maximum context length" in lowered or "input_tokens" in lowered
+
+
+def resolve_serve_effective_max_tokens(
+    *,
+    messages: list[dict[str, str]],
+    model_path: str,
+    requested_max_tokens: int,
+    max_model_len: int | None,
+    enable_thinking: bool,
+    tools: list[dict[str, Any]] | None,
+) -> tuple[int, int | None]:
+    """serve/stream 用: 推定とクランプを行い (effective_max, prompt_tokens) を返す。"""
+    if max_model_len is None:
+        return requested_max_tokens, None
+    from joryu.vllm.prompt_tokens import estimate_chat_prompt_tokens
+
+    prompt_tokens = estimate_chat_prompt_tokens(
+        messages,
+        model_path=model_path,
+        enable_thinking=enable_thinking,
+        tools=tools,
+    )
+    effective = clamp_max_tokens_for_context(
+        requested_max_tokens=requested_max_tokens,
+        max_model_len=max_model_len,
+        prompt_tokens=prompt_tokens,
+    )
+    return effective, prompt_tokens
 
 
 def build_chat_template_kwargs(enable_thinking: bool) -> dict[str, Any]:
@@ -98,8 +170,12 @@ __all__ = [
     "DEFAULT_LOCAL_VLLM_URL",
     "build_chat_template_kwargs",
     "build_offline_chat_kwargs",
+    "clamp_max_tokens_for_context",
     "compute_effective_max_tokens",
     "extract_known_tool_names",
     "extract_thinking",
+    "is_context_length_error",
     "normalize_vllm_serve_base_url",
+    "parse_context_overflow_input_tokens",
+    "resolve_serve_effective_max_tokens",
 ]

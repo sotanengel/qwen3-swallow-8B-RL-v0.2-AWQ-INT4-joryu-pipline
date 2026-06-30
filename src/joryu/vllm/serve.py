@@ -9,7 +9,14 @@ from typing import Any
 from joryu.completion_normalize import normalize_chat_result
 from joryu.tool_calls import ParsedToolCall
 from joryu.vllm.base import HttpVllmBase
-from joryu.vllm.common import extract_known_tool_names, extract_thinking
+from joryu.vllm.common import (
+    clamp_max_tokens_for_context,
+    extract_known_tool_names,
+    extract_thinking,
+    is_context_length_error,
+    parse_context_overflow_input_tokens,
+    resolve_serve_effective_max_tokens,
+)
 from joryu.vllm.protocol import ChatResult, VllmError
 
 logger = logging.getLogger(__name__)
@@ -152,9 +159,43 @@ class VllmServeClient(HttpVllmBase):
         base_url: str,
         *,
         model: str = _DEFAULT_MODEL,
+        max_model_len: int | None = None,
         timeout_s: float = 600.0,
     ) -> None:
         super().__init__(base_url, model=model, timeout_s=timeout_s)
+        self._max_model_len = max_model_len
+
+    def _post_chat_completions(
+        self,
+        payload: dict[str, Any],
+        *,
+        requested_max_tokens: int,
+        prompt_tokens: int | None,
+    ) -> dict[str, Any]:
+        try:
+            return self.post_json_with_retry("/v1/chat/completions", payload)
+        except VllmError as exc:
+            if (
+                self._max_model_len is None
+                or prompt_tokens is not None
+                or not is_context_length_error(str(exc))
+            ):
+                raise
+            input_tokens = parse_context_overflow_input_tokens(str(exc))
+            if input_tokens is None:
+                raise
+            effective = clamp_max_tokens_for_context(
+                requested_max_tokens=requested_max_tokens,
+                max_model_len=self._max_model_len,
+                prompt_tokens=input_tokens,
+            )
+            payload["max_tokens"] = effective
+            logger.info(
+                "[vllm-serve] context overflow retry: input_tokens=%s max_tokens=%s",
+                input_tokens,
+                effective,
+            )
+            return self.post_json_with_retry("/v1/chat/completions", payload)
 
     def chat_via_template(
         self,
@@ -173,11 +214,24 @@ class VllmServeClient(HttpVllmBase):
             tool_choice=tool_choice,
             **sampling_overrides,
         )
-        effective_max = payload.get("max_tokens")
-        if not isinstance(effective_max, int):
-            effective_max = None
+        requested_max = payload.get("max_tokens")
+        if not isinstance(requested_max, int):
+            requested_max = int(sampling_overrides.get("max_tokens", 0)) or 2048
+        effective_max, prompt_tokens = resolve_serve_effective_max_tokens(
+            messages=messages,
+            model_path=self.model,
+            requested_max_tokens=requested_max,
+            max_model_len=self._max_model_len,
+            enable_thinking=enable_thinking,
+            tools=tools,
+        )
+        payload["max_tokens"] = effective_max
 
-        data = self.post_json_with_retry("/v1/chat/completions", payload)
+        data = self._post_chat_completions(
+            payload,
+            requested_max_tokens=requested_max,
+            prompt_tokens=prompt_tokens,
+        )
         known = extract_known_tool_names(tools)
         return openai_response_to_chat_result(
             data,

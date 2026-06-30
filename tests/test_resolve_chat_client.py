@@ -25,6 +25,7 @@ def test_resolve_vllm_serve_backend_returns_serve_client(
     assert isinstance(client, VllmServeClient)
     assert client._base_url == DEFAULT_LOCAL_VLLM_URL.rstrip("/").removesuffix("/v1")
     assert client._model == "org/my-model"
+    assert client._max_model_len == 4096
 
 
 def test_resolve_vllm_serve_backend_uses_env_url(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -60,6 +61,7 @@ def test_resolve_stream_client_vllm_serve(monkeypatch: pytest.MonkeyPatch) -> No
     assert isinstance(client, VllmServeStreamClient)
     assert client._base_url == DEFAULT_LOCAL_VLLM_URL.rstrip("/").removesuffix("/v1")
     assert client._model == "org/model"
+    assert client._max_model_len == 4096
 
 
 def test_resolve_stream_client_non_vllm_serve_returns_none() -> None:

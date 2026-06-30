@@ -14,7 +14,7 @@ import httpx
 from joryu.completion_normalize import normalize_chat_result
 from joryu.http_client import build_httpx_timeout, get_shared_async_client
 from joryu.tool_calls import ParsedToolCall
-from joryu.vllm.common import extract_known_tool_names
+from joryu.vllm.common import extract_known_tool_names, resolve_serve_effective_max_tokens
 from joryu.vllm.protocol import ChatResult, VllmError
 from joryu.vllm.serve import (
     _DEFAULT_MODEL,
@@ -182,6 +182,7 @@ class VllmServeStreamClient:
         base_url: str,
         *,
         model: str = _DEFAULT_MODEL,
+        max_model_len: int | None = None,
         timeout_s: float = 600.0,
         transport: httpx.AsyncBaseTransport | None = None,
         http_client: httpx.AsyncClient | None = None,
@@ -190,6 +191,7 @@ class VllmServeStreamClient:
 
         self._base_url = normalize_vllm_serve_base_url(base_url)
         self._model = model
+        self._max_model_len = max_model_len
         self._timeout_s = timeout_s
         self._transport = transport
         self._http_client = http_client
@@ -212,9 +214,18 @@ class VllmServeStreamClient:
             **sampling_overrides,
         )
         payload["stream"] = True
-        effective_max = payload.get("max_tokens")
-        if not isinstance(effective_max, int):
-            effective_max = None
+        requested_max = payload.get("max_tokens")
+        if not isinstance(requested_max, int):
+            requested_max = int(sampling_overrides.get("max_tokens", 0)) or 2048
+        effective_max, _prompt_tokens = resolve_serve_effective_max_tokens(
+            messages=messages,
+            model_path=self._model,
+            requested_max_tokens=requested_max,
+            max_model_len=self._max_model_len,
+            enable_thinking=enable_thinking,
+            tools=tools,
+        )
+        payload["max_tokens"] = effective_max
 
         known = extract_known_tool_names(tools)
         url = f"{self._base_url}/v1/chat/completions"
