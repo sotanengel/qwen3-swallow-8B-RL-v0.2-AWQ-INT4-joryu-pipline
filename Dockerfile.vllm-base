@@ -1,25 +1,10 @@
 # joryu-vllm-base: torch + git vLLM コンパイル済みベース (joryu / joryu-seed 共通)。
 # 再ビルド: Dockerfile.vllm-base または vLLM pin 変更時のみ。
-# devel イメージ (nvcc 同梱) は fp8 KV 用 (ADR 0005)。
-FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS builder
+# compile stage: cuda-devel + nvcc で vLLM ソースビルド。
+# runtime stage: cuda-devel (fp8 KV 用 ADR 0005) だが build ツールは含めない。
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS uv_toolchain
 
-WORKDIR /app
-
-ENV UV_COMPILE_BYTECODE=1 \
-    UV_LINK_MODE=copy
-
-COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev --no-install-project
-
-COPY src ./src
-COPY scripts ./scripts
-COPY config.yaml ./config.yaml
-COPY styles.yaml ./styles.yaml
-COPY tools.yaml ./tools.yaml
-COPY README.md ./README.md
-RUN uv sync --frozen --no-dev --extra api
-
-FROM nvidia/cuda:13.0.0-devel-ubuntu24.04
+FROM nvidia/cuda:13.0.0-devel-ubuntu24.04 AS compile
 
 LABEL org.opencontainers.image.source="https://github.com/sotanengel/qwen3-swallow-8B-RL-v0.2-AWQ-INT4-joryu-pipline"
 
@@ -35,8 +20,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /usr/local /usr/local
-COPY --from=builder /app /app
+COPY --from=uv_toolchain /usr/local /usr/local
+
+RUN uv venv /app/.venv --python python3.12
 
 # 並列度・対象 arch:
 #   - MAX_JOBS=4 / NVCC_THREADS=2: 12 論理 CPU の半分以下を上限。
@@ -51,7 +37,8 @@ ENV UV_TORCH_BACKEND=cu130 \
     NVCC_THREADS=2 \
     CMAKE_BUILD_PARALLEL_LEVEL=4 \
     TORCH_CUDA_ARCH_LIST="8.6" \
-    CCACHE_DIR=/root/.cache/ccache
+    CCACHE_DIR=/root/.cache/ccache \
+    PATH="/app/.venv/bin:/usr/local/bin:$PATH"
 
 # torch stack pin は scripts/vllm_base_torch_stack.py (SSOT) と一致させること。
 RUN --mount=type=cache,id=joryu-uv-cu130,sharing=locked,target=/root/.cache/uv \
@@ -96,8 +83,18 @@ RUN --mount=type=cache,id=joryu-uv-cu130,sharing=locked,target=/root/.cache/uv \
        --python /app/.venv/bin/python \
        --index-url https://download.pytorch.org/whl/cu130
 
+FROM nvidia/cuda:13.0.0-devel-ubuntu24.04 AS runtime
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=uv_toolchain /usr/local /usr/local
+COPY --from=compile /app/.venv /app/.venv
+
 ENV PATH="/app/.venv/bin:/usr/local/bin:$PATH" \
-    PYTHONPATH=/app/src \
     PYTHONUNBUFFERED=1 \
     LD_LIBRARY_PATH=/usr/local/cuda/lib64:${LD_LIBRARY_PATH} \
     VLLM_USE_DEEP_GEMM=0 \
