@@ -163,7 +163,9 @@ def test_dockerfile_app_syncs_on_top_of_base_venv() -> None:
     assert "COPY --from=builder /app/src /app/src" in dockerfile
 
 
-def test_pyproject_no_git_vllm_source() -> None:
+def test_pyproject_vllm_pinned_to_security_tag() -> None:
+    """vLLM は Dependabot CVE #3-#7 修正入り tag 経由で解決する (Closes #377)."""
     text = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
-    assert "[tool.uv.sources]" not in text or "vllm = { git" not in text
-    assert 'vllm = ["vllm==0.23.0"]' in text or "vllm==0.23.0" in text
+    assert "[tool.uv.sources]" in text
+    assert 'tag = "v0.23.1rc0"' in text
+    assert "vllm==0.23.0" not in text
