@@ -26,10 +26,9 @@ export function ToolEventTimeline({ events }: ToolEventTimelineProps) {
       aria-live="polite"
       aria-label="ツール実行タイムライン"
       className="tool-event-timeline"
-      style={{ marginBottom: "1.5rem" }}
     >
-      <h2 style={{ fontSize: "1rem", marginBottom: "0.75rem" }}>ツール実行</h2>
-      <ol style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: "0.5rem" }}>
+      <h2>ツール実行</h2>
+      <ol className="tool-event-list">
         {events.map((event) => {
           const pending = toolEventPending(event, events);
           const isError = event.kind === "error";
@@ -37,32 +36,21 @@ export function ToolEventTimeline({ events }: ToolEventTimelineProps) {
             <li key={`${event.kind}-${event.id}`}>
               <details
                 open={isError || pending}
-                style={{
-                  border: `1px solid ${isError ? "#c62828" : "var(--border)"}`,
-                  borderRadius: "6px",
-                  padding: "0.5rem 0.75rem",
-                  background: isError ? "rgba(198, 40, 40, 0.08)" : "transparent",
-                }}
+                className={`tool-event-details${isError ? " tool-event-details--error" : ""}`}
               >
-                <summary style={{ cursor: "pointer" }}>
+                <summary>
                   {eventLabel(event)}
                   {pending ? " (実行中…)" : null}
                   {isError ? " (失敗)" : null}
                 </summary>
                 {event.kind === "call" ? (
-                  <pre style={{ overflow: "auto", margin: "0.5rem 0 0", fontSize: "0.8rem" }}>
-                    {JSON.stringify(event.arguments, null, 2)}
-                  </pre>
+                  <pre className="tool-event-pre">{JSON.stringify(event.arguments, null, 2)}</pre>
                 ) : null}
                 {event.kind === "result" ? (
-                  <pre style={{ overflow: "auto", margin: "0.5rem 0 0", fontSize: "0.8rem" }}>
-                    {event.content}
-                  </pre>
+                  <pre className="tool-event-pre">{event.content}</pre>
                 ) : null}
                 {event.kind === "error" ? (
-                  <p style={{ margin: "0.5rem 0 0", color: "#c62828", fontSize: "0.85rem" }}>
-                    {event.message}
-                  </p>
+                  <p className="tool-event-error-msg">{event.message}</p>
                 ) : null}
               </details>
             </li>

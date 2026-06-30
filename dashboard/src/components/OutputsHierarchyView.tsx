@@ -95,7 +95,7 @@ export function OutputsHierarchyView({
   };
 
   if (tree.length === 0) {
-    return <p style={{ color: "var(--muted)" }}>表示する出力がありません。</p>;
+    return <p className="muted">表示する出力がありません。</p>;
   }
 
   return (
@@ -140,7 +140,7 @@ export function OutputsHierarchyView({
 
         {level === "categories" ? (
           <div className="outputs-table-wrap">
-            <table>
+            <table className="data-table">
               <thead>
                 <tr>
                   <th>名前</th>
@@ -172,7 +172,7 @@ export function OutputsHierarchyView({
 
         {level === "styles" && selectedCatNode ? (
           <div className="outputs-table-wrap">
-            <table>
+            <table className="data-table">
               <thead>
                 <tr>
                   <th>ID</th>
@@ -204,7 +204,7 @@ export function OutputsHierarchyView({
 
         {level === "records" && selectedStyleNode ? (
           <div className="outputs-table-wrap">
-            <table>
+            <table className="data-table">
               <thead>
                 <tr>
                   <th>mode</th>
@@ -226,24 +226,20 @@ export function OutputsHierarchyView({
                       className="output-list-row"
                       onClick={() => router.push(`/outputs/${id}`)}
                     >
-                      <td style={{ verticalAlign: "top" }}>{r.mode ?? ""}</td>
-                      <td style={{ verticalAlign: "top" }}>{r.model ?? "-"}</td>
+                      <td>{r.mode ?? ""}</td>
+                      <td>{r.model ?? "-"}</td>
                       <td>{truncateText(r.prompt, 80)}</td>
                       <td>{truncateText(r.answer, 60)}</td>
-                      <td style={{ verticalAlign: "top", whiteSpace: "nowrap" }}>
-                        {formatTokens(r)}
-                      </td>
-                      <td style={{ verticalAlign: "top" }}>
+                      <td className="cell-nowrap">{formatTokens(r)}</td>
+                      <td>
                         {formatStatus(r) === "truncated" ? (
                           <span className="badge-truncated">truncated</span>
                         ) : (
                           formatStatus(r)
                         )}
                       </td>
-                      <td style={{ verticalAlign: "top", whiteSpace: "nowrap" }}>
-                        {r.created_at ?? "-"}
-                      </td>
-                      <td style={{ verticalAlign: "top" }}>
+                      <td className="cell-nowrap">{r.created_at ?? "-"}</td>
+                      <td>
                         <button
                           type="button"
                           className="danger-btn"
@@ -266,8 +262,9 @@ export function OutputsHierarchyView({
       </div>
 
       {level === "records" && selectedStyleNode && folderRecords.length > BROWSE_PAGE_SIZE ? (
-        <div style={{ display: "flex", gap: "0.5rem", marginTop: "1rem" }}>
+        <div className="pagination">
           <button
+            className="secondary-btn"
             onClick={() =>
               navigateBrowse({
                 category: selectedCategory!,
@@ -279,10 +276,11 @@ export function OutputsHierarchyView({
           >
             ‹ 前へ
           </button>
-          <span style={{ color: "var(--muted)", fontSize: "0.9rem", alignSelf: "center" }}>
+          <span className="pagination-meta">
             ページ {page + 1} / {totalPages}
           </span>
           <button
+            className="secondary-btn"
             onClick={() =>
               navigateBrowse({
                 category: selectedCategory!,

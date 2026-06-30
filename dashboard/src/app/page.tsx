@@ -20,20 +20,20 @@ function HistogramTable({
   rows: Array<{ key: string; count: number }>;
   keyLabel: string;
 }) {
-  if (rows.length === 0) return <p style={{ color: "var(--muted)" }}>データなし</p>;
+  if (rows.length === 0) return <p className="muted">データなし</p>;
   return (
     <table>
       <thead>
         <tr>
           <th>{keyLabel}</th>
-          <th style={{ textAlign: "right" }}>件数</th>
+          <th className="text-right">件数</th>
         </tr>
       </thead>
       <tbody>
         {rows.map((r) => (
           <tr key={r.key}>
             <td>{r.key}</td>
-            <td style={{ textAlign: "right" }}>{r.count.toLocaleString()}</td>
+            <td className="text-right">{r.count.toLocaleString()}</td>
           </tr>
         ))}
       </tbody>
@@ -100,7 +100,7 @@ export default function HomePage() {
       </section>
 
       {stats._meta?.generated_at && (
-        <p style={{ color: "var(--muted)", fontSize: "0.8rem" }}>
+        <p className="meta-text">
           生成時刻: {stats._meta.generated_at} / source: {stats._meta.source_path}
         </p>
       )}

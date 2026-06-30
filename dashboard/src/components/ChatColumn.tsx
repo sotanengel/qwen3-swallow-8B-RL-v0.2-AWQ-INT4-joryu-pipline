@@ -38,132 +38,60 @@ export function ChatColumn({ column, showInput, disabled, onSend }: ChatColumnPr
   };
 
   return (
-    <div
-      className="card"
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        minHeight: "420px",
-        minWidth: "280px",
-      }}
-    >
-      <h3 style={{ margin: "0 0 0.75rem", color: "var(--text)", textTransform: "none" }}>
+    <div className="card chat-column">
+      <h3 className="chat-column-title">
         {column.label}
-        <span style={{ color: "var(--muted)", fontSize: "0.75rem", marginLeft: "0.5rem" }}>
-          ({column.style_id})
-        </span>
+        <span className="chat-column-title-id">({column.style_id})</span>
       </h3>
-      <div
-        style={{
-          flex: 1,
-          overflowY: "auto",
-          display: "flex",
-          flexDirection: "column",
-          gap: "0.75rem",
-          marginBottom: "0.75rem",
-        }}
-      >
+      <div className="chat-messages">
         {column.messages.map((msg, idx) => (
           <div
             key={`${column.style_id}-msg-${idx}`}
-            style={{
-              padding: "0.5rem 0.75rem",
-              borderRadius: "6px",
-              background: msg.role === "user" ? "var(--accent-soft)" : "transparent",
-              border: msg.role === "assistant" ? "1px solid var(--border)" : "none",
-              fontSize: "0.9rem",
-            }}
+            className={`chat-message chat-message--${msg.role}`}
           >
-            <div style={{ color: "var(--muted)", fontSize: "0.7rem", marginBottom: "0.25rem" }}>
-              {msg.role}
-            </div>
+            <div className="chat-message-role">{msg.role}</div>
             <div className="chat-message-markdown">
               <MarkdownView source={msg.content} />
             </div>
           </div>
         ))}
         {column.isStreaming ? (
-          <div
-            style={{
-              padding: "0.5rem 0.75rem",
-              border: "1px dashed var(--border)",
-              borderRadius: "6px",
-              fontSize: "0.9rem",
-            }}
-          >
+          <div className="chat-message chat-message--streaming">
             {column.streamingText ? (
               <div className="chat-message-markdown">
                 <MarkdownView source={column.streamingText} />
               </div>
             ) : (
-              <span style={{ color: "var(--muted)" }}>考え中…</span>
+              <span className="muted">考え中…</span>
             )}
           </div>
         ) : null}
         {(column.toolCalls ?? []).map((tc) => (
-          <details
-            key={tc.call_id}
-            style={{
-              border: "1px solid var(--border)",
-              borderRadius: "6px",
-              padding: "0.5rem",
-              fontSize: "0.8rem",
-            }}
-          >
+          <details key={tc.call_id} className="chat-tool-details">
             <summary>
               tool: {tc.name}
-              {tc.error
-                ? " (error)"
-                : tc.result !== undefined
-                  ? " (done)"
-                  : " (running…)"}
+              {tc.error ? " (error)" : tc.result !== undefined ? " (done)" : " (running…)"}
             </summary>
-            <pre style={{ overflow: "auto", margin: "0.5rem 0 0" }}>
-              {JSON.stringify(tc.arguments, null, 2)}
-            </pre>
-            {tc.error ? (
-              <pre style={{ overflow: "auto", margin: "0.5rem 0 0", color: "var(--error, #c62828)" }}>
-                {tc.error}
-              </pre>
-            ) : null}
-            {tc.result !== undefined ? (
-              <pre style={{ overflow: "auto", margin: "0.5rem 0 0" }}>{tc.result}</pre>
-            ) : null}
+            <pre className="chat-tool-pre">{JSON.stringify(tc.arguments, null, 2)}</pre>
+            {tc.error ? <pre className="chat-tool-pre chat-tool-pre--error">{tc.error}</pre> : null}
+            {tc.result !== undefined ? <pre className="chat-tool-pre">{tc.result}</pre> : null}
           </details>
         ))}
       </div>
       {showInput ? (
-        <form onSubmit={handleSubmit} style={{ display: "flex", gap: "0.5rem" }}>
+        <form className="chat-column-form" onSubmit={handleSubmit}>
           <textarea
+            className="chat-column-textarea"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             disabled={disabled || column.isStreaming}
             rows={2}
             placeholder="追加質問…"
-            style={{
-              flex: 1,
-              resize: "vertical",
-              background: "var(--bg)",
-              color: "var(--text)",
-              border: "1px solid var(--border)",
-              borderRadius: "6px",
-              padding: "0.5rem",
-              fontSize: "0.85rem",
-            }}
           />
           <button
             type="submit"
+            className="chat-column-submit"
             disabled={disabled || column.isStreaming || !draft.trim()}
-            style={{
-              alignSelf: "flex-end",
-              padding: "0.5rem 0.75rem",
-              background: "var(--accent)",
-              color: "#fff",
-              border: "none",
-              borderRadius: "6px",
-              cursor: disabled ? "not-allowed" : "pointer",
-              opacity: disabled || column.isStreaming ? 0.5 : 1,
-            }}
           >
             送信
           </button>

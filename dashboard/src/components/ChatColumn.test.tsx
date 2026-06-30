@@ -35,6 +35,8 @@ describe("ChatColumn markdown rendering", () => {
     expect(screen.getByText("太字").tagName).toBe("STRONG");
     expect(screen.getByRole("heading", { level: 2, name: "見出し" })).toBeTruthy();
     expect(screen.getByText("項目1").closest("li")).toBeTruthy();
+    expect(document.querySelector(".chat-message--user")).toBeTruthy();
+    expect(document.querySelector(".chat-message--assistant")).toBeTruthy();
   });
 
   it("renders streaming assistant text as markdown", () => {

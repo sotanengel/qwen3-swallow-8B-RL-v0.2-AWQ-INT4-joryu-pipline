@@ -16,11 +16,11 @@ export function HistogramChart({
   data: Array<{ name: string; count: number }>;
 }) {
   if (data.length === 0) {
-    return <p style={{ color: "var(--muted)" }}>データなし</p>;
+    return <p className="muted">データなし</p>;
   }
 
   return (
-    <div style={{ width: "100%", height: 280 }}>
+    <div className="chart-container">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={data}>
           <CartesianGrid stroke="#30363d" strokeDasharray="3 3" />
@@ -34,7 +34,7 @@ export function HistogramChart({
           />
           <YAxis stroke="#8b949e" />
           <Tooltip
-            contentStyle={{ background: "#161b22", border: "1px solid #30363d" }}
+            contentStyle={{ background: "#161b22", border: "1px solid #30363d", color: "#e6edf3" }}
           />
           <Bar dataKey="count" fill="#58a6ff" />
         </BarChart>

@@ -12,11 +12,7 @@ const HistogramChart = dynamic(
     import("@/components/HistogramChart").then((mod) => mod.HistogramChart),
   {
     ssr: false,
-    loading: () => (
-      <div style={{ width: "100%", height: 280, color: "var(--muted)" }}>
-        グラフを読み込み中…
-      </div>
-    ),
+    loading: () => <div className="chart-loading">グラフを読み込み中…</div>,
   },
 );
 
@@ -62,7 +58,7 @@ export default function DistributionsPage() {
   return (
     <>
       {loaded && stats.total === 0 && (
-        <p style={{ color: "var(--muted)", marginBottom: "1rem" }}>
+        <p className="section-subtitle">
           stats.json が未生成または空です。{" "}
           <code>uv run joryu-stats</code> または{" "}
           <code>uv run joryu-up --refresh-stats</code> を実行してください。

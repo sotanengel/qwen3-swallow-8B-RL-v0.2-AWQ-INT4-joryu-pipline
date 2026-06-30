@@ -5,12 +5,10 @@ import type { CurationSamplingStyleCell } from "@/lib/curation";
 /**
  * sampling × style の 2 軸ヒートマップ。
  * keep_rate (0-1) を背景色の濃さに、count を tooltip 的に文字で表示。
- *
- * recharts に綺麗な heatmap が無いので CSS Grid で実装 (depencencies を増やさない方針)。
  */
 export function HeatmapTable({ cells }: { cells: CurationSamplingStyleCell[] }) {
   if (cells.length === 0) {
-    return <p style={{ color: "var(--muted)" }}>データなし</p>;
+    return <p className="muted">データなし</p>;
   }
 
   const samplings = Array.from(new Set(cells.map((c) => c.sampling))).sort();
@@ -21,7 +19,6 @@ export function HeatmapTable({ cells }: { cells: CurationSamplingStyleCell[] }) 
   }
 
   const colorFor = (rate: number): string => {
-    // GitHub-ish green scale。0 → 透明、1 → 濃い緑。
     const intensity = Math.round(rate * 100);
     return `rgba(63, 185, 80, ${0.15 + (intensity / 100) * 0.85})`;
   };
@@ -30,28 +27,13 @@ export function HeatmapTable({ cells }: { cells: CurationSamplingStyleCell[] }) 
   const labelWidth = 110;
 
   return (
-    <div style={{ overflowX: "auto" }}>
-      <table
-        style={{
-          borderCollapse: "collapse",
-          fontSize: "0.85rem",
-        }}
-      >
+    <div className="heatmap-wrap">
+      <table className="heatmap-table">
         <thead>
           <tr>
-            <th style={{ width: labelWidth, textAlign: "left", color: "var(--muted)" }}>
-              sampling \ style
-            </th>
+            <th style={{ width: labelWidth }}>sampling \ style</th>
             {styles.map((sid) => (
-              <th
-                key={sid}
-                style={{
-                  padding: "0.25rem 0.5rem",
-                  color: "var(--muted)",
-                  textAlign: "center",
-                  minWidth: cellSize,
-                }}
-              >
+              <th key={sid} className="heatmap-cell" style={{ minWidth: cellSize }}>
                 {sid}
               </th>
             ))}
@@ -60,13 +42,7 @@ export function HeatmapTable({ cells }: { cells: CurationSamplingStyleCell[] }) 
         <tbody>
           {samplings.map((samp) => (
             <tr key={samp}>
-              <td
-                style={{
-                  padding: "0.25rem 0.5rem",
-                  color: "var(--muted)",
-                  whiteSpace: "nowrap",
-                }}
-              >
+              <td className="muted" style={{ whiteSpace: "nowrap" }}>
                 {samp}
               </td>
               {styles.map((sid) => {
@@ -75,11 +51,10 @@ export function HeatmapTable({ cells }: { cells: CurationSamplingStyleCell[] }) 
                   return (
                     <td
                       key={sid}
+                      className="heatmap-cell"
                       style={{
-                        background: "#0d1117",
-                        border: "1px solid #30363d",
-                        textAlign: "center",
-                        color: "#484f58",
+                        background: "var(--bg)",
+                        color: "var(--muted)",
                         height: cellSize,
                         minWidth: cellSize,
                       }}
@@ -93,16 +68,15 @@ export function HeatmapTable({ cells }: { cells: CurationSamplingStyleCell[] }) 
                   <td
                     key={sid}
                     title={`採用 ${cell.kept} / ${cell.total} = ${pct}%`}
+                    className="heatmap-cell"
                     style={{
                       background: colorFor(cell.keep_rate),
-                      border: "1px solid #30363d",
-                      textAlign: "center",
                       height: cellSize,
                       minWidth: cellSize,
                     }}
                   >
-                    <div style={{ fontWeight: 600 }}>{pct}%</div>
-                    <div style={{ fontSize: "0.7rem", color: "#c9d1d9" }}>
+                    <div className="heatmap-cell-pct">{pct}%</div>
+                    <div className="heatmap-cell-count">
                       {cell.kept}/{cell.total}
                     </div>
                   </td>

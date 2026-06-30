@@ -46,7 +46,7 @@ export default function OutputDetailPage() {
       {!record ? (
         <div className="output-detail">
           <p>レコードが見つかりません (id: {id})</p>
-          <p style={{ color: "var(--muted)", fontSize: "0.9rem" }}>
+          <p className="muted page-subtitle">
             データがまだ読み込まれていないか、該当する出力が存在しません。
           </p>
         </div>
