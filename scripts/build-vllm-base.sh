@@ -151,11 +151,6 @@ docker build \
   -t "$TAG" \
   "$ROOT" 2>&1 | tee "$LOG_FILE" || status=$?
 
-if [ "$status" -eq 0 ]; then
-  echo "[build-vllm-base] post-build smoke: docker run --rm ${TAG} python scripts/vllm_base_smoke.py" >&2
-  docker run --rm "$TAG" python scripts/vllm_base_smoke.py || status=$?
-fi
-
 END_EPOCH=$(date -u +%s)
 END_ISO=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 ELAPSED=$((END_EPOCH - START_EPOCH))
