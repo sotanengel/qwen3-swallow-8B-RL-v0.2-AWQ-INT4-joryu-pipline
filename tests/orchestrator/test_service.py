@@ -103,3 +103,22 @@ def test_ensure_profile_from_error_stops_gpu_first(orch: ModelOrchestrator) -> N
     orch.ensure_profile(ModelProfile.SEED_GEN)
     assert ("stop", ModelProfile.DISTILL) in backend.calls
     assert orch.get_state().active == ModelProfile.SEED_GEN
+
+
+def test_ensure_profile_resumes_switching(orch: ModelOrchestrator) -> None:
+    backend = orch.backend
+    assert isinstance(backend, FakeBackend)
+    orch._save_state(
+        OrchestratorState(
+            status=OrchestratorStatus.SWITCHING,
+            active=ModelProfile.DISTILL,
+            target=ModelProfile.SEED_GEN,
+            progress="switching distill -> seed_gen",
+        )
+    )
+    backend.mark_healthy(ModelProfile.SEED_GEN)
+    logs: list[str] = []
+    orch.ensure_profile(ModelProfile.SEED_GEN, log=logs.append)
+    assert ("start", ModelProfile.SEED_GEN) in backend.calls
+    assert any("resuming switch" in line for line in logs)
+    assert orch.get_state().active == ModelProfile.SEED_GEN

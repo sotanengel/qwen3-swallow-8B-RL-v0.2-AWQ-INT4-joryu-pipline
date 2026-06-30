@@ -186,3 +186,41 @@ def test_build_docker_command_allocates_tty_when_requested(tmp_path: Path) -> No
     )
 
     assert cmd[0:4] == ["docker", "run", "--rm", "-t"]
+
+
+def test_stop_docker_container_skips_when_not_running() -> None:
+    calls: list[list[str]] = []
+
+    def _run(cmd: list[str], **kwargs: object) -> object:
+        calls.append(cmd)
+        return type("P", (), {"returncode": 1, "stdout": "", "stderr": ""})()
+
+    from joryu.docker_delegate import stop_docker_container
+
+    assert stop_docker_container("joryu", docker_run=_run) is True
+    assert len(calls) == 1
+    assert calls[0][:3] == ["docker", "inspect", "-f"]
+
+
+def test_stop_docker_container_kills_when_still_running() -> None:
+    calls: list[list[str]] = []
+    inspect_count = 0
+
+    def _run_with_kill(cmd: list[str], **kwargs: object) -> object:
+        nonlocal inspect_count
+        calls.append(cmd)
+        if cmd[:2] == ["docker", "inspect"]:
+            inspect_count += 1
+            if inspect_count <= 2:
+                return type("P", (), {"returncode": 0, "stdout": "true", "stderr": ""})()
+            return type("P", (), {"returncode": 0, "stdout": "false", "stderr": ""})()
+        if cmd[:2] == ["docker", "stop"]:
+            return type("P", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+        if cmd[:2] == ["docker", "kill"]:
+            return type("P", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+        raise AssertionError(f"unexpected cmd: {cmd}")
+
+    from joryu.docker_delegate import stop_docker_container
+
+    assert stop_docker_container("joryu", docker_run=_run_with_kill) is True
+    assert any(c[:2] == ["docker", "kill"] for c in calls)

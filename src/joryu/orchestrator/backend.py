@@ -27,6 +27,7 @@ class Backend(Protocol):
         keep: ModelProfile,
         *,
         profiles: dict[ModelProfile, ProfileSpec],
+        log: Callable[[str], None] | None = None,
     ) -> None: ...
 
     def is_healthy(
@@ -60,11 +61,16 @@ class FakeBackend:
         keep: ModelProfile,
         *,
         profiles: dict[ModelProfile, ProfileSpec],
+        log: Callable[[str], None] | None = None,
     ) -> None:
         for profile, spec in profiles.items():
             if profile == keep:
                 continue
+            if log is not None:
+                log(f"[orchestrator] stopping container {spec.service}")
             self.stop_profile(profile, spec=spec)
+            if log is not None:
+                log(f"[orchestrator] stopped container {spec.service}")
 
     def is_healthy(
         self, profile: ModelProfile, *, spec: ProfileSpec, timeout_s: float = 1.0
@@ -102,24 +108,20 @@ class ComposeBackend:
             stderr = (proc.stderr or proc.stdout or "").strip()
             raise RuntimeError(f"compose failed ({' '.join(args)}): {stderr}")
 
-    def _stop_gpu_service(self, service: str, compose_profile: str) -> None:
-        try:
-            self._compose(
-                "--profile",
-                ALWAYS_COMPOSE_PROFILE,
-                "--profile",
-                compose_profile,
-                "stop",
-                service,
-            )
-        except RuntimeError:
-            logger.warning(
-                "compose stop failed for %s (profile=%s); falling back to docker stop",
-                service,
-                compose_profile,
-                exc_info=True,
-            )
-        stop_docker_container(service, docker_run=self.docker_run)
+    def _stop_gpu_service(
+        self,
+        service: str,
+        *,
+        log: Callable[[str], None] | None = None,
+    ) -> None:
+        if log is not None:
+            log(f"[orchestrator] stopping container {service}")
+        stopped = stop_docker_container(service, docker_run=self.docker_run)
+        if log is not None:
+            if stopped:
+                log(f"[orchestrator] stopped container {service}")
+            else:
+                log(f"[orchestrator] failed to stop container {service}")
 
     def start_profile(self, profile: ModelProfile, *, spec: ProfileSpec) -> None:
         compose_profile = spec.compose_profile or profile.value
@@ -134,20 +136,19 @@ class ComposeBackend:
         )
 
     def stop_profile(self, profile: ModelProfile, *, spec: ProfileSpec) -> None:
-        compose_profile = spec.compose_profile or profile.value
-        self._stop_gpu_service(spec.service, compose_profile)
+        self._stop_gpu_service(spec.service)
 
     def stop_other_gpu_profiles(
         self,
         keep: ModelProfile,
         *,
         profiles: dict[ModelProfile, ProfileSpec],
+        log: Callable[[str], None] | None = None,
     ) -> None:
         for profile, spec in profiles.items():
             if profile == keep:
                 continue
-            compose_profile = spec.compose_profile or profile.value
-            self._stop_gpu_service(spec.service, compose_profile)
+            self._stop_gpu_service(spec.service, log=log)
 
     def is_healthy(
         self, profile: ModelProfile, *, spec: ProfileSpec, timeout_s: float = 1.0
