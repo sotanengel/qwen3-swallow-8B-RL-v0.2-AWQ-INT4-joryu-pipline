@@ -158,7 +158,7 @@ export default function JobsPage() {
     <>
       <section className="section">
         <h2>蒸留ジョブ投入</h2>
-        <p style={{ color: "var(--muted)", marginBottom: "1rem" }}>
+        <p className="section-subtitle">
           joryu-distill と同等のパラメータでローカル LLM 蒸留を実行します。API (
           {process.env.NEXT_PUBLIC_JORYU_API_URL || "http://localhost:8000"}) が起動している必要があります。
         </p>
@@ -214,7 +214,7 @@ export default function JobsPage() {
           </label>
           <fieldset className="style-fieldset">
             <legend>ツール (tools)</legend>
-            <p style={{ color: "var(--muted)", fontSize: "0.875rem", margin: "0 0 0.5rem" }}>
+            <p className="muted" style={{ fontSize: "0.875rem", margin: "0 0 0.5rem" }}>
               プロンプト行に tool_ids が無い行にのみ適用されます。
             </p>
             <div className="style-grid">
@@ -276,7 +276,7 @@ export default function JobsPage() {
       <section className="section">
         <h2>ジョブ一覧</h2>
         {jobs.length === 0 ? (
-          <p style={{ color: "var(--muted)" }}>ジョブはまだありません。</p>
+          <p className="muted">ジョブはまだありません。</p>
         ) : (
           <table>
             <thead>
@@ -294,12 +294,11 @@ export default function JobsPage() {
               {jobs.map((job) => (
                 <tr
                   key={job.id}
-                  className={selectedId === job.id ? "row-selected" : ""}
+                  className={`job-row-clickable${selectedId === job.id ? " row-selected" : ""}`}
                   onClick={() => {
                     setSelectedId(job.id);
                     setLogs("");
                   }}
-                  style={{ cursor: "pointer" }}
                 >
                   <td>
                     <StatusBadge status={job.status} />

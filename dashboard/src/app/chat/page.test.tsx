@@ -69,6 +69,8 @@ describe("ChatPage", () => {
       expect(screen.getByText("散文")).toBeTruthy();
       expect(screen.getByText("短答")).toBeTruthy();
     });
+    expect(document.querySelector(".chat-layout")).toBeTruthy();
+    expect(document.querySelector(".chat-main")).toBeTruthy();
     expect(screen.getByPlaceholderText("全スタイルに同じ質問を送信…")).toBeTruthy();
   });
 

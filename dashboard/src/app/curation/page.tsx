@@ -29,11 +29,7 @@ const HistogramChart = dynamic(
     import("@/components/HistogramChart").then((mod) => mod.HistogramChart),
   {
     ssr: false,
-    loading: () => (
-      <div style={{ width: "100%", height: 280, color: "var(--muted)" }}>
-        グラフを読み込み中…
-      </div>
-    ),
+    loading: () => <div className="chart-loading">グラフを読み込み中…</div>,
   },
 );
 
@@ -189,19 +185,19 @@ export default function CurationPage() {
     <>
       <section className="section">
         <h2>高品質抽出</h2>
-        <p style={{ color: "var(--muted)", marginBottom: "1rem" }}>
+        <p className="section-subtitle">
           API (
           {process.env.NEXT_PUBLIC_JORYU_API_URL || "http://localhost:8000"}
           ) 経由で <code>joryu-curate</code> を実行します。完了後、curation.json が自動更新されます。
         </p>
         {error && <p className="error-banner">{error}</p>}
         {!inputReady && (
-          <p style={{ color: "var(--muted)", marginBottom: "1rem" }}>
+          <p className="section-subtitle">
             蒸留 JSONL が未生成です。先に /jobs から蒸留を実行するか、
             <code> uv run joryu-distill</code> を実行してください。
           </p>
         )}
-        <div className="card" style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+        <div className="card card-stack">
           <label className="checkbox-label">
             <input
               type="checkbox"
@@ -210,7 +206,7 @@ export default function CurationPage() {
             />
             LLM judge をスキップ (--skip-llm)
             {!vllmAvailable && (
-              <span style={{ color: "var(--muted)", marginLeft: "0.5rem" }}>
+              <span className="muted" style={{ marginLeft: "0.5rem" }}>
                 vLLM 未起動のため推奨
               </span>
             )}
@@ -243,12 +239,11 @@ export default function CurationPage() {
               {jobs.map((job) => (
                 <tr
                   key={job.id}
-                  className={selectedId === job.id ? "row-selected" : ""}
+                  className={`job-row-clickable${selectedId === job.id ? " row-selected" : ""}`}
                   onClick={() => {
                     setSelectedId(job.id);
                     setLogs("");
                   }}
-                  style={{ cursor: "pointer" }}
                 >
                   <td>
                     <span className={`badge badge-${job.status}`}>
@@ -290,7 +285,7 @@ export default function CurationPage() {
       )}
 
       {loaded && cur.total === 0 && (
-        <p style={{ color: "var(--muted)", marginBottom: "1rem" }}>
+        <p className="section-subtitle">
           curation.json が未生成または空です。上の「高品質抽出を実行」ボタンを使うか、
           <code> uv run joryu-curate</code> を実行してください。
         </p>
@@ -313,18 +308,12 @@ export default function CurationPage() {
       <section className="section">
         <h2>mode 別 スコア分布</h2>
         {modeEntries.length === 0 ? (
-          <p style={{ color: "var(--muted)" }}>データなし</p>
+          <p className="muted">データなし</p>
         ) : (
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: `repeat(${Math.min(modeEntries.length, 2)}, 1fr)`,
-              gap: "1rem",
-            }}
-          >
+          <div className="curation-charts">
             {modeEntries.map(([mode, v]) => (
-              <div key={mode}>
-                <h3 style={{ fontSize: "0.95rem", color: "var(--muted)" }}>
+              <div key={mode} className="curation-chart-card">
+                <h3>
                   {mode} (n={v.total}, 採用率 {(v.keep_rate * 100).toFixed(1)}%)
                 </h3>
                 <HistogramChart
@@ -349,7 +338,7 @@ export default function CurationPage() {
         {cur.rubric_count > 0 ? (
           <HistogramChart data={rubricBars} />
         ) : (
-          <p style={{ color: "var(--muted)" }}>
+          <p className="muted">
             LLM judge が走っていません (--skip-llm モード)。
           </p>
         )}

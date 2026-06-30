@@ -35,7 +35,7 @@ function formatStatus(r: DistilledRecord): string {
 
 export default function OutputsPage() {
   return (
-    <Suspense fallback={<p style={{ color: "var(--muted)" }}>出力一覧を読み込み中…</p>}>
+    <Suspense fallback={<p className="muted">出力一覧を読み込み中…</p>}>
       <OutputsPageContent />
     </Suspense>
   );
@@ -191,16 +191,8 @@ function OutputsPageContent() {
   return (
     <>
       <section className="section">
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: "1rem",
-            flexWrap: "wrap",
-          }}
-        >
-          <h2 style={{ margin: 0 }}>出力一覧</h2>
+        <div className="page-toolbar">
+          <h2>出力一覧</h2>
           <button
             type="button"
             className="danger-btn"
@@ -273,28 +265,26 @@ function OutputsPageContent() {
       ) : null}
 
       {!loaded ? (
-        <p style={{ color: "var(--muted)" }}>
+        <p className="muted">
           responses.jsonl を読み込み中…
           <br />
           (dashboard/public/responses.jsonl にシンボリックリンクまたはコピーを置いてください)
         </p>
       ) : isSearchActive ? (
-        <p style={{ color: "var(--muted)", fontSize: "0.9rem" }}>
+        <p className="muted page-subtitle">
           {isRanked && rankedLoading ? "検索中… " : ""}
           {totalCount.toLocaleString()} / {records.length.toLocaleString()} 件 ヒット (ページ{" "}
           {page + 1} / {totalPages})
         </p>
       ) : (
-        <p style={{ color: "var(--muted)", fontSize: "0.9rem" }}>
+        <p className="muted page-subtitle">
           全 {modeFiltered.length.toLocaleString()} 件 — フォルダを開いて閲覧
         </p>
       )}
 
       {loaded && !isSearchActive ? (
         <Suspense
-          fallback={
-            <p style={{ color: "var(--muted)", fontSize: "0.9rem" }}>フォルダ階層を読み込み中…</p>
-          }
+          fallback={<p className="muted page-subtitle">フォルダ階層を読み込み中…</p>}
         >
           <OutputsHierarchyView
             records={modeFiltered}
@@ -307,7 +297,7 @@ function OutputsPageContent() {
       {loaded && isSearchActive ? (
         <>
           <div className="outputs-table-wrap">
-            <table>
+            <table className="data-table">
               <thead>
                 <tr>
                   <th>category</th>
@@ -337,31 +327,27 @@ function OutputsPageContent() {
                       className="output-list-row"
                       onClick={() => router.push(`/outputs/${id}`)}
                     >
-                      <td style={{ verticalAlign: "top" }}>{r.category ?? ""}</td>
-                      <td style={{ verticalAlign: "top" }}>{r.mode ?? ""}</td>
-                      <td style={{ verticalAlign: "top" }}>{r.style_id ?? "-"}</td>
-                      <td style={{ verticalAlign: "top" }}>{r.model ?? "-"}</td>
+                      <td>{r.category ?? ""}</td>
+                      <td>{r.mode ?? ""}</td>
+                      <td>{r.style_id ?? "-"}</td>
+                      <td>{r.model ?? "-"}</td>
                       <td>{truncateText(r.prompt, 80)}</td>
                       <td>{truncateText(r.answer, 60)}</td>
-                      <td style={{ verticalAlign: "top", whiteSpace: "nowrap" }}>
-                        {formatTokens(r)}
-                      </td>
-                      <td style={{ verticalAlign: "top" }}>
+                      <td className="cell-nowrap">{formatTokens(r)}</td>
+                      <td>
                         {formatStatus(r) === "truncated" ? (
                           <span className="badge-truncated">truncated</span>
                         ) : (
                           formatStatus(r)
                         )}
                       </td>
-                      <td style={{ verticalAlign: "top", whiteSpace: "nowrap" }}>
-                        {r.created_at ?? "-"}
-                      </td>
+                      <td className="cell-nowrap">{r.created_at ?? "-"}</td>
                       {isRanked ? (
                         <>
-                          <td style={{ verticalAlign: "top", whiteSpace: "nowrap" }}>
+                          <td className="cell-nowrap">
                             {hit ? hit.score.toFixed(2) : "-"}
                           </td>
-                          <td style={{ verticalAlign: "top", maxWidth: "16rem" }}>
+                          <td className="cell-truncate">
                             {hit?.snippet ? (
                               <pre className="snippet search-snippet">{hit.snippet}</pre>
                             ) : (
@@ -390,11 +376,12 @@ function OutputsPageContent() {
             </table>
           </div>
 
-          <div style={{ display: "flex", gap: "0.5rem", marginTop: "1rem" }}>
-            <button onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0}>
+          <div className="pagination">
+            <button className="secondary-btn" onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0}>
               ‹ 前へ
             </button>
             <button
+              className="secondary-btn"
               onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
               disabled={page >= totalPages - 1}
             >

@@ -120,67 +120,34 @@ export function ChatSessionSidebar({
   };
 
   const sidebarBody = (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <button
-        type="button"
-        onClick={() => void handleNewSession()}
-        style={{
-          margin: "0.75rem",
-          padding: "0.55rem 0.75rem",
-          background: "var(--accent)",
-          color: "#fff",
-          border: "none",
-          borderRadius: "6px",
-          cursor: "pointer",
-          fontWeight: 600,
-        }}
-      >
+    <div className="chat-sidebar-body">
+      <button type="button" className="chat-sidebar-new-btn" onClick={() => void handleNewSession()}>
         + 新しいセッション
       </button>
-      {error ? (
-        <p style={{ color: "#f85149", fontSize: "0.85rem", padding: "0 0.75rem" }}>{error}</p>
-      ) : null}
+      {error ? <p className="chat-sidebar-error">{error}</p> : null}
       {loading ? (
-        <p style={{ color: "var(--muted)", padding: "0 0.75rem", fontSize: "0.85rem" }}>
-          読み込み中…
-        </p>
+        <p className="chat-sidebar-loading muted">読み込み中…</p>
       ) : (
-        <ul
-          style={{
-            listStyle: "none",
-            margin: 0,
-            padding: "0 0.5rem 0.75rem",
-            overflowY: "auto",
-            flex: 1,
-          }}
-        >
+        <ul className="chat-sidebar-list">
           {items.map((item) => {
             const active = item.session_id === activeSessionId;
             return (
-              <li key={item.session_id} style={{ marginBottom: "0.35rem" }}>
+              <li key={item.session_id} className="chat-sidebar-item">
                 {editingId === item.session_id ? (
                   <form
+                    className="chat-sidebar-rename-form"
                     onSubmit={(e) => {
                       e.preventDefault();
                       void commitRename(item.session_id);
                     }}
-                    style={{ display: "flex", gap: "0.25rem", padding: "0.25rem" }}
                   >
                     <input
+                      className="chat-sidebar-rename-input"
                       value={editTitle}
                       onChange={(e) => setEditTitle(e.target.value)}
                       autoFocus
-                      style={{
-                        flex: 1,
-                        background: "var(--surface)",
-                        color: "var(--text)",
-                        border: "1px solid var(--border)",
-                        borderRadius: "4px",
-                        padding: "0.25rem 0.4rem",
-                        fontSize: "0.85rem",
-                      }}
                     />
-                    <button type="submit" style={{ fontSize: "0.75rem" }}>
+                    <button type="submit" className="chat-sidebar-rename-save secondary-btn">
                       保存
                     </button>
                   </form>
@@ -188,78 +155,35 @@ export function ChatSessionSidebar({
                   <div
                     role="button"
                     tabIndex={0}
+                    className={`chat-sidebar-entry${active ? " chat-sidebar-entry--active" : ""}`}
                     onClick={() => handleSelect(item.session_id)}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" || e.key === " ") handleSelect(item.session_id);
                     }}
-                    style={{
-                      padding: "0.55rem 0.65rem",
-                      borderRadius: "6px",
-                      cursor: "pointer",
-                      background: active ? "var(--surface)" : "transparent",
-                      border: active ? "1px solid var(--accent)" : "1px solid transparent",
-                    }}
                   >
                     <div
-                      style={{
-                        fontSize: "0.9rem",
-                        fontWeight: active ? 600 : 400,
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                      }}
+                      className={`chat-sidebar-entry-title${active ? " chat-sidebar-entry-title--active" : ""}`}
                     >
                       {displayTitle(item)}
                     </div>
-                    <div
-                      style={{
-                        fontSize: "0.75rem",
-                        color: "var(--muted)",
-                        marginTop: "0.15rem",
-                        display: "flex",
-                        justifyContent: "space-between",
-                        gap: "0.5rem",
-                      }}
-                    >
+                    <div className="chat-sidebar-entry-meta">
                       <span>{formatRelativeTime(item.last_updated_at)}</span>
                       <span>{item.turn_count} ターン</span>
                     </div>
-                    <div
-                      style={{
-                        marginTop: "0.35rem",
-                        display: "flex",
-                        gap: "0.35rem",
-                      }}
-                    >
+                    <div className="chat-sidebar-entry-actions">
                       <button
                         type="button"
                         aria-label="改名"
+                        className="ghost-btn"
                         onClick={(e) => startRename(item, e)}
-                        style={{
-                          fontSize: "0.7rem",
-                          padding: "0.15rem 0.35rem",
-                          background: "transparent",
-                          border: "1px solid var(--border)",
-                          borderRadius: "4px",
-                          color: "var(--muted)",
-                          cursor: "pointer",
-                        }}
                       >
                         改名
                       </button>
                       <button
                         type="button"
                         aria-label="削除"
+                        className="ghost-btn ghost-btn-danger"
                         onClick={(e) => void handleDelete(item.session_id, e)}
-                        style={{
-                          fontSize: "0.7rem",
-                          padding: "0.15rem 0.35rem",
-                          background: "transparent",
-                          border: "1px solid var(--border)",
-                          borderRadius: "4px",
-                          color: "#f85149",
-                          cursor: "pointer",
-                        }}
                       >
                         削除
                       </button>
@@ -281,53 +205,15 @@ export function ChatSessionSidebar({
         className="chat-sidebar-toggle"
         onClick={() => setDrawerOpen((v) => !v)}
         aria-expanded={drawerOpen}
-        style={{
-          display: "none",
-          marginBottom: "0.75rem",
-          padding: "0.5rem 0.75rem",
-          background: "var(--surface)",
-          border: "1px solid var(--border)",
-          borderRadius: "6px",
-          color: "var(--text)",
-          cursor: "pointer",
-        }}
       >
         セッション一覧
       </button>
       <aside
         className={`chat-session-sidebar${drawerOpen ? " chat-session-sidebar--open" : ""}`}
-        style={{
-          width: "240px",
-          flexShrink: 0,
-          borderRight: "1px solid var(--border)",
-          background: "var(--bg)",
-          minHeight: "60vh",
-        }}
       >
-        <div style={{ padding: "0.75rem 0.75rem 0", fontWeight: 600, fontSize: "0.95rem" }}>
-          セッション
-        </div>
+        <div className="chat-session-sidebar-header">セッション</div>
         {sidebarBody}
       </aside>
-      <style jsx global>{`
-        @media (max-width: 767px) {
-          .chat-sidebar-toggle {
-            display: inline-block !important;
-          }
-          .chat-session-sidebar {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            bottom: 0;
-            z-index: 40;
-            box-shadow: 0 0 24px rgba(0, 0, 0, 0.25);
-          }
-          .chat-session-sidebar--open {
-            display: block;
-          }
-        }
-      `}</style>
     </>
   );
 }

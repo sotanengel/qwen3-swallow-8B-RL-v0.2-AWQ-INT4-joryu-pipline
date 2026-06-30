@@ -98,7 +98,7 @@ export default function PromptsPage() {
   return (
     <div className="stack">
       <h2>プロンプト作成</h2>
-      {error && <p style={{ color: "var(--danger)" }}>{error}</p>}
+      {error && <p className="text-danger">{error}</p>}
       {displayStatus && (
         <p>
           バンク総件数: {displayStatus.bank_total} / 目標 {displayStatus.target_total}
@@ -118,7 +118,7 @@ export default function PromptsPage() {
           </thead>
           <tbody>
             {(displayStatus?.domains ?? []).map((d) => (
-              <tr key={d.key} style={{ color: d.ratio >= 0.8 ? "var(--ok)" : "inherit" }}>
+              <tr key={d.key} className={d.ratio >= 0.8 ? "domain-ratio-ok" : undefined}>
                 <td>{d.key}</td>
                 <td>{d.current}</td>
                 <td>{d.target}</td>
@@ -129,63 +129,78 @@ export default function PromptsPage() {
         </table>
       </section>
 
-      <section>
+      <section className="card">
         <h3>ジョブ起動</h3>
-        <label>
-          分野 (空=全分野)
-          <input value={domain} onChange={(e) => setDomain(e.target.value)} placeholder="math" />
-        </label>
-        <label>
-          <input type="checkbox" checked={fakeLlm} onChange={(e) => setFakeLlm(e.target.checked)} />
-          fake_llm
-        </label>
-        <label>
-          <input type="checkbox" checked={dryRun} onChange={(e) => setDryRun(e.target.checked)} />
-          dry_run
-        </label>
-        <button type="button" onClick={submitJob}>
-          seed-gen 開始
-        </button>
-        <button type="button" onClick={runPromptScreening}>
-          プロンプト LLM スクリーニング
-        </button>
+        <div className="job-form">
+          <label>
+            分野 (空=全分野)
+            <input value={domain} onChange={(e) => setDomain(e.target.value)} placeholder="math" />
+          </label>
+          <label className="checkbox-label">
+            <input type="checkbox" checked={fakeLlm} onChange={(e) => setFakeLlm(e.target.checked)} />
+            fake_llm
+          </label>
+          <label className="checkbox-label">
+            <input type="checkbox" checked={dryRun} onChange={(e) => setDryRun(e.target.checked)} />
+            dry_run
+          </label>
+          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+            <button type="button" className="primary-btn" onClick={submitJob}>
+              seed-gen 開始
+            </button>
+            <button type="button" className="secondary-btn" onClick={runPromptScreening}>
+              プロンプト LLM スクリーニング
+            </button>
+          </div>
+        </div>
       </section>
 
-      <section>
+      <section className="card">
         <h3>手動 1 件追加</h3>
-        <textarea value={manualPrompt} onChange={(e) => setManualPrompt(e.target.value)} rows={3} />
-        <input value={manualDomain} onChange={(e) => setManualDomain(e.target.value)} />
-        <button
-          type="button"
-          onClick={() =>
-            appendManualPrompt(manualPrompt, manualDomain)
-              .then(() => loadSeedGenStatus().then(setStatus))
-              .catch((exc) => setError(String(exc)))
-          }
-        >
-          追記
-        </button>
+        <div className="job-form">
+          <label>
+            プロンプト
+            <textarea value={manualPrompt} onChange={(e) => setManualPrompt(e.target.value)} rows={3} />
+          </label>
+          <label>
+            分野
+            <input value={manualDomain} onChange={(e) => setManualDomain(e.target.value)} />
+          </label>
+          <button
+            type="button"
+            className="primary-btn"
+            onClick={() =>
+              appendManualPrompt(manualPrompt, manualDomain)
+                .then(() => loadSeedGenStatus().then(setStatus))
+                .catch((exc) => setError(String(exc)))
+            }
+          >
+            追記
+          </button>
+        </div>
       </section>
 
-      <section>
+      <section className="card">
         <h3>ジョブ一覧</h3>
-        <ul>
+        <ul className="chat-sidebar-list" style={{ padding: 0 }}>
           {jobs.map((job) => (
-            <li key={job.id}>
-              <button type="button" onClick={() => setSelectedId(job.id)}>
-                {job.id.slice(0, 8)}… {seedGenStatusLabel(job.status)}
-                {isSeedGenJobActive(job.status) ? " (実行中)" : ""}
-              </button>
-              {isSeedGenJobActive(job.status) && (
-                <button type="button" onClick={() => cancelSeedGenJob(job.id).then(refreshJobs)}>
-                  中止
+            <li key={job.id} className="chat-sidebar-item">
+              <div className="chat-sidebar-entry-actions">
+                <button type="button" className="secondary-btn" onClick={() => setSelectedId(job.id)}>
+                  {job.id.slice(0, 8)}… {seedGenStatusLabel(job.status)}
+                  {isSeedGenJobActive(job.status) ? " (実行中)" : ""}
                 </button>
-              )}
+                {isSeedGenJobActive(job.status) && (
+                  <button type="button" className="danger-btn" onClick={() => cancelSeedGenJob(job.id).then(refreshJobs)}>
+                    中止
+                  </button>
+                )}
+              </div>
             </li>
           ))}
         </ul>
         {selectedId && (
-          <pre style={{ maxHeight: 240, overflow: "auto", whiteSpace: "pre-wrap" }}>{logs}</pre>
+          <pre className="snippet log-panel-scroll">{logs}</pre>
         )}
       </section>
     </div>
