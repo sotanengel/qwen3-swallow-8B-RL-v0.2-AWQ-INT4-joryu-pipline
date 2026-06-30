@@ -11,9 +11,10 @@ from joryu.config import ModelConfig, VllmConfig
 from joryu.paths import resolve_limits_probe_path
 from joryu.vllm.common import (
     build_offline_chat_kwargs,
-    compute_effective_max_tokens,
+    clamp_max_tokens_for_context,
     extract_thinking,
 )
+from joryu.vllm.prompt_tokens import estimate_chat_prompt_tokens
 from joryu.vllm.protocol import ChatResult, VllmError
 from joryu.vllm_limits import clamp_model_limits, load_probe_limits
 
@@ -105,24 +106,13 @@ class VllmClient:
         chat_template_kwargs: dict[str, Any],
         tools: list[dict[str, Any]] | None = None,
     ) -> int | None:
-        try:
-            tokenizer = self._llm.get_tokenizer()
-            template_kwargs: dict[str, Any] = {
-                "messages": messages,
-                "add_generation_prompt": True,
-                "tokenize": True,
-                "chat_template_kwargs": chat_template_kwargs,
-            }
-            if tools:
-                template_kwargs["tools"] = tools
-            token_ids = tokenizer.apply_chat_template(**template_kwargs)
-            if isinstance(token_ids, list):
-                return len(token_ids)
-            if hasattr(token_ids, "input_ids"):
-                return len(token_ids.input_ids)
-        except Exception as exc:  # noqa: BLE001
-            logger.debug("[vllm] prompt token estimate failed: %s", exc)
-        return None
+        enable_thinking = bool(chat_template_kwargs.get("enable_thinking", True))
+        return estimate_chat_prompt_tokens(
+            messages,
+            model_path=self._model_path,
+            enable_thinking=enable_thinking,
+            tools=tools,
+        )
 
     def _sampling_params(self, **overrides: Any) -> Any:
         from vllm import SamplingParams
@@ -160,7 +150,7 @@ class VllmClient:
         )
         effective_max = requested_max
         if prompt_tokens is not None:
-            effective_max = compute_effective_max_tokens(
+            effective_max = clamp_max_tokens_for_context(
                 requested_max_tokens=requested_max,
                 max_model_len=self._max_model_len,
                 prompt_tokens=prompt_tokens,

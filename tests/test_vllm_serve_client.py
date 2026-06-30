@@ -53,6 +53,40 @@ def openai_server() -> str:
     server.shutdown()
 
 
+def test_vllm_serve_client_clamps_max_tokens_for_long_prompt(
+    monkeypatch: pytest.MonkeyPatch,
+    openai_server: str,
+) -> None:
+    monkeypatch.setattr(
+        "joryu.vllm.prompt_tokens.estimate_chat_prompt_tokens",
+        lambda *args, **kwargs: 2049,
+    )
+    client = VllmServeClient(openai_server, model="test-model", max_model_len=4096)
+    client.chat_via_template(
+        [{"role": "user", "content": "long"}],
+        max_tokens=2048,
+    )
+    assert _OpenAIHandler.last_body is not None
+    assert _OpenAIHandler.last_body["max_tokens"] == 2015
+
+
+def test_vllm_serve_client_keeps_max_tokens_when_estimate_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+    openai_server: str,
+) -> None:
+    monkeypatch.setattr(
+        "joryu.vllm.prompt_tokens.estimate_chat_prompt_tokens",
+        lambda *args, **kwargs: None,
+    )
+    client = VllmServeClient(openai_server, model="test-model", max_model_len=4096)
+    client.chat_via_template(
+        [{"role": "user", "content": "hi"}],
+        max_tokens=2048,
+    )
+    assert _OpenAIHandler.last_body is not None
+    assert _OpenAIHandler.last_body["max_tokens"] == 2048
+
+
 def test_vllm_serve_client_posts_openai_chat_completions(openai_server: str) -> None:
     client = VllmServeClient(openai_server, model="test-model")
     result = client.chat_via_template(
