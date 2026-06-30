@@ -43,6 +43,7 @@ from joryu.compose import (
     vllm_base_build_command,
 )
 from joryu.docker_delegate import stop_orphan_joryu_containers
+from joryu.orchestrator.profile import ALL_COMPOSE_PROFILES
 from joryu.preflight import (
     PreflightError,
     changed_services_from_git,
@@ -266,7 +267,7 @@ def main(argv: list[str] | None = None) -> int:
     rc = run(cmd)
     if rc != 0:
         logger.error("[joryu-up] compose up failed (exit %s); running rollback", rc)
-        rollback_rc = run(compose_down_command(volumes=False))
+        rollback_rc = run(compose_down_command(volumes=False, profiles=list(ALL_COMPOSE_PROFILES)))
         if rollback_rc != 0:
             logger.error("[joryu-up] compose down rollback failed (exit %s)", rollback_rc)
         return rc

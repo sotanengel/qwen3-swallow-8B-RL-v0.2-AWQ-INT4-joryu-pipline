@@ -40,3 +40,11 @@ GPU_PROFILES: frozenset[ModelProfile] = frozenset(
 )
 
 ALWAYS_COMPOSE_PROFILE = "always"
+
+ALL_GPU_COMPOSE_PROFILES: tuple[str, ...] = (
+    ModelProfile.DISTILL.value,
+    ModelProfile.SEED_GEN.value,
+    ModelProfile.SCREENING.value,
+)
+
+ALL_COMPOSE_PROFILES: tuple[str, ...] = (ALWAYS_COMPOSE_PROFILE, *ALL_GPU_COMPOSE_PROFILES)

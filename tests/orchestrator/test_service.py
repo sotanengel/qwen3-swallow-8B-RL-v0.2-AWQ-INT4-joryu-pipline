@@ -9,7 +9,7 @@ import pytest
 from joryu.orchestrator.backend import FakeBackend
 from joryu.orchestrator.profile import ModelProfile, ProfileSpec
 from joryu.orchestrator.service import ModelOrchestrator
-from joryu.orchestrator.state import OrchestratorStatus
+from joryu.orchestrator.state import OrchestratorState, OrchestratorStatus
 
 
 def _profiles() -> dict[ModelProfile, ProfileSpec]:
@@ -67,3 +67,39 @@ def test_maybe_auto_restore(orch: ModelOrchestrator) -> None:
     orch.ensure_profile(ModelProfile.SEED_GEN)
     orch.maybe_auto_restore()
     assert orch.get_state().active == ModelProfile.DISTILL
+
+
+def test_ensure_profile_waits_when_already_starting(orch: ModelOrchestrator) -> None:
+    backend = orch.backend
+    assert isinstance(backend, FakeBackend)
+    orch._save_state(
+        OrchestratorState(
+            status=OrchestratorStatus.STARTING,
+            target=ModelProfile.SEED_GEN,
+            progress="waiting health 10s",
+        )
+    )
+    backend.mark_healthy(ModelProfile.SEED_GEN)
+    backend.calls.clear()
+    orch.ensure_profile(ModelProfile.SEED_GEN)
+    assert ("start", ModelProfile.SEED_GEN) not in backend.calls
+    state = orch.get_state()
+    assert state.status == OrchestratorStatus.ACTIVE
+    assert state.active == ModelProfile.SEED_GEN
+
+
+def test_ensure_profile_from_error_stops_gpu_first(orch: ModelOrchestrator) -> None:
+    backend = orch.backend
+    assert isinstance(backend, FakeBackend)
+    orch.ensure_profile(ModelProfile.DISTILL)
+    orch._save_state(
+        OrchestratorState(
+            status=OrchestratorStatus.ERROR,
+            error="health timeout",
+        )
+    )
+    backend.mark_healthy(ModelProfile.SEED_GEN)
+    backend.calls.clear()
+    orch.ensure_profile(ModelProfile.SEED_GEN)
+    assert ("stop", ModelProfile.DISTILL) in backend.calls
+    assert orch.get_state().active == ModelProfile.SEED_GEN

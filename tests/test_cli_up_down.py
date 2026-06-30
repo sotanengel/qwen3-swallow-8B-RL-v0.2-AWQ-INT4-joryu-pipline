@@ -588,7 +588,8 @@ def test_down_default(monkeypatch: pytest.MonkeyPatch) -> None:
     calls = _patch_runner(monkeypatch)
     rc = cli_down.main([])
     assert rc == 0
-    assert calls[0] == ["docker", "compose", "down"]
+    assert calls[0][:3] == ["docker", "compose", "--profile"]
+    assert "down" in calls[0]
 
 
 def test_down_with_volumes(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -629,7 +630,7 @@ def test_up_compose_failure_runs_rollback(monkeypatch: pytest.MonkeyPatch) -> No
     monkeypatch.setattr("joryu.preflight.joryu_container_running", lambda **_: False)
     rc = cli_up.main(["--detach"])
     assert rc == 1
-    assert any(cmd[0:3] == ["docker", "compose", "down"] for cmd in calls)
+    assert any(cmd[0:3] == ["docker", "compose", "--profile"] and "down" in cmd for cmd in calls)
 
 
 def test_up_includes_mcp_when_config_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
