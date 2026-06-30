@@ -6,6 +6,7 @@ import argparse
 import sys
 
 from joryu.compose import compose_down_command, run
+from joryu.orchestrator.profile import ALL_COMPOSE_PROFILES
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -26,7 +27,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    cmd = compose_down_command(volumes=args.volumes)
+    cmd = compose_down_command(volumes=args.volumes, profiles=list(ALL_COMPOSE_PROFILES))
     return run(cmd)
 
 

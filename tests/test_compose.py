@@ -124,12 +124,17 @@ def test_stop_single_service() -> None:
 
 
 def test_down_default() -> None:
-    cmd = compose_down_command(volumes=False)
-    assert cmd == ["docker", "compose", "down"]
+    from joryu.orchestrator.profile import ALL_COMPOSE_PROFILES
+
+    cmd = compose_down_command(volumes=False, profiles=list(ALL_COMPOSE_PROFILES))
+    assert cmd[:3] == ["docker", "compose", "--profile"]
+    assert "down" in cmd
 
 
 def test_down_with_volumes() -> None:
-    cmd = compose_down_command(volumes=True)
+    from joryu.orchestrator.profile import ALL_COMPOSE_PROFILES
+
+    cmd = compose_down_command(volumes=True, profiles=list(ALL_COMPOSE_PROFILES))
     assert "-v" in cmd or "--volumes" in cmd
 
 

@@ -93,9 +93,13 @@ def compose_up_command(
     return cmd
 
 
-def compose_down_command(*, volumes: bool) -> list[str]:
+def compose_down_command(*, volumes: bool, profiles: list[str] | None = None) -> list[str]:
     """`docker compose down [-v]` を構築。"""
-    cmd: list[str] = ["docker", "compose", "down"]
+    cmd: list[str] = ["docker", "compose"]
+    if profiles:
+        for profile in profiles:
+            cmd.extend(["--profile", profile])
+    cmd.append("down")
     if volumes:
         cmd.append("-v")
     return cmd

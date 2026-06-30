@@ -109,6 +109,33 @@ class ModelOrchestrator:
         assert self.backend is not None
         return self.backend.is_healthy(profile, spec=spec)
 
+    def _wait_for_profile_health(
+        self,
+        target: ModelProfile,
+        spec: ProfileSpec,
+        state: OrchestratorState,
+        backend: Backend,
+        emit: Callable[[str], None],
+    ) -> None:
+        deadline = time.monotonic() + self.health_timeout_s
+        while time.monotonic() < deadline:
+            if backend.is_healthy(target, spec=spec):
+                state = transition(state, OrchestratorEvent.HEALTH_OK)
+                self._save_state(state)
+                emit(f"[orchestrator] profile ready: {target.value}")
+                if isinstance(backend, FakeBackend):
+                    backend.mark_healthy(target)
+                return
+            elapsed = int(self.health_timeout_s - (deadline - time.monotonic()))
+            state = replace(state, progress=f"waiting health {elapsed}s")
+            self._save_state(state)
+            time.sleep(self.poll_interval_s)
+
+        state = transition(state, OrchestratorEvent.HEALTH_TIMEOUT)
+        self._save_state(state)
+        msg = f"profile {target.value} health timeout after {self.health_timeout_s}s"
+        raise RuntimeError(msg)
+
     def ensure_profile(
         self,
         target: ModelProfile,
@@ -122,43 +149,40 @@ class ModelOrchestrator:
                 emit(f"[orchestrator] profile already active: {target.value}")
                 return
 
-            state = transition(state, OrchestratorEvent.ENSURE_PROFILE, target=target)
-            self._save_state(state)
-            emit(f"[orchestrator] ensuring profile: {target.value}")
-
             assert self.backend is not None
             backend = self.backend
             spec = self.profiles[target]
 
-            # stop other GPU profiles
-            if state.status == OrchestratorStatus.SWITCHING and state.active is not None:
-                old_spec = self.profiles[state.active]
-                emit(f"[orchestrator] stopping {state.active.value}")
-                backend.stop_profile(state.active, spec=old_spec)
+            if state.status == OrchestratorStatus.STARTING and state.target == target:
+                emit(f"[orchestrator] waiting for profile: {target.value}")
+                self._wait_for_profile_health(target, spec, state, backend, emit)
+                return
+
+            if state.status == OrchestratorStatus.ERROR:
+                emit("[orchestrator] clearing error, stopping other GPU profiles")
+                backend.stop_other_gpu_profiles(keep=target, profiles=self.profiles)
+
+            if state.status == OrchestratorStatus.STARTING and state.target != target:
+                emit(
+                    f"[orchestrator] switching from {state.target.value} to {target.value}"
+                    if state.target
+                    else f"[orchestrator] switching to {target.value}"
+                )
+                backend.stop_other_gpu_profiles(keep=target, profiles=self.profiles)
+
+            state = transition(state, OrchestratorEvent.ENSURE_PROFILE, target=target)
+            self._save_state(state)
+            emit(f"[orchestrator] ensuring profile: {target.value}")
+
+            if state.status == OrchestratorStatus.SWITCHING:
+                emit(f"[orchestrator] stopping other GPU profiles for {target.value}")
+                backend.stop_other_gpu_profiles(keep=target, profiles=self.profiles)
                 state = transition(state, OrchestratorEvent.STOP_DONE)
                 self._save_state(state)
 
             emit(f"[orchestrator] starting {target.value}")
             backend.start_profile(target, spec=spec)
-
-            deadline = time.monotonic() + self.health_timeout_s
-            while time.monotonic() < deadline:
-                if backend.is_healthy(target, spec=spec):
-                    state = transition(state, OrchestratorEvent.HEALTH_OK)
-                    self._save_state(state)
-                    emit(f"[orchestrator] profile ready: {target.value}")
-                    if isinstance(backend, FakeBackend):
-                        backend.mark_healthy(target)
-                    return
-                elapsed = int(self.health_timeout_s - (deadline - time.monotonic()))
-                state = replace(state, progress=f"waiting health {elapsed}s")
-                self._save_state(state)
-                time.sleep(self.poll_interval_s)
-
-            state = transition(state, OrchestratorEvent.HEALTH_TIMEOUT)
-            self._save_state(state)
-            msg = f"profile {target.value} health timeout after {self.health_timeout_s}s"
-            raise RuntimeError(msg)
+            self._wait_for_profile_health(target, spec, state, backend, emit)
 
     def maybe_auto_restore(self, *, log: Callable[[str], None] | None = None) -> None:
         if self.auto_restore is None:
