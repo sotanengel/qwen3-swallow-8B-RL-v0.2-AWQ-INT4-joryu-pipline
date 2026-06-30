@@ -53,8 +53,13 @@ ENV UV_TORCH_BACKEND=cu130 \
     TORCH_CUDA_ARCH_LIST="8.6" \
     CCACHE_DIR=/root/.cache/ccache
 
+# torch stack pin は scripts/vllm_base_torch_stack.py (SSOT) と一致させること。
 RUN --mount=type=cache,id=joryu-uv-cu130,sharing=locked,target=/root/.cache/uv \
-    uv pip install "torch==2.12.1+cu130" --python /app/.venv/bin/python \
+    uv pip install \
+       "torch==2.12.1+cu130" \
+       "torchvision==0.27.1+cu130" \
+       "torchaudio==2.11.0+cu130" \
+       --python /app/.venv/bin/python \
        --index-url https://download.pytorch.org/whl/cu130
 
 # precompiled wheel / stale uv git wheel cache だと torch ABI mismatch になる (#342)。
@@ -80,6 +85,17 @@ RUN --mount=type=cache,id=joryu-ccache,sharing=locked,target=/root/.cache/ccache
        "vllm @ git+https://github.com/vllm-project/vllm@v0.23.1rc0" \
        --python /app/.venv/bin/python
 
+# vLLM install が torchvision==0.26.0 (torch 2.11 train) を transitive で入れるのを防ぐ。
+# torch 版は同じ 2.12.1 のため vLLM ソースビルド済み _C は維持される。
+RUN --mount=type=cache,id=joryu-uv-cu130,sharing=locked,target=/root/.cache/uv \
+    uv pip install \
+       "torch==2.12.1+cu130" \
+       "torchvision==0.27.1+cu130" \
+       "torchaudio==2.11.0+cu130" \
+       --reinstall-package torch --reinstall-package torchvision --reinstall-package torchaudio \
+       --python /app/.venv/bin/python \
+       --index-url https://download.pytorch.org/whl/cu130
+
 ENV PATH="/app/.venv/bin:/usr/local/bin:$PATH" \
     PYTHONPATH=/app/src \
     PYTHONUNBUFFERED=1 \
@@ -88,4 +104,5 @@ ENV PATH="/app/.venv/bin:/usr/local/bin:$PATH" \
     VLLM_DEEP_GEMM_WARMUP=skip \
     VLLM_USE_FLASHINFER_SAMPLER=0
 
-RUN python -c "import torch; import vllm._C; print('vllm+torch OK', torch.__version__)"
+COPY scripts/vllm_base_smoke.py scripts/vllm_base_smoke.py
+RUN python scripts/vllm_base_smoke.py
