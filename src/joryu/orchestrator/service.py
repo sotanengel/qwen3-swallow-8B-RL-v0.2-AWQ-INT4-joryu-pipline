@@ -158,9 +158,19 @@ class ModelOrchestrator:
                 self._wait_for_profile_health(target, spec, state, backend, emit)
                 return
 
+            if state.status == OrchestratorStatus.SWITCHING and state.target == target:
+                emit(f"[orchestrator] resuming switch to {target.value}")
+                backend.stop_other_gpu_profiles(keep=target, profiles=self.profiles, log=emit)
+                state = transition(state, OrchestratorEvent.STOP_DONE)
+                self._save_state(state)
+                emit(f"[orchestrator] starting {target.value}")
+                backend.start_profile(target, spec=spec)
+                self._wait_for_profile_health(target, spec, state, backend, emit)
+                return
+
             if state.status == OrchestratorStatus.ERROR:
                 emit("[orchestrator] clearing error, stopping other GPU profiles")
-                backend.stop_other_gpu_profiles(keep=target, profiles=self.profiles)
+                backend.stop_other_gpu_profiles(keep=target, profiles=self.profiles, log=emit)
 
             if state.status == OrchestratorStatus.STARTING and state.target != target:
                 emit(
@@ -168,7 +178,7 @@ class ModelOrchestrator:
                     if state.target
                     else f"[orchestrator] switching to {target.value}"
                 )
-                backend.stop_other_gpu_profiles(keep=target, profiles=self.profiles)
+                backend.stop_other_gpu_profiles(keep=target, profiles=self.profiles, log=emit)
 
             state = transition(state, OrchestratorEvent.ENSURE_PROFILE, target=target)
             self._save_state(state)
@@ -176,7 +186,7 @@ class ModelOrchestrator:
 
             if state.status == OrchestratorStatus.SWITCHING:
                 emit(f"[orchestrator] stopping other GPU profiles for {target.value}")
-                backend.stop_other_gpu_profiles(keep=target, profiles=self.profiles)
+                backend.stop_other_gpu_profiles(keep=target, profiles=self.profiles, log=emit)
                 state = transition(state, OrchestratorEvent.STOP_DONE)
                 self._save_state(state)
 

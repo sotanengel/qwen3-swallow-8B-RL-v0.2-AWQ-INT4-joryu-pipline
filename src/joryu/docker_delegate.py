@@ -29,26 +29,61 @@ def is_managed_joryu_container(name: str) -> bool:
     return any(name.startswith(prefix) for prefix in JORYU_MANAGED_PREFIXES)
 
 
-def stop_docker_container(name: str, *, docker_run: Callable[..., Any] | None = None) -> None:
-    """同名コンテナが残っていれば停止 (再 run 前の GPU 占有防止)。"""
+def stop_docker_container(
+    name: str,
+    *,
+    grace_seconds: int = 10,
+    kill_timeout_seconds: int = 15,
+    docker_run: Callable[..., Any] | None = None,
+) -> bool:
+    """同名コンテナが残っていれば停止 (再 run 前の GPU 占有防止)。
+
+    grace 秒以内に docker stop し、まだ running なら docker kill する。
+    停止できた (または元から停止) なら True。
+    """
     runner = docker_run or subprocess.run
+    if not _container_running(name, docker_run=runner):
+        return True
+
+    stop_timeout = grace_seconds + kill_timeout_seconds
     try:
-        proc = runner(
+        runner(
+            ["docker", "stop", "--time", str(grace_seconds), name],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=stop_timeout,
+        )
+    except subprocess.TimeoutExpired:
+        logger.warning("docker stop timed out for %s after %ss", name, stop_timeout)
+
+    if _container_running(name, docker_run=runner):
+        try:
+            runner(
+                ["docker", "kill", name],
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=kill_timeout_seconds,
+            )
+        except subprocess.TimeoutExpired:
+            logger.warning("docker kill timed out for %s", name)
+            return False
+
+    return not _container_running(name, docker_run=runner)
+
+
+def _container_running(name: str, *, docker_run: Callable[..., Any]) -> bool:
+    try:
+        proc = docker_run(
             ["docker", "inspect", "-f", "{{.State.Running}}", name],
             capture_output=True,
             text=True,
             check=False,
         )
     except OSError:
-        return
-    if proc.returncode != 0 or proc.stdout.strip() != "true":
-        return
-    runner(
-        ["docker", "stop", "--time", "30", name],
-        capture_output=False,
-        text=True,
-        check=False,
-    )
+        return False
+    return proc.returncode == 0 and proc.stdout.strip() == "true"
 
 
 def stop_orphan_joryu_containers(
