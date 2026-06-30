@@ -17,6 +17,47 @@ def _load_torch_stack():
     return module
 
 
+def _vllm_base_dockerfile() -> str:
+    return (REPO_ROOT / "Dockerfile.vllm-base").read_text(encoding="utf-8")
+
+
+def _dockerfile_stage(dockerfile: str, stage: str) -> str:
+    marker = f"AS {stage}"
+    start = dockerfile.index(marker)
+    from_start = dockerfile.rfind("FROM", 0, start)
+    next_from = dockerfile.find("\nFROM ", start + len(marker))
+    if next_from == -1:
+        return dockerfile[from_start:]
+    return dockerfile[from_start:next_from]
+
+
+def test_dockerfile_vllm_base_no_joryu_app_layer() -> None:
+    """base は vLLM runtime のみ。joryu アプリ層は joryu-job に委譲する。"""
+    dockerfile = _vllm_base_dockerfile()
+    assert "COPY src" not in dockerfile
+    assert "--extra api" not in dockerfile
+    assert "PYTHONPATH=/app/src" not in dockerfile
+    assert "uv sync" not in dockerfile
+
+
+def test_dockerfile_vllm_base_multistage_compile_runtime() -> None:
+    """compile で vLLM をビルドし runtime に venv のみ渡すマルチステージ契約。"""
+    dockerfile = _vllm_base_dockerfile()
+    assert "AS compile" in dockerfile
+    assert "AS runtime" in dockerfile
+    assert "COPY --from=compile /app/.venv /app/.venv" in dockerfile
+
+
+def test_dockerfile_vllm_base_runtime_no_build_toolchain() -> None:
+    """runtime stage に build-essential / ccache を入れない。"""
+    runtime = _dockerfile_stage(_vllm_base_dockerfile(), "runtime")
+    assert "build-essential" not in runtime
+    assert "ccache" not in runtime
+    compile = _dockerfile_stage(_vllm_base_dockerfile(), "compile")
+    assert "build-essential" in compile
+    assert "ccache" in compile
+
+
 def test_dockerfile_app_stage_from_vllm_base() -> None:
     dockerfile = (REPO_ROOT / "Dockerfile.job").read_text(encoding="utf-8")
     assert "FROM joryu-vllm-base:latest" in dockerfile

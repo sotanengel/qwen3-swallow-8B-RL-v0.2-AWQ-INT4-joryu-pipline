@@ -88,7 +88,7 @@ image 構成 (PR #330 で分離):
 
 | image | 用途 | 中身 |
 |---|---|---|
-| `joryu-vllm-base:latest` | torch + git vLLM コンパイル済みベース | `Dockerfile.vllm-base` |
+| `joryu-vllm-base:latest` | torch + git vLLM コンパイル済みベース（compile/runtime マルチステージ。`src/`・api 依存なし） | `Dockerfile.vllm-base` |
 | `joryu` / `joryu-seed` サービス | 常駐 vLLM サーバ | `joryu-vllm-base:latest` を**直接参照** (src/ なし、`vllm serve` のみ) |
 | `joryu-job:latest` | api からの `compose run` でジョブ実行 | `Dockerfile.job` (vllm-base + src + uv sync) |
 | `joryu-judge:latest` | スクリーニング | `Dockerfile.judge` (llama.cpp + GGUF) |

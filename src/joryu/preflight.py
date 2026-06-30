@@ -21,7 +21,7 @@ from typing import Any, Protocol
 DISK_REQUIRED_GB: dict[str, float] = {
     "dashboard": 2.0,
     "api": 1.0,
-    "joryu-vllm-base": 10.0,
+    "joryu-vllm-base": 8.0,
     # 常駐 vLLM サーバ (joryu / joryu-seed) は joryu-vllm-base:latest を直接参照する
     # ため、サービス単独で build 容量を見積もる必要はない (vllm-base 側で確保)。
     "joryu": 1.0,
