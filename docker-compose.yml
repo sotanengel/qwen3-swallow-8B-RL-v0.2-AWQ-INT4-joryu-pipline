@@ -206,9 +206,6 @@ services:
       - JORYU_VLLM_URL=http://joryu:8100
       - JORYU_HOST_REPO_ROOT=${JORYU_HOST_REPO_ROOT:-}
       - PYTHONPATH=/workspace/src
-    depends_on:
-      joryu:
-        condition: service_healthy
     restart: "on-failure:3"
 
 volumes:
