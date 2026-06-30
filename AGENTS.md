@@ -1,14 +1,25 @@
 # Agent 向け開発ルール
 
-## CI ゲート（必須・例外なし）
+## ローカル vs GitHub Actions
 
-**`git commit` または PR 作成の前に、必ず次を実行し、全て成功してから進める。**
+### コミット時（pre-commit フック・高速・必須）
 
-```bash
-bash scripts/check.sh
-```
+`setup-dev.sh` が登録する pre-commit が lint / format / セキュリティ検査を実行する。
 
-`pytest` だけ、`ruff` だけ、など部分的な検査で完了報告してはならない。
+- ruff / zizmor / pinact / JSONL lint 等
+- `--no-verify` でフックを迂回することは禁止
+
+### PR 時（GitHub Actions・重い検査はここに一任）
+
+`.github/workflows/ci.yml` の GitHub Actions が pytest / カバレッジ閾値 / `verify_pipeline.sh` 等を実行する。
+pre-push フックは使わない（`git push` はフック待ちなく即完了する）。
+
+### 任意: ローカルフル検証
+
+GitHub Actions と同等の検査をローカルで先に回したい場合のみ `bash scripts/check.sh` を使う。
+通常は push して GitHub Actions の結果を待てばよい。
+
+`--quick` は開発中の途中確認のみ（pytest / verify_pipeline を省略）。
 
 初回セットアップ:
 
@@ -16,20 +27,13 @@ bash scripts/check.sh
 bash scripts/setup-dev.sh
 ```
 
-## check.sh が実行する内容
+## check.sh が実行する内容（任意・GitHub Actions と同等）
 
 1. `uv run ruff check .`
 2. `uv run ruff format --check .`
 3. `uvx pre-commit run --all-files`（zizmor / pinact / 基本フック含む）
 4. `bash scripts/check_coverage.sh`（`pyproject.toml` の `fail_under` 未満で失敗）
-5. `bash scripts/verify_pipeline.sh`（CI と同じ end-to-end スモーク）
-
-`--quick` は開発中の途中確認のみ。PR・コミット前では使用禁止。`--quick` でも **pre-commit（JSONL lint / ruff / zizmor 等）は実行される**が、`pytest` カバレッジと `verify_pipeline.sh` は省略される。
-
-## pre-commit / pre-push フック
-
-`setup-dev.sh` が `pre-commit` と `pre-push` を登録する。
-`--no-verify` でフックを迂回することは禁止。
+5. `bash scripts/verify_pipeline.sh`（GitHub Actions と同じ end-to-end スモーク）
 
 ## データ取り扱い
 
@@ -39,8 +43,8 @@ bash scripts/setup-dev.sh
 
 ## 実装完了の報告条件
 
-- `bash scripts/check.sh` が exit 0
-- ユーザーが PR を求めた場合は PR URL を返す
+- GitHub Actions（PR の workflow）が green（またはユーザーが PR URL を求めた場合は PR URL を返す）
+- ローカルで `bash scripts/check.sh` を回した場合は exit 0
 
 ## Docker / joryu-up（コンテナ追加時）
 
