@@ -14,6 +14,7 @@ from joryu.vllm.common import (
     extract_known_tool_names,
     extract_thinking,
     is_context_length_error,
+    parse_context_overflow_characters,
     parse_context_overflow_input_tokens,
     resolve_serve_effective_max_tokens,
 )
@@ -175,13 +176,20 @@ class VllmServeClient(HttpVllmBase):
         try:
             return self.post_json_with_retry("/v1/chat/completions", payload)
         except VllmError as exc:
+            detail = str(exc)
+            char_count = parse_context_overflow_characters(detail)
+            if char_count is not None and self._max_model_len is not None:
+                raise VllmError(
+                    f"prompt too long for num_ctx={self._max_model_len}: "
+                    f"vLLM reported {char_count} input characters"
+                ) from exc
             if (
                 self._max_model_len is None
                 or prompt_tokens is not None
-                or not is_context_length_error(str(exc))
+                or not is_context_length_error(detail)
             ):
                 raise
-            input_tokens = parse_context_overflow_input_tokens(str(exc))
+            input_tokens = parse_context_overflow_input_tokens(detail)
             if input_tokens is None:
                 raise
             effective = clamp_max_tokens_for_context(

@@ -54,3 +54,16 @@ def test_search_fn_truncates_query() -> None:
     from joryu.tools_impl.search import _truncate_query
 
     assert len(_truncate_query(long_q)) == 256
+
+
+def test_format_search_results_truncates_long_snippet() -> None:
+    from joryu.tools_impl.search import SearchResult, format_search_results
+
+    long_snippet = "s" * 20_000
+    out = format_search_results(
+        "q",
+        1,
+        [SearchResult(title="t", url="https://example.com", snippet=long_snippet)],
+    )
+    assert "[truncated]" in out
+    assert len(out) < 20_000

@@ -15,6 +15,7 @@ TAVILY_URL = "https://api.tavily.com/search"
 MAX_QUERY_LEN = 256
 MAX_TOP_K = 10
 DEFAULT_TIMEOUT = 8.0
+SNIPPET_TRUNCATE = 8000
 
 
 @dataclass(frozen=True)
@@ -86,6 +87,12 @@ def _resolve_provider() -> SearchProvider:
     return TavilyProvider(api_key)
 
 
+def _truncate_snippet(text: str) -> str:
+    if len(text) <= SNIPPET_TRUNCATE:
+        return text
+    return text[:SNIPPET_TRUNCATE] + "\n[truncated]"
+
+
 def format_search_results(query: str, top_k: int, results: list[SearchResult]) -> str:
     lines = [f"[search results for {query!r}, top_k={top_k}]"]
     for i, item in enumerate(results, start=1):
@@ -93,7 +100,7 @@ def format_search_results(query: str, top_k: int, results: list[SearchResult]) -
         if item.url:
             lines.append(f"   url: {item.url}")
         if item.snippet:
-            lines.append(f"   snippet: {item.snippet}")
+            lines.append(f"   snippet: {_truncate_snippet(item.snippet)}")
     return "\n".join(lines)
 
 

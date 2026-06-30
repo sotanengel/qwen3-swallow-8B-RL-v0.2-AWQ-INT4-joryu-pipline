@@ -10,9 +10,14 @@ import pytest
 
 from joryu.vllm.common import (
     clamp_max_tokens_for_context,
+    ensure_prompt_fits_context_budget,
+    estimate_prompt_characters,
     is_context_length_error,
+    is_prompt_context_overflow_error,
+    parse_context_overflow_characters,
     parse_context_overflow_input_tokens,
     resolve_serve_effective_max_tokens,
+    vllm_input_char_budget,
 )
 from joryu.vllm.protocol import VllmError
 from joryu.vllm.serve import VllmServeClient
@@ -21,7 +26,40 @@ from joryu.vllm.serve import VllmServeClient
 def test_is_context_length_error() -> None:
     assert is_context_length_error("maximum context length is 4096")
     assert is_context_length_error('{"input_tokens": 2049}')
+    assert is_prompt_context_overflow_error(
+        "your prompt contains 875414 characters (more than 262144 characters)"
+    )
     assert not is_context_length_error("connection reset")
+
+
+def test_parse_context_overflow_characters() -> None:
+    detail = (
+        "your prompt contains 875414 characters (more than 262144 characters, "
+        "which is the upper bound for 2048 input tokens). "
+        '(parameter=input_text, value=875414)"'
+    )
+    assert parse_context_overflow_characters(detail) == 875414
+
+
+def test_vllm_input_char_budget() -> None:
+    assert vllm_input_char_budget(max_model_len=4096, effective_max_tokens=2048) == 262144
+
+
+def test_ensure_prompt_fits_context_budget_raises_when_over() -> None:
+    huge = "x" * 300_000
+    with pytest.raises(VllmError, match="prompt too long"):
+        ensure_prompt_fits_context_budget(
+            messages=[{"role": "user", "content": huge}],
+            tools=None,
+            max_model_len=4096,
+            effective_max_tokens=2048,
+        )
+
+
+def test_estimate_prompt_characters_includes_tools() -> None:
+    messages = [{"role": "user", "content": "hi"}]
+    tools = [{"type": "function", "function": {"name": "search", "parameters": {}}}]
+    assert estimate_prompt_characters(messages, tools) > estimate_prompt_characters(messages)
 
 
 def test_resolve_serve_effective_max_tokens_without_max_model_len() -> None:
