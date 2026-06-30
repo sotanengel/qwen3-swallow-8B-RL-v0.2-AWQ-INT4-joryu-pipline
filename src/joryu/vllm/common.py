@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
@@ -14,6 +15,7 @@ logger = logging.getLogger(__name__)
 _THINK_RE = re.compile(r"<think>(.*?)</think>", re.DOTALL)
 _PROMPT_TOKEN_MARGIN = 32
 _MIN_EFFECTIVE_MAX_TOKENS = 64
+_VLLM_CHARS_PER_TOKEN_SLOT = 128
 
 DEFAULT_LOCAL_VLLM_URL = "http://localhost:8100"
 
@@ -77,6 +79,25 @@ _CONTEXT_OVERFLOW_INPUT_RE = re.compile(
     r"prompt contains at least (\d+) input tokens",
     re.IGNORECASE,
 )
+_CONTEXT_OVERFLOW_CHARS_RE = re.compile(
+    r"prompt contains (\d+) characters",
+    re.IGNORECASE,
+)
+_CONTEXT_OVERFLOW_VALUE_RE = re.compile(
+    r'"parameter"\s*:\s*"input_text"\s*,\s*"value"\s*:\s*(\d+)',
+    re.IGNORECASE,
+)
+
+
+def parse_context_overflow_characters(error_detail: str) -> int | None:
+    """vLLM HTTP 400 の error body から input 文字数を抽出する。"""
+    match = _CONTEXT_OVERFLOW_CHARS_RE.search(error_detail)
+    if match:
+        return int(match.group(1))
+    match = _CONTEXT_OVERFLOW_VALUE_RE.search(error_detail)
+    if match:
+        return int(match.group(1))
+    return None
 
 
 def parse_context_overflow_input_tokens(error_detail: str) -> int | None:
@@ -88,8 +109,67 @@ def parse_context_overflow_input_tokens(error_detail: str) -> int | None:
 
 
 def is_context_length_error(error_detail: str) -> bool:
+    return is_prompt_context_overflow_error(error_detail)
+
+
+def is_prompt_context_overflow_error(error_detail: str) -> bool:
     lowered = error_detail.lower()
-    return "maximum context length" in lowered or "input_tokens" in lowered
+    if "maximum context length" in lowered:
+        return True
+    if "input_tokens" in lowered:
+        return True
+    if "prompt contains" in lowered and "characters" in lowered:
+        return True
+    if parse_context_overflow_input_tokens(error_detail) is not None:
+        return True
+    if parse_context_overflow_characters(error_detail) is not None:
+        return True
+    return False
+
+
+def vllm_input_char_budget(*, max_model_len: int, effective_max_tokens: int) -> int:
+    """vLLM の input_text 文字数上限を見積もる (262144 chars / 2048 output slots 準拠)。"""
+    input_slots = max(0, max_model_len - effective_max_tokens)
+    return input_slots * _VLLM_CHARS_PER_TOKEN_SLOT
+
+
+def estimate_prompt_characters(
+    messages: list[dict[str, Any]],
+    tools: list[dict[str, Any]] | None = None,
+) -> int:
+    """リクエスト直前の軽量文字数見積もり。"""
+    total = 0
+    for message in messages:
+        if not isinstance(message, dict):
+            continue
+        content = message.get("content")
+        if isinstance(content, str):
+            total += len(content)
+        tool_calls = message.get("tool_calls")
+        if isinstance(tool_calls, list):
+            total += len(json.dumps(tool_calls, ensure_ascii=False))
+    if tools:
+        total += len(json.dumps(tools, ensure_ascii=False))
+    return total
+
+
+def ensure_prompt_fits_context_budget(
+    *,
+    messages: list[dict[str, Any]],
+    tools: list[dict[str, Any]] | None,
+    max_model_len: int,
+    effective_max_tokens: int,
+) -> None:
+    char_count = estimate_prompt_characters(messages, tools)
+    char_budget = vllm_input_char_budget(
+        max_model_len=max_model_len,
+        effective_max_tokens=effective_max_tokens,
+    )
+    if char_count > char_budget:
+        raise VllmError(
+            f"prompt too long for num_ctx={max_model_len}: "
+            f"estimated {char_count} characters (budget={char_budget})"
+        )
 
 
 def resolve_serve_effective_max_tokens(
@@ -116,6 +196,12 @@ def resolve_serve_effective_max_tokens(
         requested_max_tokens=requested_max_tokens,
         max_model_len=max_model_len,
         prompt_tokens=prompt_tokens,
+    )
+    ensure_prompt_fits_context_budget(
+        messages=messages,
+        tools=tools,
+        max_model_len=max_model_len,
+        effective_max_tokens=effective,
     )
     return effective, prompt_tokens
 
@@ -172,10 +258,15 @@ __all__ = [
     "build_offline_chat_kwargs",
     "clamp_max_tokens_for_context",
     "compute_effective_max_tokens",
+    "ensure_prompt_fits_context_budget",
+    "estimate_prompt_characters",
     "extract_known_tool_names",
     "extract_thinking",
     "is_context_length_error",
+    "is_prompt_context_overflow_error",
     "normalize_vllm_serve_base_url",
+    "parse_context_overflow_characters",
     "parse_context_overflow_input_tokens",
     "resolve_serve_effective_max_tokens",
+    "vllm_input_char_budget",
 ]

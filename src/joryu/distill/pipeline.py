@@ -27,6 +27,7 @@ from joryu.styles import StylePreset, load_styles, resolve_style_ids
 from joryu.tool_executor import ToolExecutor, build_default_executor
 from joryu.tools import load_tools
 from joryu.variants import expand_variants
+from joryu.vllm.common import is_prompt_context_overflow_error
 from joryu.vllm.protocol import SupportsChat, VllmError
 from joryu.writer import JsonlAppendWriter
 
@@ -48,6 +49,71 @@ def _resolve_tools_path(
     if rel.is_absolute():
         return rel.resolve()
     return rel.resolve()
+
+
+def _should_retry_without_tools(exc: VllmError, *, had_tools: bool) -> bool:
+    if not had_tools:
+        return False
+    detail = str(exc)
+    return is_prompt_context_overflow_error(detail) or "prompt too long" in detail
+
+
+def _generate_variant_record(
+    *,
+    client: SupportsChat,
+    messages: list[dict[str, str]],
+    eff: Any,
+    include_tools: bool,
+    use_tool_loop: bool,
+    loop_executor: ToolExecutor | None,
+    loop_max_turns: int,
+    turns_holder: dict[str, Any],
+    build_record: Callable[[Any], dict[str, Any]],
+    no_think_fallback: bool,
+    tool_loop_dedupe: bool,
+    deadline: float | None,
+    config: Config,
+    on_retry: Callable[[int, dict[str, Any]], None] | None,
+    log: Callable[..., Any],
+) -> tuple[dict[str, Any] | None, int]:
+    tools = (eff.tools or None) if include_tools else None
+    active_tool_loop = use_tool_loop and loop_executor is not None and include_tools
+    chat_fn = (
+        make_tool_loop_chat_fn(
+            client,
+            loop_executor,
+            loop_max_turns,
+            turns_holder,
+            no_think_fallback=no_think_fallback,
+            tool_loop_dedupe=tool_loop_dedupe,
+        )
+        if active_tool_loop and loop_executor is not None
+        else None
+    )
+    build_with_turns = make_build_with_turns(
+        build_record,
+        use_tool_loop=active_tool_loop,
+        turns_holder=turns_holder,
+        client=client if include_tools else None,
+        messages=messages if include_tools else None,
+        tools=tools,
+        sampling=eff.sampling,
+        no_think_fallback=no_think_fallback,
+    )
+    return generate_until_complete(
+        client=client,
+        messages=messages,
+        tools=tools,
+        sampling=eff.sampling,
+        build_record=build_with_turns,
+        chat_fn=chat_fn,
+        deadline=deadline,
+        min_interval_sec=config.distill.min_interval_sec,
+        max_tokens_cap=config.distill.truncation_retry_max_tokens,
+        max_attempts=config.distill.truncation_retry_max_attempts,
+        on_retry=on_retry,
+        log=log,
+    )
 
 
 def _report_truncation_retry(
@@ -246,29 +312,7 @@ def run_distill(
                     config_hash=fingerprint,
                 )
                 turns_holder: dict[str, Any] = {"turns": []}
-                chat_fn = (
-                    make_tool_loop_chat_fn(
-                        client,
-                        loop_executor,
-                        loop_max_turns,
-                        turns_holder,
-                        no_think_fallback=no_think_fallback,
-                        tool_loop_dedupe=tool_loop_dedupe,
-                    )
-                    if use_tool_loop and loop_executor is not None
-                    else None
-                )
-                build_with_turns = make_build_with_turns(
-                    build_record,
-                    use_tool_loop=use_tool_loop,
-                    turns_holder=turns_holder,
-                    client=client,
-                    messages=messages,
-                    tools=eff.tools or None,
-                    sampling=eff.sampling,
-                    no_think_fallback=no_think_fallback,
-                )
-
+                had_tools = bool(eff.tools)
                 on_retry = partial(
                     _report_truncation_retry,
                     run_key=run_key,
@@ -277,18 +321,23 @@ def run_distill(
                     stats_throttler=stats_throttler,
                 )
 
+                tools_disabled_retry = False
+                record: dict[str, Any] | None = None
                 try:
-                    record, _attempts = generate_until_complete(
+                    record, _attempts = _generate_variant_record(
                         client=client,
                         messages=messages,
-                        tools=eff.tools or None,
-                        sampling=eff.sampling,
-                        build_record=build_with_turns,
-                        chat_fn=chat_fn,
+                        eff=eff,
+                        include_tools=True,
+                        use_tool_loop=use_tool_loop,
+                        loop_executor=loop_executor,
+                        loop_max_turns=loop_max_turns,
+                        turns_holder=turns_holder,
+                        build_record=build_record,
+                        no_think_fallback=no_think_fallback,
+                        tool_loop_dedupe=tool_loop_dedupe,
                         deadline=deadline,
-                        min_interval_sec=config.distill.min_interval_sec,
-                        max_tokens_cap=config.distill.truncation_retry_max_tokens,
-                        max_attempts=config.distill.truncation_retry_max_attempts,
+                        config=config,
                         on_retry=on_retry,
                         log=log,
                     )
@@ -304,13 +353,51 @@ def run_distill(
                         log(f"[joryu-distill] [{i}/{run_total}] エラー: {exc}", file=sys.stderr)
                         reporter.update(i)
                         break
-                    logger.warning("[distill] row failed (prompt=%r): %s", row.prompt[:40], exc)
-                    log(
-                        f"[joryu-distill] [{i}/{run_total}] エラー: {exc}",
-                        file=sys.stderr,
-                    )
-                    reporter.update(i)
-                    continue
+                    if _should_retry_without_tools(exc, had_tools=had_tools):
+                        log(
+                            "[joryu-distill] コンテキスト超過 — ツール無効で再試行します",
+                            file=sys.stderr,
+                        )
+                        turns_holder = {"turns": []}
+                        try:
+                            record, _attempts = _generate_variant_record(
+                                client=client,
+                                messages=messages,
+                                eff=eff,
+                                include_tools=False,
+                                use_tool_loop=use_tool_loop,
+                                loop_executor=loop_executor,
+                                loop_max_turns=loop_max_turns,
+                                turns_holder=turns_holder,
+                                build_record=build_record,
+                                no_think_fallback=no_think_fallback,
+                                tool_loop_dedupe=tool_loop_dedupe,
+                                deadline=deadline,
+                                config=config,
+                                on_retry=on_retry,
+                                log=log,
+                            )
+                            tools_disabled_retry = True
+                        except VllmError as retry_exc:
+                            logger.warning(
+                                "[distill] row failed after tools-disabled retry (prompt=%r): %s",
+                                row.prompt[:40],
+                                retry_exc,
+                            )
+                            log(
+                                f"[joryu-distill] [{i}/{run_total}] エラー: {retry_exc}",
+                                file=sys.stderr,
+                            )
+                            reporter.update(i)
+                            continue
+                    else:
+                        logger.warning("[distill] row failed (prompt=%r): %s", row.prompt[:40], exc)
+                        log(
+                            f"[joryu-distill] [{i}/{run_total}] エラー: {exc}",
+                            file=sys.stderr,
+                        )
+                        reporter.update(i)
+                        continue
                 except Exception as exc:  # noqa: BLE001
                     logger.warning("[distill] row failed (prompt=%r): %s", row.prompt[:40], exc)
                     log(
@@ -328,6 +415,9 @@ def run_distill(
                     )
                     reporter.update(i)
                     continue
+
+                if tools_disabled_retry:
+                    record["tools_disabled_retry"] = True
 
                 context = DistillContext(
                     config=config,
