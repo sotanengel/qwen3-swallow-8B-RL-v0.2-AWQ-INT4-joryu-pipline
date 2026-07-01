@@ -7,6 +7,7 @@ import logging
 import os
 from pathlib import Path
 
+from joryu.jobs.models import SEED_GEN_MODE_CREATE, SEED_GEN_MODES
 from joryu.logging_config import setup_logging
 from joryu.seed_gen.config import (
     DEFAULT_DOMAINS_REL,
@@ -24,9 +25,15 @@ logger = logging.getLogger(__name__)
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="joryu-seed-gen",
-        description="プロンプトバンクへ LLM 生成シードを追記する (Epic #313)。",
+        description="プロンプトバンクの生成/チェックを行う (Epic #313)。",
     )
-    p.add_argument("--bank", default=DEFAULT_BANK_REL, help="追記先 JSONL")
+    p.add_argument(
+        "--mode",
+        choices=list(SEED_GEN_MODES),
+        default=SEED_GEN_MODE_CREATE,
+        help="create: LLM 生成 + Stage1 dedup / check: Stage2 類似 dedup",
+    )
+    p.add_argument("--bank", default=DEFAULT_BANK_REL, help="対象 JSONL")
     p.add_argument("--domains-config", default=DEFAULT_DOMAINS_REL, help="分野定義 YAML")
     p.add_argument("--model", default=DEFAULT_MODEL, help="生成 LLM モデル名")
     p.add_argument("--embed-model", default="cl-nagoya/ruri-large", help="埋め込みモデル")
@@ -36,11 +43,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--domain", default="", help="特定分野のみ実行")
     p.add_argument("--batch-size", type=int, default=8, help="LLM 生成バッチサイズ")
-    p.add_argument("--dry-run", action="store_true", help="生成せず計画のみ表示")
     p.add_argument("--resume", action="store_true", help="state.json から再開")
-    p.add_argument("--fake-llm", action="store_true", help="テスト用ダミー LLM")
     p.add_argument(
         "--llm-base-url", default="", help="OpenAI 互換 API URL (例 http://127.0.0.1:8100/v1)"
+    )
+    p.add_argument(
+        "--judge-base-url", default="", help="judge (screening) LLM URL (check モードで使用)"
     )
     p.add_argument("--state", default=DEFAULT_STATE_REL, help="state.json パス")
     return p
@@ -73,11 +81,10 @@ def main(argv: list[str] | None = None) -> int:
         bank_path=bank_path,
         state_path=state_path,
         config=cfg,
+        mode=str(args.mode),
         sim_threshold=float(args.sim_threshold),
         batch_size=int(args.batch_size),
-        dry_run=bool(args.dry_run),
         resume=bool(args.resume),
-        fake_llm=bool(args.fake_llm),
         embed_model=str(args.embed_model),
         llm_base_url=llm_url,
         llm_model=str(args.model),

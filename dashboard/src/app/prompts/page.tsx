@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import {
   SeedGenJobRecord,
+  SeedGenMode,
   SeedGenStatus,
   appendManualPrompt,
   cancelSeedGenJob,
@@ -12,10 +13,10 @@ import {
   isSeedGenJobActive,
   listSeedGenJobs,
   loadSeedGenStatus,
+  seedGenModeLabel,
   seedGenStatusLabel,
 } from "@/lib/seed-gen-jobs";
 import { createCurateJob } from "@/lib/curate-jobs";
-import { loadSystemStatus, profileReady } from "@/lib/system";
 import { useIntervalPoll } from "@/lib/useIntervalPoll";
 
 export default function PromptsPage() {
@@ -25,20 +26,8 @@ export default function PromptsPage() {
   const [logs, setLogs] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [domain, setDomain] = useState("");
-  const [fakeLlm, setFakeLlm] = useState(true);
-  const [dryRun, setDryRun] = useState(false);
   const [manualPrompt, setManualPrompt] = useState("");
   const [manualDomain, setManualDomain] = useState("general_qa");
-
-  useEffect(() => {
-    loadSystemStatus()
-      .then((sys) => {
-        if (!profileReady(sys, "seed_gen")) {
-          setFakeLlm(true);
-        }
-      })
-      .catch(() => undefined);
-  }, []);
 
   const polledStatus = useIntervalPoll(
     () => loadSeedGenStatus(),
@@ -87,13 +76,12 @@ export default function PromptsPage() {
     };
   }, [selectedId]);
 
-  async function submitJob() {
+  async function submitCreate() {
     setError(null);
     try {
       const job = await createSeedGenJob({
         domain,
-        fake_llm: fakeLlm,
-        dry_run: dryRun,
+        mode: "create" as SeedGenMode,
         target_total: 100,
         batch_size: 8,
       });
@@ -105,9 +93,19 @@ export default function PromptsPage() {
     }
   }
 
-  async function runPromptScreening() {
+  async function submitCheck() {
     setError(null);
     try {
+      const job = await createSeedGenJob({
+        domain,
+        mode: "check" as SeedGenMode,
+        target_total: 100,
+        batch_size: 8,
+      });
+      setSelectedId(job.id);
+      setLogs("");
+      await refreshJobs();
+      // check 側は LLM 品質スクリーニングも並行して起動する。
       await createCurateJob({ screening: true, prompt_bank: true, skip_llm: false });
     } catch (exc) {
       setError(String(exc));
@@ -116,7 +114,7 @@ export default function PromptsPage() {
 
   return (
     <div className="stack">
-      <h2>プロンプト作成</h2>
+      <h2>プロンプト作成 / チェック</h2>
       {error && <p className="text-danger">{error}</p>}
       {displayStatus && (
         <p>
@@ -155,22 +153,17 @@ export default function PromptsPage() {
             分野 (空=全分野)
             <input value={domain} onChange={(e) => setDomain(e.target.value)} placeholder="math" />
           </label>
-          <label className="checkbox-label">
-            <input type="checkbox" checked={fakeLlm} onChange={(e) => setFakeLlm(e.target.checked)} />
-            fake_llm
-          </label>
-          <label className="checkbox-label">
-            <input type="checkbox" checked={dryRun} onChange={(e) => setDryRun(e.target.checked)} />
-            dry_run
-          </label>
           <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-            <button type="button" className="primary-btn" onClick={submitJob}>
-              seed-gen 開始
+            <button type="button" className="primary-btn" onClick={submitCreate}>
+              プロンプト作成
             </button>
-            <button type="button" className="secondary-btn" onClick={runPromptScreening}>
-              プロンプト LLM スクリーニング
+            <button type="button" className="secondary-btn" onClick={submitCheck}>
+              プロンプトチェック
             </button>
           </div>
+          <p className="hint">
+            作成: LLM 生成 + Stage1 完全一致 dedup / チェック: Stage2 類似 dedup + LLM 品質審査
+          </p>
         </div>
       </section>
 
@@ -206,7 +199,7 @@ export default function PromptsPage() {
             <li key={job.id} className="chat-sidebar-item">
               <div className="chat-sidebar-entry-actions">
                 <button type="button" className="secondary-btn" onClick={() => setSelectedId(job.id)}>
-                  {job.id.slice(0, 8)}… {seedGenStatusLabel(job.status)}
+                  {job.id.slice(0, 8)}… [{seedGenModeLabel(job.spec.mode)}] {seedGenStatusLabel(job.status)}
                   {isSeedGenJobActive(job.status) ? " (実行中)" : ""}
                 </button>
                 {isSeedGenJobActive(job.status) && (

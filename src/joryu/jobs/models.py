@@ -157,6 +157,11 @@ class CurateJobSpec:
         return argv
 
 
+SEED_GEN_MODE_CREATE = "create"
+SEED_GEN_MODE_CHECK = "check"
+SEED_GEN_MODES = (SEED_GEN_MODE_CREATE, SEED_GEN_MODE_CHECK)
+
+
 @dataclass
 class SeedGenJobSpec:
     """joryu-seed-gen と同等のジョブ仕様。"""
@@ -166,34 +171,37 @@ class SeedGenJobSpec:
     domains_config: str = ""
     domain: str = ""
     target_total: int = 230000
-    fake_llm: bool = False
-    dry_run: bool = False
+    mode: str = SEED_GEN_MODE_CREATE
     resume: bool = False
     sim_threshold: float = 0.85
     batch_size: int = 8
     llm_base_url: str = ""
+    judge_base_url: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> SeedGenJobSpec:
+        mode = str(data.get("mode") or SEED_GEN_MODE_CREATE).strip()
+        if mode not in SEED_GEN_MODES:
+            raise ValueError(f"unknown seed_gen mode: {mode}")
         return cls(
             config=str(data.get("config") or DEFAULT_CONFIG),
             bank=str(data.get("bank") or ""),
             domains_config=str(data.get("domains_config") or ""),
             domain=str(data.get("domain") or ""),
             target_total=int(data.get("target_total", 230000)),
-            fake_llm=bool(data.get("fake_llm", False)),
-            dry_run=bool(data.get("dry_run", False)),
+            mode=mode,
             resume=bool(data.get("resume", False)),
             sim_threshold=float(data.get("sim_threshold", 0.85)),
             batch_size=int(data.get("batch_size", 8)),
             llm_base_url=str(data.get("llm_base_url") or ""),
+            judge_base_url=str(data.get("judge_base_url") or ""),
         )
 
     def to_seed_gen_argv(self) -> list[str]:
-        argv: list[str] = []
+        argv: list[str] = ["--mode", self.mode]
         if self.bank:
             argv.extend(["--bank", self.bank])
         if self.domains_config:
@@ -203,14 +211,12 @@ class SeedGenJobSpec:
         argv.extend(["--target-total", str(self.target_total)])
         argv.extend(["--sim-threshold", str(self.sim_threshold)])
         argv.extend(["--batch-size", str(self.batch_size)])
-        if self.fake_llm:
-            argv.append("--fake-llm")
-        if self.dry_run:
-            argv.append("--dry-run")
         if self.resume:
             argv.append("--resume")
         if self.llm_base_url:
             argv.extend(["--llm-base-url", self.llm_base_url])
+        if self.judge_base_url:
+            argv.extend(["--judge-base-url", self.judge_base_url])
         return argv
 
 

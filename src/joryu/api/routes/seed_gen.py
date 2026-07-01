@@ -99,15 +99,16 @@ def _resolve_domains(repo_root: Any) -> SeedGenConfig:
 def seed_gen_options(request: Request) -> dict[str, Any]:
     orchestrator = get_orchestrator(request)
     seed_ready = orchestrator.profile_ready(ModelProfile.SEED_GEN)
+    screening_ready = orchestrator.profile_ready(ModelProfile.SCREENING)
     return {
         "defaults": {
             "bank": DEFAULT_BANK_REL,
             "domains_config": DEFAULT_DOMAINS_REL,
             "target_total": 230000,
-            "fake_llm": not seed_ready,
         },
         "vllm_available": seed_ready,
         "seed_gen_ready": seed_ready,
+        "screening_ready": screening_ready,
     }
 
 
@@ -142,17 +143,19 @@ def _build_status(request: Request) -> SeedGenStatusResponse:
 @router.post("", response_model=SeedGenJobResponse, status_code=201)
 def create_seed_gen_job(request: Request, body: SeedGenRequestBody) -> SeedGenJobResponse:
     repo_root = request.app.state.repo_root
-    spec = SeedGenJobSpec.from_dict(body)
+    try:
+        spec = SeedGenJobSpec.from_dict(body)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     try:
         validate_seed_gen_job_spec(spec, repo_root=repo_root)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    if not spec.fake_llm and not spec.dry_run:
-        assert_profile_enqueueable(
-            get_orchestrator(request),
-            required_profile_from_spec(JobKind.SEED_GEN, spec),
-        )
+    assert_profile_enqueueable(
+        get_orchestrator(request),
+        required_profile_from_spec(JobKind.SEED_GEN, spec),
+    )
 
     record = JobRecord.create(spec, kind=JobKind.SEED_GEN)
     _store(request).save(record)
