@@ -1,10 +1,13 @@
 """generator parse tests."""
 
+import httpx
 import pytest
+import respx
 
 from joryu.seed_gen.config import DomainSpec
 from joryu.seed_gen.generator import (
     OpenAICompatibleSeedGenerator,
+    SamplingParams,
     build_seed_prompt,
     build_user_message,
     parse_prompt_array,
@@ -63,3 +66,69 @@ def test_build_seed_prompt_and_user_message() -> None:
 def test_openai_generator_forbidden_model() -> None:
     with pytest.raises(ValueError, match="forbidden"):
         OpenAICompatibleSeedGenerator(base_url="http://x", model="Qwen3-Swallow-test")
+
+
+def _make_domain() -> DomainSpec:
+    return DomainSpec(
+        key="general_qa",
+        target=1,
+        seed_templates=["{theme}"],
+        themes=["テーマ"],
+    )
+
+
+@respx.mock
+def test_openai_generator_generate_batch_ok() -> None:
+    gen = OpenAICompatibleSeedGenerator(
+        base_url="http://mock/v1",
+        model="Qwen/Qwen2.5-7B-Instruct-AWQ",
+        api_key="secret",
+    )
+    respx.post("http://mock/v1/chat/completions").mock(
+        return_value=httpx.Response(
+            200,
+            json={"choices": [{"message": {"content": '["A", "B"]'}}]},
+        )
+    )
+    out = gen.generate_batch(domain=_make_domain(), n=2, sampling=gen.next_sampling())
+    assert out == ["A", "B"]
+
+
+@respx.mock
+def test_openai_generator_generate_batch_bad_shape_returns_empty() -> None:
+    gen = OpenAICompatibleSeedGenerator(
+        base_url="http://mock/v1",
+        model="Qwen/Qwen2.5-7B-Instruct-AWQ",
+    )
+    respx.post("http://mock/v1/chat/completions").mock(
+        return_value=httpx.Response(200, json={"unexpected": "shape"})
+    )
+    out = gen.generate_batch(
+        domain=_make_domain(), n=1, sampling=SamplingParams(temperature=0.7, top_p=0.9)
+    )
+    assert out == []
+
+
+@respx.mock
+def test_openai_generator_generate_batch_http_error_returns_empty() -> None:
+    gen = OpenAICompatibleSeedGenerator(
+        base_url="http://mock/v1",
+        model="Qwen/Qwen2.5-7B-Instruct-AWQ",
+    )
+    respx.post("http://mock/v1/chat/completions").mock(
+        return_value=httpx.Response(500, text="boom")
+    )
+    out = gen.generate_batch(
+        domain=_make_domain(), n=1, sampling=SamplingParams(temperature=0.7, top_p=0.9)
+    )
+    assert out == []
+
+
+def test_openai_generator_next_sampling_rotates() -> None:
+    gen = OpenAICompatibleSeedGenerator(
+        base_url="http://mock/v1",
+        model="Qwen/Qwen2.5-7B-Instruct-AWQ",
+    )
+    s1 = gen.next_sampling()
+    s2 = gen.next_sampling()
+    assert s1 != s2 or s1.temperature != s2.temperature or s1.top_p != s2.top_p
