@@ -131,6 +131,14 @@ def _container_running(name: str, *, docker_run: Callable[..., Any]) -> bool:
     return proc.returncode == 0 and proc.stdout.strip() == "true"
 
 
+def is_docker_container_running(name: str, *, docker_run: Callable[..., Any] | None = None) -> bool:
+    """名前付きコンテナが存在し Running か。"""
+    runner = docker_run or subprocess.run
+    return _container_exists(name, docker_run=runner) and _container_running(
+        name, docker_run=runner
+    )
+
+
 def stop_orphan_joryu_containers(
     *,
     image: str = DEFAULT_IMAGE,

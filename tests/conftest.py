@@ -166,6 +166,12 @@ def fake_client() -> FakeVllmClient:
     return FakeVllmClient()
 
 
+@pytest.fixture(autouse=True)
+def orchestrator_fake_backend(monkeypatch: pytest.MonkeyPatch) -> None:
+    """API / ジョブテストは tmp_path に compose が無いため fake backend を使う。"""
+    monkeypatch.setenv("JORYU_ORCHESTRATOR_BACKEND", "fake")
+
+
 @pytest.fixture()
 def fake_judge():
     from joryu.curate.judge_client import FakeJudgeClient

@@ -79,6 +79,7 @@ def test_ensure_profile_waits_when_already_starting(orch: ModelOrchestrator) -> 
             progress="waiting health 10s",
         )
     )
+    backend.running.add(ModelProfile.SEED_GEN)
     backend.mark_healthy(ModelProfile.SEED_GEN)
     backend.calls.clear()
     orch.ensure_profile(ModelProfile.SEED_GEN)
@@ -86,6 +87,46 @@ def test_ensure_profile_waits_when_already_starting(orch: ModelOrchestrator) -> 
     state = orch.get_state()
     assert state.status == OrchestratorStatus.ACTIVE
     assert state.active == ModelProfile.SEED_GEN
+
+
+def test_ensure_profile_starting_retries_start_when_container_not_running(
+    orch: ModelOrchestrator,
+) -> None:
+    backend = orch.backend
+    assert isinstance(backend, FakeBackend)
+    orch._save_state(
+        OrchestratorState(
+            status=OrchestratorStatus.STARTING,
+            target=ModelProfile.SEED_GEN,
+            progress="waiting health 10s",
+        )
+    )
+    backend.mark_healthy(ModelProfile.SEED_GEN)
+    backend.calls.clear()
+    logs: list[str] = []
+    orch.ensure_profile(ModelProfile.SEED_GEN, log=logs.append)
+    assert ("start", ModelProfile.SEED_GEN) in backend.calls
+    assert any("container not running" in line for line in logs)
+    assert orch.get_state().active == ModelProfile.SEED_GEN
+
+
+def test_compose_failure_sets_error_state(orch: ModelOrchestrator) -> None:
+    backend = orch.backend
+    assert isinstance(backend, FakeBackend)
+
+    def _fail_start(profile: ModelProfile, *, spec: ProfileSpec) -> None:
+        del profile, spec
+        raise RuntimeError("compose failed (file=/repo/docker-compose.yml): bad config")
+
+    backend.start_profile = _fail_start  # type: ignore[method-assign]
+    logs: list[str] = []
+    with pytest.raises(RuntimeError, match="compose failed"):
+        orch.ensure_profile(ModelProfile.SEED_GEN, log=logs.append)
+    state = orch.get_state()
+    assert state.status == OrchestratorStatus.ERROR
+    assert state.error is not None
+    assert "compose failed" in state.error
+    assert any("compose failed" in line for line in logs)
 
 
 def test_ensure_profile_from_error_stops_gpu_first(orch: ModelOrchestrator) -> None:

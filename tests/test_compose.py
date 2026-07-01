@@ -118,6 +118,17 @@ def test_up_multiple_services() -> None:
     assert idx_j < idx_d
 
 
+def test_up_with_explicit_compose_file() -> None:
+    cmd = compose_up_command(
+        services=["dashboard"],
+        detach=False,
+        build=False,
+        profiles=["always", "distill"],
+        compose_file="/repo/docker-compose.yml",
+    )
+    assert cmd[:4] == ["docker", "compose", "-f", "/repo/docker-compose.yml"]
+
+
 def test_stop_single_service() -> None:
     cmd = compose_stop_command(services=["joryu"])
     assert cmd == ["docker", "compose", "stop", "joryu"]

@@ -188,6 +188,24 @@ def test_build_docker_command_allocates_tty_when_requested(tmp_path: Path) -> No
     assert cmd[0:4] == ["docker", "run", "--rm", "-t"]
 
 
+def test_is_docker_container_running_true() -> None:
+    from joryu.docker_delegate import is_docker_container_running
+
+    def _run(cmd: list[str], **kwargs: object) -> object:
+        return type("P", (), {"returncode": 0, "stdout": "true", "stderr": ""})()
+
+    assert is_docker_container_running("joryu-seed", docker_run=_run) is True
+
+
+def test_is_docker_container_running_false_when_missing() -> None:
+    from joryu.docker_delegate import is_docker_container_running
+
+    def _run(cmd: list[str], **kwargs: object) -> object:
+        return type("P", (), {"returncode": 1, "stdout": "", "stderr": ""})()
+
+    assert is_docker_container_running("joryu-seed", docker_run=_run) is False
+
+
 def test_stop_docker_container_skips_when_not_running() -> None:
     calls: list[list[str]] = []
 

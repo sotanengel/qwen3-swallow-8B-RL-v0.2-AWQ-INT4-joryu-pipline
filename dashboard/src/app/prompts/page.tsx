@@ -57,15 +57,34 @@ export default function PromptsPage() {
   }, [refreshJobs]);
 
   useEffect(() => {
-    if (!selectedId) return;
-    const tick = () => {
-      getSeedGenJobLogs(selectedId)
-        .then((res) => setLogs((prev) => prev + res.chunk))
-        .catch((exc) => setError(String(exc)));
+    if (!selectedId) {
+      setLogs("");
+      return;
+    }
+
+    let cancelled = false;
+    let offset = 0;
+    setLogs("");
+
+    const poll = async () => {
+      try {
+        const res = await getSeedGenJobLogs(selectedId, offset);
+        if (cancelled) return;
+        if (res.chunk) {
+          setLogs((prev) => prev + res.chunk);
+        }
+        offset = res.offset;
+      } catch (exc) {
+        if (!cancelled) setError(String(exc));
+      }
     };
-    tick();
-    const id = setInterval(tick, 3000);
-    return () => clearInterval(id);
+
+    poll();
+    const id = setInterval(poll, 3000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
   }, [selectedId]);
 
   async function submitJob() {

@@ -10,8 +10,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
 
-from joryu.docker_delegate import stop_docker_container
-from joryu.docker_paths import resolve_host_repo_root
+from joryu.compose_invoke import ComposeProject, compose_command_prefix, resolve_compose_project
+from joryu.docker_delegate import is_docker_container_running, stop_docker_container
 from joryu.orchestrator.profile import ALWAYS_COMPOSE_PROFILE, ModelProfile, ProfileSpec
 
 logger = logging.getLogger(__name__)
@@ -35,6 +35,8 @@ class Backend(Protocol):
     def is_healthy(
         self, profile: ModelProfile, *, spec: ProfileSpec, timeout_s: float = 1.0
     ) -> bool: ...
+
+    def is_profile_container_running(self, profile: ModelProfile, *, spec: ProfileSpec) -> bool: ...
 
     def current_running(self) -> set[ModelProfile]: ...
 
@@ -80,6 +82,10 @@ class FakeBackend:
         del spec, timeout_s
         return profile in self.healthy or profile in self.running
 
+    def is_profile_container_running(self, profile: ModelProfile, *, spec: ProfileSpec) -> bool:
+        del spec
+        return profile in self.running
+
     def current_running(self) -> set[ModelProfile]:
         return set(self.running)
 
@@ -93,17 +99,17 @@ class ComposeBackend:
     docker_run: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run
     urlopen_fn: Callable | None = None
     compose_timeout_s: float = DEFAULT_COMPOSE_TIMEOUT_S
-    _compose_cwd: str = field(init=False)
+    _project: ComposeProject = field(init=False)
 
     def __post_init__(self) -> None:
-        self._compose_cwd = str(resolve_host_repo_root(Path(self.repo_root)))
+        self._project = resolve_compose_project(Path(self.repo_root))
 
     def _compose(self, *args: str, timeout_s: float | None = None) -> None:
-        cmd = ["docker", "compose", *args]
+        cmd = [*compose_command_prefix(self._project), *args]
         timeout = self.compose_timeout_s if timeout_s is None else timeout_s
         proc = self.docker_run(
             cmd,
-            cwd=self._compose_cwd,
+            cwd=str(self._project.host_root),
             capture_output=True,
             text=True,
             check=False,
@@ -111,7 +117,10 @@ class ComposeBackend:
         )
         if proc.returncode != 0:
             stderr = (proc.stderr or proc.stdout or "").strip()
-            raise RuntimeError(f"compose failed ({' '.join(args)}): {stderr}")
+            raise RuntimeError(
+                f"compose failed (file={self._project.compose_file}, "
+                f"args={' '.join(args)}): {stderr}"
+            )
 
     def _stop_gpu_service(
         self,
@@ -162,6 +171,13 @@ class ComposeBackend:
         from joryu.readiness import is_profile_healthy
 
         return is_profile_healthy(spec, urlopen_fn=self.urlopen_fn)
+
+    def is_profile_container_running(self, profile: ModelProfile, *, spec: ProfileSpec) -> bool:
+        del profile
+        return is_docker_container_running(spec.service, docker_run=self.docker_run)
+
+    def current_running(self) -> set[ModelProfile]:
+        return set()
 
 
 def resolve_backend(repo_root: str) -> Backend:

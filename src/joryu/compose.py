@@ -11,6 +11,13 @@ VLLM_BASE_DOCKERFILE = "Dockerfile.vllm-base"
 JORYU_VLLM_BASE_IMAGE = "joryu-vllm-base:latest"
 
 
+def _compose_base(*, compose_file: str | None = None) -> list[str]:
+    cmd: list[str] = ["docker", "compose"]
+    if compose_file is not None:
+        cmd.extend(["-f", compose_file])
+    return cmd
+
+
 def vllm_base_build_command(*, repo_root: str) -> list[str]:
     """``docker build --progress=plain -f Dockerfile.vllm-base -t joryu-vllm-base:latest`` を構築。
 
@@ -34,9 +41,10 @@ def compose_build_command(
     *,
     services: list[str],
     profiles: list[str] | None = None,
+    compose_file: str | None = None,
 ) -> list[str]:
     """`docker compose build [services...]` を構築。"""
-    cmd: list[str] = ["docker", "compose"]
+    cmd: list[str] = _compose_base(compose_file=compose_file)
     if profiles:
         for profile in profiles:
             cmd.extend(["--profile", profile])
@@ -49,6 +57,7 @@ def staged_build_commands(
     services: list[str],
     *,
     profiles: list[str] | None = None,
+    compose_file: str | None = None,
 ) -> list[list[str]]:
     """joryu GPU イメージを先に単独 build し、残りを並列 build する。
 
@@ -62,9 +71,13 @@ def staged_build_commands(
     light = [s for s in services if s not in heavy]
     cmds: list[list[str]] = []
     for svc in heavy:
-        cmds.append(compose_build_command(services=[svc], profiles=profiles))
+        cmds.append(
+            compose_build_command(services=[svc], profiles=profiles, compose_file=compose_file)
+        )
     if light:
-        cmds.append(compose_build_command(services=light, profiles=profiles))
+        cmds.append(
+            compose_build_command(services=light, profiles=profiles, compose_file=compose_file)
+        )
     return cmds
 
 
@@ -75,9 +88,10 @@ def compose_up_command(
     build: bool,
     force_recreate: bool = False,
     profiles: list[str] | None = None,
+    compose_file: str | None = None,
 ) -> list[str]:
     """`docker compose up [--build] [--force-recreate] [-d] [services...]` を構築。"""
-    cmd: list[str] = ["docker", "compose"]
+    cmd: list[str] = _compose_base(compose_file=compose_file)
     if profiles:
         for profile in profiles:
             cmd.extend(["--profile", profile])
@@ -93,9 +107,14 @@ def compose_up_command(
     return cmd
 
 
-def compose_down_command(*, volumes: bool, profiles: list[str] | None = None) -> list[str]:
+def compose_down_command(
+    *,
+    volumes: bool,
+    profiles: list[str] | None = None,
+    compose_file: str | None = None,
+) -> list[str]:
     """`docker compose down [-v]` を構築。"""
-    cmd: list[str] = ["docker", "compose"]
+    cmd: list[str] = _compose_base(compose_file=compose_file)
     if profiles:
         for profile in profiles:
             cmd.extend(["--profile", profile])
@@ -105,9 +124,9 @@ def compose_down_command(*, volumes: bool, profiles: list[str] | None = None) ->
     return cmd
 
 
-def compose_stop_command(*, services: list[str]) -> list[str]:
+def compose_stop_command(*, services: list[str], compose_file: str | None = None) -> list[str]:
     """`docker compose stop [services...]` を構築。"""
-    cmd: list[str] = ["docker", "compose", "stop"]
+    cmd: list[str] = [*_compose_base(compose_file=compose_file), "stop"]
     cmd.extend(services)
     return cmd
 

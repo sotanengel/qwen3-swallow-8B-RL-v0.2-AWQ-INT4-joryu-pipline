@@ -111,6 +111,38 @@ class ModelOrchestrator:
         assert self.backend is not None
         return self.backend.is_healthy(profile, spec=spec)
 
+    def _mark_compose_failed(
+        self,
+        state: OrchestratorState,
+        target: ModelProfile,
+        exc: BaseException,
+        emit: Callable[[str], None],
+    ) -> None:
+        err = str(exc)
+        failed = OrchestratorState(
+            status=OrchestratorStatus.ERROR,
+            target=target,
+            active=None,
+            error=err,
+            progress=None,
+        )
+        self._save_state(failed)
+        emit(f"[orchestrator] compose failed: {err}")
+
+    def _start_profile_or_fail(
+        self,
+        target: ModelProfile,
+        spec: ProfileSpec,
+        state: OrchestratorState,
+        backend: Backend,
+        emit: Callable[[str], None],
+    ) -> None:
+        try:
+            backend.start_profile(target, spec=spec)
+        except RuntimeError as exc:
+            self._mark_compose_failed(state, target, exc, emit)
+            raise
+
     def _wait_for_profile_health(
         self,
         target: ModelProfile,
@@ -164,6 +196,9 @@ class ModelOrchestrator:
 
             if state.status == OrchestratorStatus.STARTING and state.target == target:
                 emit(f"[orchestrator] waiting for profile: {target.value}")
+                if not backend.is_profile_container_running(target, spec=spec):
+                    emit(f"[orchestrator] container not running, restarting {target.value}")
+                    self._start_profile_or_fail(target, spec, state, backend, emit)
                 self._wait_for_profile_health(target, spec, state, backend, emit)
                 return
 
@@ -173,7 +208,7 @@ class ModelOrchestrator:
                 state = transition(state, OrchestratorEvent.STOP_DONE)
                 self._save_state(state)
                 emit(f"[orchestrator] starting {target.value}")
-                backend.start_profile(target, spec=spec)
+                self._start_profile_or_fail(target, spec, state, backend, emit)
                 self._wait_for_profile_health(target, spec, state, backend, emit)
                 return
 
@@ -200,7 +235,7 @@ class ModelOrchestrator:
                 self._save_state(state)
 
             emit(f"[orchestrator] starting {target.value}")
-            backend.start_profile(target, spec=spec)
+            self._start_profile_or_fail(target, spec, state, backend, emit)
             self._wait_for_profile_health(target, spec, state, backend, emit)
 
     def maybe_auto_restore(self, *, log: Callable[[str], None] | None = None) -> None:
