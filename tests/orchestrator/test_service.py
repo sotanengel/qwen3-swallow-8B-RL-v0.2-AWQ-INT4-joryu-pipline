@@ -110,6 +110,34 @@ def test_ensure_profile_starting_retries_start_when_container_not_running(
     assert orch.get_state().active == ModelProfile.SEED_GEN
 
 
+def test_ensure_profile_starting_stops_other_gpu_profiles_before_retry(
+    orch: ModelOrchestrator,
+) -> None:
+    """STARTING+same target レジューム時、target を再起動する前に他 GPU profile を停止する。
+
+    回帰テスト: state=STARTING(seed_gen) のまま joryu (distill) が生きていると、
+    seed_gen コンテナが GPU 空きを取れずに OOM で即死する。
+    """
+    backend = orch.backend
+    assert isinstance(backend, FakeBackend)
+    backend.running.add(ModelProfile.DISTILL)
+    orch._save_state(
+        OrchestratorState(
+            status=OrchestratorStatus.STARTING,
+            target=ModelProfile.SEED_GEN,
+            progress="waiting health 10s",
+        )
+    )
+    backend.mark_healthy(ModelProfile.SEED_GEN)
+    backend.calls.clear()
+    orch.ensure_profile(ModelProfile.SEED_GEN)
+    assert ("stop", ModelProfile.DISTILL) in backend.calls
+    stop_idx = backend.calls.index(("stop", ModelProfile.DISTILL))
+    start_idx = backend.calls.index(("start", ModelProfile.SEED_GEN))
+    assert stop_idx < start_idx, "distill must be stopped before seed_gen restart"
+    assert orch.get_state().active == ModelProfile.SEED_GEN
+
+
 def test_compose_failure_sets_error_state(orch: ModelOrchestrator) -> None:
     backend = orch.backend
     assert isinstance(backend, FakeBackend)
