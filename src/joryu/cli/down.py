@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
 
 from joryu.compose import compose_down_command, run
+from joryu.compose_invoke import resolve_compose_project
 from joryu.orchestrator.profile import ALL_COMPOSE_PROFILES
 
 
@@ -27,7 +29,12 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    cmd = compose_down_command(volumes=args.volumes, profiles=list(ALL_COMPOSE_PROFILES))
+    project = resolve_compose_project(Path.cwd())
+    cmd = compose_down_command(
+        volumes=args.volumes,
+        profiles=list(ALL_COMPOSE_PROFILES),
+        compose_file=str(project.compose_file),
+    )
     return run(cmd)
 
 

@@ -45,6 +45,8 @@ def test_compose_config_valid_for_always_plus_gpu_profile(gpu_profile: str) -> N
         [
             docker,
             "compose",
+            "-f",
+            str(COMPOSE_FILE),
             "--profile",
             "always",
             "--profile",

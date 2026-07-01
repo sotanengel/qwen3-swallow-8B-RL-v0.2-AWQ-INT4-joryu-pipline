@@ -11,12 +11,45 @@ from joryu.cli import down as cli_down
 from joryu.cli import up as cli_up
 from joryu.orchestrator.state import OrchestratorState, OrchestratorStatus
 
-_UP_WITH_DISTILL = ["docker", "compose", "--profile", "always", "--profile", "distill", "up"]
-_BUILD_PREFIX = ["docker", "compose", "--profile", "always", "--profile", "distill", "build"]
+REPO_ROOT = Path(__file__).resolve().parents[1]
+_COMPOSE_FILE = str((REPO_ROOT / "docker-compose.yml").resolve())
+_COMPOSE_F = ["-f", _COMPOSE_FILE]
+
+_UP_WITH_DISTILL = [
+    "docker",
+    "compose",
+    *_COMPOSE_F,
+    "--profile",
+    "always",
+    "--profile",
+    "distill",
+    "up",
+]
+_BUILD_PREFIX = [
+    "docker",
+    "compose",
+    *_COMPOSE_F,
+    "--profile",
+    "always",
+    "--profile",
+    "distill",
+    "build",
+]
 
 
-def _compose_build(*services: str) -> list[str]:
-    return [*_BUILD_PREFIX, *services]
+def _compose_build(*services: str, compose_file: str = _COMPOSE_FILE) -> list[str]:
+    prefix = [
+        "docker",
+        "compose",
+        "-f",
+        compose_file,
+        "--profile",
+        "always",
+        "--profile",
+        "distill",
+        "build",
+    ]
+    return [*prefix, *services]
 
 
 def _vllm_base_build(repo_root: str) -> list[str]:
@@ -32,8 +65,29 @@ def _vllm_base_build(repo_root: str) -> list[str]:
     ]
 
 
-def _compose_up_cmd(*services: str, detach: bool = False, force_recreate: bool = True) -> list[str]:
-    cmd = list(_UP_WITH_DISTILL)
+def _write_minimal_compose(path: Path) -> str:
+    compose = path / "docker-compose.yml"
+    compose.write_text("services: {}\n", encoding="utf-8")
+    return str(compose.resolve())
+
+
+def _compose_up_cmd(
+    *services: str,
+    detach: bool = False,
+    force_recreate: bool = True,
+    compose_file: str = _COMPOSE_FILE,
+) -> list[str]:
+    cmd = [
+        "docker",
+        "compose",
+        "-f",
+        compose_file,
+        "--profile",
+        "always",
+        "--profile",
+        "distill",
+        "up",
+    ]
     if force_recreate:
         cmd.append("--force-recreate")
     if detach:
@@ -165,7 +219,7 @@ def test_up_stops_joryu_before_compose_up(monkeypatch: pytest.MonkeyPatch) -> No
     assert rc == 0
     assert order == ["stop_joryu"]
     assert calls[0] == _STARTUP_IMAGE_PRUNE
-    assert calls[1][0:7] == _UP_WITH_DISTILL
+    assert calls[1][: len(_UP_WITH_DISTILL)] == _UP_WITH_DISTILL
 
 
 def test_up_frontend_only_does_not_stop_joryu(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -254,12 +308,14 @@ def test_up_refresh_stats_before_compose(monkeypatch: pytest.MonkeyPatch, tmp_pa
         return 0
 
     monkeypatch.setattr("joryu.cli.up.ensure_stats_json", _fake_ensure_stats)
+    _write_minimal_compose(tmp_path)
     monkeypatch.chdir(tmp_path)
     rc = cli_up.main(["--refresh-stats", "--frontend-only"])
     assert rc == 0
     assert stats_calls == [True]
     assert calls[0] == _STARTUP_IMAGE_PRUNE
-    assert calls[1] == [*_UP_WITH_DISTILL, "dashboard"]
+    compose_file = str((tmp_path / "docker-compose.yml").resolve())
+    assert calls[1] == _compose_up_cmd("dashboard", compose_file=compose_file, force_recreate=False)
 
 
 def test_up_aborts_when_curation_fails(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -270,6 +326,7 @@ def test_up_aborts_when_curation_fails(monkeypatch: pytest.MonkeyPatch, tmp_path
         return 1
 
     monkeypatch.setattr("joryu.cli.up.ensure_curation", _fail_curation)
+    _write_minimal_compose(tmp_path)
     monkeypatch.chdir(tmp_path)
     rc = cli_up.main(["--frontend-only"])
     assert rc == 1
@@ -327,11 +384,13 @@ def test_up_builds_vllm_base_before_joryu_on_first_run(
     monkeypatch.setattr("joryu.cli.up.is_first_up_run", lambda _root: True)
     monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: set())
     monkeypatch.setattr("joryu.cli.up.needs_vllm_base_build", lambda *_args, **_kwargs: True)
+    _write_minimal_compose(tmp_path)
     monkeypatch.chdir(tmp_path)
     rc = cli_up.main([])
     assert rc == 0
+    compose_file = str((tmp_path / "docker-compose.yml").resolve())
     assert calls[1] == _vllm_base_build(str(tmp_path))
-    assert calls[2] == _compose_build("joryu-job")
+    assert calls[2] == _compose_build("joryu-job", compose_file=compose_file)
 
 
 def test_up_first_run_builds_up_targets(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -439,7 +498,7 @@ def test_up_auto_prunes_and_continues_when_disk_recovered(
     assert calls[2] == _compose_build("joryu-job")
     assert calls[3] == ["docker", "image", "prune", "-f"]
     assert calls[4] == ["docker", "builder", "prune", "-a", "-f"]
-    assert calls[5][:7] == _UP_WITH_DISTILL
+    assert calls[5][: len(_UP_WITH_DISTILL)] == _UP_WITH_DISTILL
 
 
 def test_up_force_bypasses_disk_check(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -621,7 +680,7 @@ def test_down_default(monkeypatch: pytest.MonkeyPatch) -> None:
     calls = _patch_runner(monkeypatch)
     rc = cli_down.main([])
     assert rc == 0
-    assert calls[0][:3] == ["docker", "compose", "--profile"]
+    assert calls[0][:4] == ["docker", "compose", "-f", _COMPOSE_FILE]
     assert "down" in calls[0]
 
 
@@ -654,7 +713,7 @@ def test_up_compose_failure_runs_rollback(monkeypatch: pytest.MonkeyPatch) -> No
         if kwargs.get("capture_output"):
             return type("R", (), {"returncode": 0, "stdout": "test-head\n"})()
         calls.append(cmd)
-        if len(cmd) >= 7 and cmd[0:7] == _UP_WITH_DISTILL:
+        if len(cmd) >= len(_UP_WITH_DISTILL) and cmd[: len(_UP_WITH_DISTILL)] == _UP_WITH_DISTILL:
             return _FailUp()
         return type("R", (), {"returncode": 0})()
 
@@ -663,7 +722,7 @@ def test_up_compose_failure_runs_rollback(monkeypatch: pytest.MonkeyPatch) -> No
     monkeypatch.setattr("joryu.preflight.joryu_container_running", lambda **_: False)
     rc = cli_up.main(["--detach"])
     assert rc == 1
-    assert any(cmd[0:3] == ["docker", "compose", "--profile"] and "down" in cmd for cmd in calls)
+    assert any(cmd[0:2] == ["docker", "compose"] and "-f" in cmd and "down" in cmd for cmd in calls)
 
 
 def test_up_includes_mcp_when_config_enabled(monkeypatch: pytest.MonkeyPatch) -> None:

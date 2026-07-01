@@ -42,6 +42,7 @@ from joryu.compose import (
     staged_build_commands,
     vllm_base_build_command,
 )
+from joryu.compose_invoke import resolve_compose_project
 from joryu.docker_delegate import stop_orphan_joryu_containers
 from joryu.orchestrator.profile import ALL_COMPOSE_PROFILES
 from joryu.preflight import (
@@ -135,6 +136,8 @@ def main(argv: list[str] | None = None) -> int:
     run_up_startup_cleanup()
 
     repo_root = Path.cwd()
+    compose_project = resolve_compose_project(repo_root)
+    compose_file = str(compose_project.compose_file)
 
     changed = changed_services_from_git(repo_root)
     up_services = resolve_up_services(args, changed, repo_root=repo_root)
@@ -219,6 +222,7 @@ def main(argv: list[str] | None = None) -> int:
         for build_cmd in staged_build_commands(
             build_services,
             profiles=compose_profiles,
+            compose_file=compose_file,
         ):
             rc = run(build_cmd)
             if rc != 0:
@@ -249,6 +253,7 @@ def main(argv: list[str] | None = None) -> int:
             first_run=first_run,
         ),
         profiles=["always", *(args.profiles or ["distill"])],
+        compose_file=compose_file,
     )
     open_browser = _should_open_browser(args, up_services)
     pre_browser_cleanup = run_pre_browser_image_cleanup if build_services else None
@@ -267,7 +272,13 @@ def main(argv: list[str] | None = None) -> int:
     rc = run(cmd)
     if rc != 0:
         logger.error("[joryu-up] compose up failed (exit %s); running rollback", rc)
-        rollback_rc = run(compose_down_command(volumes=False, profiles=list(ALL_COMPOSE_PROFILES)))
+        rollback_rc = run(
+            compose_down_command(
+                volumes=False,
+                profiles=list(ALL_COMPOSE_PROFILES),
+                compose_file=compose_file,
+            )
+        )
         if rollback_rc != 0:
             logger.error("[joryu-up] compose down rollback failed (exit %s)", rollback_rc)
         return rc

@@ -179,6 +179,7 @@ echo "[verify]  -> curation.json written" >&2
 echo "[verify] step 6: chat SSE progress + streaming smoke" >&2
 uv run python - <<'PY'
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -199,6 +200,7 @@ for name in ("styles.yaml", "tools.yaml"):
     (work / name).write_text((root / name).read_text(encoding="utf-8"), encoding="utf-8")
 (work / "data" / "distilled").mkdir(parents=True, exist_ok=True)
 
+os.environ["JORYU_ORCHESTRATOR_BACKEND"] = "fake"
 app = create_app(repo_root=work)
 app.state.chat_client = FakeVllmClient(answer="fallback", thinking=None)
 app.state.stream_chat_client = FakeStreamClient(answer="streamed")

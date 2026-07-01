@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -12,6 +13,12 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from joryu.api.routes import chat, curate, dashboard, jobs, search, seed_gen, system
 from joryu.chat.session import ChatSessionStore
+from joryu.compose_invoke import (
+    assert_compose_contract_from_file,
+    resolve_compose_project,
+    should_validate_compose_at_startup,
+    validate_compose_profiles,
+)
 from joryu.config import load_config
 from joryu.http_client import close_shared_async_client
 from joryu.jobs.runner import JobRunner, default_jobs_dir
@@ -19,6 +26,8 @@ from joryu.jobs.store import JobStore
 from joryu.mcp_runtime import probe_mcp_health
 from joryu.orchestrator.factory import build_orchestrator
 from joryu.tools_impl.weather import apply_weather_config
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -36,6 +45,11 @@ def repo_root_from_env() -> Path:
 
 def create_app(*, repo_root: Path | None = None) -> FastAPI:
     root = repo_root or repo_root_from_env()
+    if should_validate_compose_at_startup():
+        project = resolve_compose_project(root)
+        assert_compose_contract_from_file(project.compose_file)
+        validate_compose_profiles(project, ("always", "seed_gen"))
+        logger.info("[api] compose preflight ok: %s", project.compose_file)
     store = JobStore(default_jobs_dir(root))
     orchestrator = build_orchestrator(root)
     if orchestrator.get_state().status.value == "stopped":
