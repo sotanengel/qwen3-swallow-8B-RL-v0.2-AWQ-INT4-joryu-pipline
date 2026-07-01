@@ -98,9 +98,7 @@ def test_full_browser_workflow_profile_transitions(
     assert _snapshot(client)["active"] == "distill"
 
     # 2. seed_gen (profile switch)
-    r2 = client.post(
-        "/api/seed-gen/jobs", json={"fake_llm": False, "dry_run": True, "target_total": 1}
-    )
+    r2 = client.post("/api/seed-gen/jobs", json={"mode": "create", "target_total": 1})
     assert r2.status_code == 201
     job2 = r2.json()["id"]
     for _ in range(100):

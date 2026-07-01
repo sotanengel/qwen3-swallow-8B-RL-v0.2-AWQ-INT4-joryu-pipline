@@ -61,13 +61,32 @@ def test_seed_gen_status(client: TestClient) -> None:
     assert len(body["domains"]) == 15
 
 
-def test_create_seed_gen_job_fake(client: TestClient) -> None:
+def test_create_seed_gen_job_create_mode(client: TestClient) -> None:
     resp = client.post(
         "/api/seed-gen/jobs",
-        json={"fake_llm": True, "dry_run": True, "target_total": 50, "domain": "math"},
+        json={"mode": "create", "target_total": 50, "domain": "math"},
     )
     assert resp.status_code == 201
-    assert resp.json()["kind"] == "seed_gen"
+    body = resp.json()
+    assert body["kind"] == "seed_gen"
+    assert body["spec"]["mode"] == "create"
+
+
+def test_create_seed_gen_job_check_mode(client: TestClient) -> None:
+    resp = client.post(
+        "/api/seed-gen/jobs",
+        json={"mode": "check", "target_total": 50},
+    )
+    assert resp.status_code == 201
+    assert resp.json()["spec"]["mode"] == "check"
+
+
+def test_create_seed_gen_job_rejects_unknown_mode(client: TestClient) -> None:
+    resp = client.post(
+        "/api/seed-gen/jobs",
+        json={"mode": "bogus", "target_total": 10},
+    )
+    assert resp.status_code == 400
 
 
 def test_manual_append_prompt(client: TestClient) -> None:

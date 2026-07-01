@@ -49,12 +49,14 @@ def test_factory_build_job_command_seed_gen(tmp_path, monkeypatch) -> None:
         id="job-seed",
         kind=JobKind.SEED_GEN,
         status=JobStatus.QUEUED,
-        spec=SeedGenJobSpec(fake_llm=True, domain="math"),
+        spec=SeedGenJobSpec(domain="math"),
         created_at="2026-01-01T00:00:00Z",
     )
     cmd = RunnerStrategyFactory.build_job_command(tmp_path, record)
-    assert "joryu.seed_gen.cli" in " ".join(cmd)
-    assert "--fake-llm" in cmd
+    joined = " ".join(cmd)
+    assert "joryu.seed_gen.cli" in joined
+    assert "--mode" in cmd
+    assert "create" in cmd
 
 
 def test_curate_spec_screening_argv() -> None:

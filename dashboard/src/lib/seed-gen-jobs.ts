@@ -1,12 +1,13 @@
 export type SeedGenJobStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled";
 
+export type SeedGenMode = "create" | "check";
+
 export type SeedGenJobSpec = {
   bank: string;
   domains_config: string;
   domain: string;
   target_total: number;
-  fake_llm: boolean;
-  dry_run: boolean;
+  mode: SeedGenMode;
   resume: boolean;
   sim_threshold: number;
   batch_size: number;
@@ -75,8 +76,7 @@ export function parseSeedGenJobRecord(data: unknown): SeedGenJobRecord {
       domains_config: String(row.spec?.domains_config ?? ""),
       domain: String(row.spec?.domain ?? ""),
       target_total: Number(row.spec?.target_total ?? 230000),
-      fake_llm: Boolean(row.spec?.fake_llm),
-      dry_run: Boolean(row.spec?.dry_run),
+      mode: (row.spec?.mode === "check" ? "check" : "create") as SeedGenMode,
       resume: Boolean(row.spec?.resume),
       sim_threshold: Number(row.spec?.sim_threshold ?? 0.85),
       batch_size: Number(row.spec?.batch_size ?? 8),
@@ -126,6 +126,10 @@ export async function appendManualPrompt(prompt: string, domain: string): Promis
 
 export function isSeedGenJobActive(status: SeedGenJobStatus): boolean {
   return status === "queued" || status === "running";
+}
+
+export function seedGenModeLabel(mode: SeedGenMode): string {
+  return mode === "check" ? "チェック" : "作成";
 }
 
 export function seedGenStatusLabel(status: SeedGenJobStatus): string {

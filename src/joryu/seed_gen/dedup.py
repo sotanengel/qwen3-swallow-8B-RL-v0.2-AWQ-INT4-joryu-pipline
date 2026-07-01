@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import logging
 import math
 from typing import Protocol
@@ -12,18 +11,6 @@ logger = logging.getLogger(__name__)
 
 class EmbeddingBackend(Protocol):
     def embed(self, texts: list[str]) -> list[list[float]]: ...
-
-
-class FakeEmbeddingBackend:
-    """決定的な低次元ベクトル (CI / --fake-llm 用)。"""
-
-    def embed(self, texts: list[str]) -> list[list[float]]:
-        out: list[list[float]] = []
-        for text in texts:
-            digest = hashlib.sha256(text.encode("utf-8")).digest()
-            vec = [float(b) / 255.0 for b in digest[:16]]
-            out.append(vec)
-        return out
 
 
 def cosine_similarity(a: list[float], b: list[float]) -> float:
@@ -75,13 +62,15 @@ class EmbeddingIndex:
         return len(self._vectors)
 
 
-def try_sentence_transformer_backend(model_name: str) -> EmbeddingBackend | None:
-    """sentence-transformers が利用可能なら backend を返す。"""
+def load_sentence_transformer_backend(model_name: str) -> EmbeddingBackend:
+    """sentence-transformers backend を返す。未導入なら例外。"""
     try:
         from sentence_transformers import SentenceTransformer  # type: ignore[import-untyped]
-    except ImportError:
-        logger.info("sentence-transformers not installed; using FakeEmbeddingBackend")
-        return None
+    except ImportError as exc:
+        raise RuntimeError(
+            "sentence-transformers is required for seed_gen. "
+            "seed_gen コンテナを --extra seed_gen 付きで再ビルドしてください。"
+        ) from exc
     model = SentenceTransformer(model_name)
 
     class _STBackend:
@@ -95,7 +84,6 @@ def try_sentence_transformer_backend(model_name: str) -> EmbeddingBackend | None
 __all__ = [
     "EmbeddingBackend",
     "EmbeddingIndex",
-    "FakeEmbeddingBackend",
     "cosine_similarity",
-    "try_sentence_transformer_backend",
+    "load_sentence_transformer_backend",
 ]

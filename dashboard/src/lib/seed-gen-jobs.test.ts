@@ -12,8 +12,7 @@ describe("parseSeedGenJobRecord", () => {
         domains_config: "src/joryu/seed_gen/domains.yaml",
         domain: "math",
         target_total: 1000,
-        fake_llm: true,
-        dry_run: false,
+        mode: "check",
         resume: true,
         sim_threshold: 0.9,
         batch_size: 4,
@@ -28,8 +27,23 @@ describe("parseSeedGenJobRecord", () => {
     });
     expect(row.kind).toBe("seed_gen");
     expect(row.spec.domain).toBe("math");
-    expect(row.spec.fake_llm).toBe(true);
+    expect(row.spec.mode).toBe("check");
     expect(row.spec.sim_threshold).toBe(0.9);
+  });
+
+  it("defaults mode to create when missing", () => {
+    const row = parseSeedGenJobRecord({
+      id: "def",
+      kind: "seed_gen",
+      spec: {},
+      status: "queued",
+      created_at: "2026-01-01T00:00:00Z",
+      started_at: null,
+      finished_at: null,
+      exit_code: null,
+      error: null,
+    });
+    expect(row.spec.mode).toBe("create");
   });
 });
 

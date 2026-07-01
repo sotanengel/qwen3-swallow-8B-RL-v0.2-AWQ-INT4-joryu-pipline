@@ -10,7 +10,7 @@ ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy
 
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev --no-install-project
+RUN uv sync --frozen --no-dev --no-install-project --extra api --extra seed_gen
 
 COPY src ./src
 COPY scripts ./scripts
@@ -18,7 +18,7 @@ COPY config.yaml ./config.yaml
 COPY styles.yaml ./styles.yaml
 COPY tools.yaml ./tools.yaml
 COPY README.md ./README.md
-RUN uv sync --frozen --no-dev --extra api
+RUN uv sync --frozen --no-dev --extra api --extra seed_gen
 
 FROM joryu-vllm-base:latest
 
@@ -35,7 +35,7 @@ COPY --from=builder /app/styles.yaml /app/styles.yaml
 COPY --from=builder /app/tools.yaml /app/tools.yaml
 COPY --from=builder /app/README.md /app/README.md
 
-RUN uv sync --frozen --no-dev --extra api
+RUN uv sync --frozen --no-dev --extra api --extra seed_gen
 
 ENV PATH="/app/.venv/bin:/usr/local/bin:$PATH" \
     PYTHONPATH=/app/src \

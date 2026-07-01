@@ -50,24 +50,15 @@ def build_seed_prompt(domain: DomainSpec, rng: random.Random) -> str:
 
 def build_user_message(domain: DomainSpec, n: int, seed_hint: str) -> str:
     return (
-        f"カテゴリ「{domain.key}」に沿った日本語の指示プロンプトを {n} 件作成してください。"
+        f"カテゴリ「{domain.key}」に沿った日本語の指示プロンプトを {n} 件作成してください。\n"
         f"参考テーマ: {seed_hint}\n"
-        "出力は JSON 配列のみ（説明文不要）。各要素は文字列。"
+        "出力は **単一の** JSON 配列 (`[...]`) のみを厳密に返してください。\n"
+        '各要素は必ず `"..."` で囲まれた 1 つの JSON 文字列にし、\n'
+        "説明文・前置き・複数の配列・コードブロック記法 (```) は禁止です。"
     )
 
 
-def parse_prompt_array(text: str) -> list[str]:
-    text = text.strip()
-    if not text:
-        return []
-    # JSON 配列を抽出
-    match = re.search(r"\[[\s\S]*\]", text)
-    payload = match.group(0) if match else text
-    try:
-        data = json.loads(payload)
-    except json.JSONDecodeError:
-        logger.warning("seed_gen: JSON parse failed: %s", text[:200])
-        return []
+def _extract_string_items(data: Any) -> list[str]:
     if not isinstance(data, list):
         return []
     out: list[str] = []
@@ -77,32 +68,48 @@ def parse_prompt_array(text: str) -> list[str]:
     return out
 
 
-class FakeSeedGenerator:
-    """CI / テスト用決定的ジェネレータ。"""
+def parse_prompt_array(text: str) -> list[str]:
+    """LLM 出力から JSON 配列群を抽出する。
 
-    def __init__(self, *, start: int = 0) -> None:
-        self._counter = start
-        self._sampling_counter = 0
+    LLM は環境によって以下のような揺れた出力を返す:
+    - 単一の valid JSON 配列
+    - 複数の JSON 配列を改行で並べたもの
+    - 文字列を二重に quote した ``[""foo""]`` のような壊れた JSON
 
-    def generate_batch(
-        self,
-        *,
-        domain: DomainSpec,
-        n: int,
-        sampling: SamplingParams,
-    ) -> list[str]:
-        del sampling
-        prompts: list[str] = []
-        for _ in range(n):
-            self._counter += 1
-            prompts.append(f"[fake:{domain.key}:{self._counter}] テスト用プロンプトです。")
-        return prompts
+    可能な限りリカバリするため、``[...]`` を non-greedy に全抽出して個別にパースし、
+    最後のフォールバックとして quoted 文字列を拾う。
+    """
+    text = text.strip()
+    if not text:
+        return []
 
-    def next_sampling(self) -> SamplingParams:
-        t = _TEMPERATURES[_rotation_index(self._sampling_counter, len(_TEMPERATURES))]
-        p = _TOP_PS[_rotation_index(self._sampling_counter, len(_TOP_PS))]
-        self._sampling_counter += 1
-        return SamplingParams(temperature=t, top_p=p)
+    parsed: list[str] = []
+    failed_blocks = 0
+    for block in re.findall(r"\[[\s\S]*?\]", text):
+        try:
+            data = json.loads(block)
+        except json.JSONDecodeError:
+            # ``""text""`` のような二重 quote を単一 quote に正規化して再試行
+            normalized = re.sub(r'""([^"\[\]]*)""', r'"\1"', block)
+            try:
+                data = json.loads(normalized)
+            except json.JSONDecodeError:
+                failed_blocks += 1
+                continue
+        parsed.extend(_extract_string_items(data))
+
+    if not parsed:
+        # フォールバック: quote された文字列だけ拾う
+        parsed = [m.strip() for m in re.findall(r'"([^"\n]+)"', text) if m.strip()]
+
+    if not parsed and failed_blocks:
+        logger.warning(
+            "seed_gen: JSON parse failed for %d block(s); head=%s",
+            failed_blocks,
+            text[:500].replace("\n", " "),
+        )
+
+    return parsed
 
 
 class OpenAICompatibleSeedGenerator:
@@ -170,7 +177,6 @@ class OpenAICompatibleSeedGenerator:
 
 __all__ = [
     "DEFAULT_MODEL",
-    "FakeSeedGenerator",
     "OpenAICompatibleSeedGenerator",
     "SamplingParams",
     "SeedGenerator",
