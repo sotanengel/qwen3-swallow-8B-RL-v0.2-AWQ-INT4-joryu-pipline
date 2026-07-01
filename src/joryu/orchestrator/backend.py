@@ -109,7 +109,7 @@ class ComposeBackend:
         timeout = self.compose_timeout_s if timeout_s is None else timeout_s
         proc = self.docker_run(
             cmd,
-            cwd=str(self._project.host_root),
+            cwd=self._project.compose_cwd,
             capture_output=True,
             text=True,
             check=False,

@@ -30,7 +30,16 @@ class ComposeProject:
 
     @property
     def compose_file_flag(self) -> list[str]:
-        return ["-f", self.compose_file.as_posix()]
+        """docker compose -f。コンテナ内は bind mount パス、ホスト CLI は host パス。"""
+        path = self.local_compose_file or self.compose_file
+        return ["-f", path.as_posix()]
+
+    @property
+    def compose_cwd(self) -> str:
+        """docker compose の cwd。コンテナ内は bind mount、ホスト CLI は host_root。"""
+        if self.local_compose_file is not None:
+            return str(self.local_compose_file.parent)
+        return _posix_path_str(self.host_root)
 
 
 def _posix_path_str(path: Path) -> str:
@@ -118,7 +127,7 @@ def validate_compose_profiles(
     cmd.append("config")
     proc = docker_run(
         cmd,
-        cwd=str(project.host_root),
+        cwd=project.compose_cwd,
         capture_output=True,
         text=True,
         check=False,

@@ -52,6 +52,7 @@ def test_resolve_compose_project_windows_host_path_inside_container(
         "C:/qwen3-swallow-8B-RL-v0.2-AWQ-INT4-joryu-pipline/docker-compose.yml"
     )
     assert project.host_root.as_posix() == "C:/qwen3-swallow-8B-RL-v0.2-AWQ-INT4-joryu-pipline"
+    assert project.compose_cwd == str(workspace)
 
 
 def test_resolve_compose_project_missing_file_raises(tmp_path: Path) -> None:

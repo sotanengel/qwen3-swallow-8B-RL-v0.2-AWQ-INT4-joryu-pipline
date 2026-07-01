@@ -172,6 +172,7 @@ def test_compose_backend_uses_resolved_host_repo_root(
         lambda _root: ComposeProject(
             host_root=host,
             compose_file=host / "docker-compose.yml",
+            local_compose_file=host / "docker-compose.yml",
         ),
     )
     backend = ComposeBackend(repo_root=str(tmp_path / "container"), docker_run=_run)
