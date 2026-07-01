@@ -105,6 +105,36 @@ def test_ensure_profile_from_error_stops_gpu_first(orch: ModelOrchestrator) -> N
     assert orch.get_state().active == ModelProfile.SEED_GEN
 
 
+def test_wait_for_profile_health_emits_progress(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    backend = FakeBackend()
+    orch = ModelOrchestrator(
+        repo_root=tmp_path,
+        profiles=_profiles(),
+        backend=backend,
+        health_timeout_s=60.0,
+        poll_interval_s=0.01,
+    )
+    orch._save_state(
+        OrchestratorState(status=OrchestratorStatus.STARTING, target=ModelProfile.SEED_GEN)
+    )
+
+    times = iter([0.0, 0.0, 20.0, 20.0, 20.0])
+    monkeypatch.setattr("joryu.orchestrator.service.time.monotonic", lambda: next(times, 20.0))
+
+    logs: list[str] = []
+    checks = iter([False, False, True])
+
+    def _healthy(*_a: object, **_k: object) -> bool:
+        return next(checks, True)
+
+    monkeypatch.setattr(backend, "is_healthy", _healthy)
+
+    orch.ensure_profile(ModelProfile.SEED_GEN, log=logs.append)
+    assert any("waiting health" in line for line in logs)
+
+
 def test_ensure_profile_resumes_switching(orch: ModelOrchestrator) -> None:
     backend = orch.backend
     assert isinstance(backend, FakeBackend)

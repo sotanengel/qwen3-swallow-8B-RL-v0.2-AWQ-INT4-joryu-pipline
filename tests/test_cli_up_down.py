@@ -9,6 +9,7 @@ import pytest
 
 from joryu.cli import down as cli_down
 from joryu.cli import up as cli_up
+from joryu.orchestrator.state import OrchestratorState, OrchestratorStatus
 
 _UP_WITH_DISTILL = ["docker", "compose", "--profile", "always", "--profile", "distill", "up"]
 _BUILD_PREFIX = ["docker", "compose", "--profile", "always", "--profile", "distill", "build"]
@@ -87,12 +88,44 @@ def _patch_runner(
     monkeypatch.setattr("joryu.cli.up.needs_vllm_base_build", lambda *_args, **_kwargs: False)
     monkeypatch.setattr(
         "joryu.orchestrator.factory.build_orchestrator",
-        lambda *_args, **_kwargs: type("Orch", (), {"init_distill_active": lambda self: None})(),
+        lambda *_args, **_kwargs: type(
+            "Orch",
+            (),
+            {
+                "init_distill_active": lambda self: None,
+                "get_state": lambda self: OrchestratorState(status=OrchestratorStatus.STOPPED),
+            },
+        )(),
     )
     return calls
 
 
 _STARTUP_IMAGE_PRUNE = ["docker", "image", "prune", "-f"]
+
+
+def test_up_skips_init_distill_when_profile_starting(monkeypatch: pytest.MonkeyPatch) -> None:
+    """STARTING/SWITCHING 中は joryu-up が FSM を distill active で上書きしない。"""
+    init_calls: list[str] = []
+
+    class _Orch:
+        def get_state(self) -> OrchestratorState:
+            return OrchestratorState(
+                status=OrchestratorStatus.STARTING,
+                target=None,
+            )
+
+        def init_distill_active(self) -> None:
+            init_calls.append("called")
+
+    _patch_runner(monkeypatch)
+    monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: set())
+    monkeypatch.setattr(
+        "joryu.orchestrator.factory.build_orchestrator",
+        lambda *_args, **_kwargs: _Orch(),
+    )
+    rc = cli_up.main([])
+    assert rc == 0
+    assert init_calls == []
 
 
 def test_up_prunes_dangling_images_at_startup_without_build(

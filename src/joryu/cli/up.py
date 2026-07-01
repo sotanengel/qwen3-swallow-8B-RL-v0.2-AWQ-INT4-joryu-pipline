@@ -288,8 +288,11 @@ def main(argv: list[str] | None = None) -> int:
 
     if "joryu" in up_services:
         from joryu.orchestrator.factory import build_orchestrator
+        from joryu.orchestrator.state import OrchestratorStatus
 
-        build_orchestrator(repo_root).init_distill_active()
+        orchestrator = build_orchestrator(repo_root)
+        if orchestrator.get_state().status == OrchestratorStatus.STOPPED:
+            orchestrator.init_distill_active()
 
     if open_browser and args.detach:
         open_dashboard_when_ready(pre_open_fn=pre_browser_cleanup)

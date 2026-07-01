@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_STATE_REL = "data/system/active_profile.json"
 DEFAULT_HEALTH_TIMEOUT_S = 600.0
 DEFAULT_POLL_INTERVAL_S = 2.0
+HEALTH_LOG_INTERVAL_S = 15.0
 
 
 @dataclass
@@ -37,6 +38,7 @@ class ModelOrchestrator:
     auto_restore: ModelProfile | None = ModelProfile.DISTILL
     health_timeout_s: float = DEFAULT_HEALTH_TIMEOUT_S
     poll_interval_s: float = DEFAULT_POLL_INTERVAL_S
+    health_log_interval_s: float = HEALTH_LOG_INTERVAL_S
 
     def __post_init__(self) -> None:
         if self.backend is None:
@@ -118,6 +120,7 @@ class ModelOrchestrator:
         emit: Callable[[str], None],
     ) -> None:
         deadline = time.monotonic() + self.health_timeout_s
+        last_logged_elapsed = -1
         while time.monotonic() < deadline:
             if backend.is_healthy(target, spec=spec):
                 state = transition(state, OrchestratorEvent.HEALTH_OK)
@@ -129,6 +132,12 @@ class ModelOrchestrator:
             elapsed = int(self.health_timeout_s - (deadline - time.monotonic()))
             state = replace(state, progress=f"waiting health {elapsed}s")
             self._save_state(state)
+            if (
+                last_logged_elapsed < 0
+                or elapsed - last_logged_elapsed >= self.health_log_interval_s
+            ):
+                emit(f"[orchestrator] waiting health {elapsed}s for {target.value}")
+                last_logged_elapsed = elapsed
             time.sleep(self.poll_interval_s)
 
         state = transition(state, OrchestratorEvent.HEALTH_TIMEOUT)
