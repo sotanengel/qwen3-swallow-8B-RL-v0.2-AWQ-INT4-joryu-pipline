@@ -211,4 +211,6 @@ services:
 
 volumes:
   hf-cache:
+    name: hf-cache
   gguf-cache:
+    name: gguf-cache
