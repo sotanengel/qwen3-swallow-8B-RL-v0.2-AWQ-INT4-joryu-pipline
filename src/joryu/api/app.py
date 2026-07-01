@@ -47,7 +47,7 @@ def create_app(*, repo_root: Path | None = None) -> FastAPI:
     root = repo_root or repo_root_from_env()
     if should_validate_compose_at_startup():
         project = resolve_compose_project(root)
-        assert_compose_contract_from_file(project.compose_file)
+        assert_compose_contract_from_file(project.local_compose_file or project.compose_file)
         validate_compose_profiles(project, ("always", "seed_gen"))
         logger.info("[api] compose preflight ok: %s", project.compose_file)
     store = JobStore(default_jobs_dir(root))

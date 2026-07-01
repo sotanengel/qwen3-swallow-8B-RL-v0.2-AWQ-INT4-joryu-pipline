@@ -52,7 +52,7 @@ def test_compose_backend_start_profile(tmp_path: Path) -> None:
     backend = ComposeBackend(repo_root=str(tmp_path), docker_run=_run)
     spec = ProfileSpec(name="seed_gen", service="joryu-seed", port=8110, compose_profile="seed_gen")
     backend.start_profile(ModelProfile.SEED_GEN, spec=spec)
-    assert calls[0][:4] == ["docker", "compose", "-f", str(compose_file)]
+    assert calls[0][:4] == ["docker", "compose", "-f", compose_file.as_posix()]
     assert calls[0][4:9] == [
         "--profile",
         "always",

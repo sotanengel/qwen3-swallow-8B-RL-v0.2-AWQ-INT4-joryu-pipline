@@ -26,10 +26,37 @@ class ComposeProject:
 
     host_root: Path
     compose_file: Path
+    local_compose_file: Path | None = None
 
     @property
     def compose_file_flag(self) -> list[str]:
-        return ["-f", str(self.compose_file)]
+        return ["-f", self.compose_file.as_posix()]
+
+
+def _posix_path_str(path: Path) -> str:
+    return str(path).replace("\\", "/").rstrip("/")
+
+
+def _normalize_host_root(host_root: Path) -> Path:
+    return Path(_posix_path_str(host_root))
+
+
+def _host_compose_path(host_root: Path) -> Path:
+    return Path(f"{_posix_path_str(host_root)}/{COMPOSE_FILENAME}")
+
+
+def _resolve_local_compose_file(repo_root: Path, *, env: dict[str, str] | None = None) -> Path:
+    e = os.environ if env is None else env
+    candidates: list[Path] = []
+    container_root = e.get("JORYU_REPO_ROOT", "").strip()
+    if container_root:
+        candidates.append(Path(container_root))
+    candidates.append(repo_root)
+    for base in candidates:
+        compose = (base / COMPOSE_FILENAME).resolve()
+        if compose.is_file():
+            return compose
+    return (candidates[0] / COMPOSE_FILENAME).resolve()
 
 
 def resolve_compose_project(
@@ -38,12 +65,16 @@ def resolve_compose_project(
     env: dict[str, str] | None = None,
 ) -> ComposeProject:
     """joryu-up と orchestrator が同じ compose 定義を使うよう host ルートを解決する。"""
-    host_root = resolve_host_repo_root(repo_root, env=env).resolve()
-    compose_file = (host_root / COMPOSE_FILENAME).resolve()
-    if not compose_file.is_file():
-        msg = f"compose file not found: {compose_file}"
+    local_compose = _resolve_local_compose_file(repo_root, env=env)
+    if not local_compose.is_file():
+        msg = f"compose file not found: {local_compose}"
         raise FileNotFoundError(msg)
-    return ComposeProject(host_root=host_root, compose_file=compose_file)
+    host_root = _normalize_host_root(resolve_host_repo_root(repo_root, env=env))
+    return ComposeProject(
+        host_root=host_root,
+        compose_file=_host_compose_path(host_root),
+        local_compose_file=local_compose,
+    )
 
 
 def _depends_on_service_names(service: dict) -> set[str]:
