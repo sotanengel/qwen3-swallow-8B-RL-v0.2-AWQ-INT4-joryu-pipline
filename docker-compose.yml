@@ -1,3 +1,4 @@
+name: joryu
 # joryu インフラ。実行環境: Windows + RTX 3060 Ti / Docker Desktop(WSL2) + NVIDIA Container Toolkit
 # 起動: uv run joryu-up --detach
 # GPU profile: distill (既定) / seed_gen / screening — 同時常駐不可 (ADR 0005)
