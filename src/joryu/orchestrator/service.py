@@ -198,6 +198,7 @@ class ModelOrchestrator:
                 emit(f"[orchestrator] waiting for profile: {target.value}")
                 if not backend.is_profile_container_running(target, spec=spec):
                     emit(f"[orchestrator] container not running, restarting {target.value}")
+                    backend.stop_other_gpu_profiles(keep=target, profiles=self.profiles, log=emit)
                     self._start_profile_or_fail(target, spec, state, backend, emit)
                 self._wait_for_profile_health(target, spec, state, backend, emit)
                 return
