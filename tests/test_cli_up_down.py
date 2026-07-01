@@ -9,6 +9,7 @@ import pytest
 
 from joryu.cli import down as cli_down
 from joryu.cli import up as cli_up
+from joryu.orchestrator.state import OrchestratorState, OrchestratorStatus
 
 _UP_WITH_DISTILL = ["docker", "compose", "--profile", "always", "--profile", "distill", "up"]
 _BUILD_PREFIX = ["docker", "compose", "--profile", "always", "--profile", "distill", "build"]
@@ -87,7 +88,14 @@ def _patch_runner(
     monkeypatch.setattr("joryu.cli.up.needs_vllm_base_build", lambda *_args, **_kwargs: False)
     monkeypatch.setattr(
         "joryu.orchestrator.factory.build_orchestrator",
-        lambda *_args, **_kwargs: type("Orch", (), {"init_distill_active": lambda self: None})(),
+        lambda *_args, **_kwargs: type(
+            "Orch",
+            (),
+            {
+                "init_distill_active": lambda self: None,
+                "get_state": lambda self: OrchestratorState(status=OrchestratorStatus.STOPPED),
+            },
+        )(),
     )
     return calls
 
@@ -97,8 +105,6 @@ _STARTUP_IMAGE_PRUNE = ["docker", "image", "prune", "-f"]
 
 def test_up_skips_init_distill_when_profile_starting(monkeypatch: pytest.MonkeyPatch) -> None:
     """STARTING/SWITCHING 中は joryu-up が FSM を distill active で上書きしない。"""
-    from joryu.orchestrator.state import OrchestratorState, OrchestratorStatus
-
     init_calls: list[str] = []
 
     class _Orch:
