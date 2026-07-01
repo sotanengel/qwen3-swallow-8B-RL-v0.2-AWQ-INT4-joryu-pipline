@@ -43,7 +43,10 @@ from joryu.compose import (
     vllm_base_build_command,
 )
 from joryu.compose_invoke import resolve_compose_project
-from joryu.docker_delegate import stop_orphan_joryu_containers
+from joryu.docker_delegate import (
+    remove_foreign_project_joryu_containers,
+    stop_orphan_joryu_containers,
+)
 from joryu.orchestrator.profile import ALL_COMPOSE_PROFILES
 from joryu.preflight import (
     PreflightError,
@@ -231,6 +234,7 @@ def main(argv: list[str] | None = None) -> int:
         run_build_artifact_cleanup()
 
     if "api" in up_services or "joryu" in up_services:
+        remove_foreign_project_joryu_containers(log=logger.info)
         stop_orphan_joryu_containers()
         try:
             ensure_vllm_limits(

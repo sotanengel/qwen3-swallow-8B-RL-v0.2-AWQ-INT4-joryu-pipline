@@ -16,7 +16,17 @@ from typing import Any
 DEFAULT_IMAGE = "joryu-job:latest"
 JORYU_PROBE_CONTAINER = "joryu-probe-vllm"
 JORYU_DISTILL_HOST_CONTAINER = "joryu-distill-host"
-JORYU_COMPOSE_CONTAINER_NAMES = frozenset({"joryu", "joryu-seed", "joryu-api", "joryu-dashboard"})
+JORYU_COMPOSE_CONTAINER_NAMES = frozenset(
+    {
+        "joryu",
+        "joryu-seed",
+        "joryu-judge",
+        "joryu-job",
+        "joryu-dashboard",
+        "joryu-mcp",
+        "joryu-api",
+    }
+)
 JORYU_MANAGED_PREFIXES = ("joryu-job-", "joryu-probe-", "joryu-distill-")
 
 logger = logging.getLogger(__name__)
@@ -137,6 +147,58 @@ def is_docker_container_running(name: str, *, docker_run: Callable[..., Any] | N
     return _container_exists(name, docker_run=runner) and _container_running(
         name, docker_run=runner
     )
+
+
+def remove_foreign_project_joryu_containers(
+    *,
+    project_name: str = "joryu",
+    docker_run: Callable[..., Any] | None = None,
+    log: Callable[[str], None] | None = None,
+) -> None:
+    """別 compose プロジェクトのラベルを持つ joryu-* 固定名コンテナを削除する。
+
+    以前は docker-compose.yml にトップレベル `name:` がなく、ホスト起動と API
+    コンテナからの起動で compose プロジェクト名が異なった (cwd 由来)。同じ
+    `container_name:` を別プロジェクトが作成した結果、Docker のグローバル
+    名前空間で衝突する。`name: joryu` 導入後の初回 up でこの掃除を行う。
+
+    compose ラベルがないコンテナ (ユーザーが手動 `docker run --name` で作った
+    もの) は触らない。
+    """
+    runner = docker_run or subprocess.run
+    for name in JORYU_COMPOSE_CONTAINER_NAMES:
+        try:
+            proc = runner(
+                [
+                    "docker",
+                    "inspect",
+                    "-f",
+                    '{{index .Config.Labels "com.docker.compose.project"}}',
+                    name,
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        except OSError:
+            continue
+        if proc.returncode != 0:
+            continue
+        current = proc.stdout.strip()
+        if current == project_name or not current:
+            continue
+        if log is not None:
+            log(f"[joryu-up] removing foreign-project container {name} (project={current})")
+        try:
+            runner(
+                ["docker", "rm", "-f", name],
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=30,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            logger.warning("docker rm -f failed for foreign container %s", name, exc_info=True)
 
 
 def stop_orphan_joryu_containers(

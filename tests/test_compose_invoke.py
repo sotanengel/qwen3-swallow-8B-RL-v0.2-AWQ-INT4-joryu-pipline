@@ -140,6 +140,18 @@ def test_compose_file_has_explicit_project_name() -> None:
     assert compose.get("name"), "docker-compose.yml must declare a top-level 'name:'"
 
 
+def test_compose_volumes_have_fixed_names() -> None:
+    """volume は name: を明示しないとプロジェクト名でスコープされ HF キャッシュが失われる。"""
+    compose = yaml.safe_load((REPO_ROOT / "docker-compose.yml").read_text(encoding="utf-8"))
+    volumes = compose.get("volumes") or {}
+    for vol_key in ("hf-cache", "gguf-cache"):
+        assert vol_key in volumes, f"volume {vol_key!r} must exist in docker-compose.yml"
+        vol_def = volumes[vol_key] or {}
+        assert vol_def.get("name") == vol_key, (
+            f"volume {vol_key!r} must declare `name: {vol_key}` to avoid project-name scoping"
+        )
+
+
 def test_validate_compose_profiles_invokes_docker_config(tmp_path: Path) -> None:
     compose = tmp_path / "docker-compose.yml"
     compose.write_text(yaml.safe_dump({"services": {}}), encoding="utf-8")
