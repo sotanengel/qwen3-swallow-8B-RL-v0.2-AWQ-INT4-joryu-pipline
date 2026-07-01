@@ -159,16 +159,17 @@ test -f "$curate_dst/curation_meta.json" || {
 kept=$(uv run python -c "import json,sys; print(json.load(open(sys.argv[1], encoding='utf-8'))['summary']['kept'])" "$curate_dst/curation_meta.json")
 echo "[verify]  -> curate kept=$kept" >&2
 
-echo "[verify] step 4b: joryu-seed-gen fake smoke" >&2
+echo "[verify] step 4b: joryu-seed-gen CLI smoke (--mode check, empty bank)" >&2
 seed_bank="$work/prompt_bank.jsonl"
+# fake-llm を廃止したので、実 LLM/実埋め込み無しでも 0 を返す check モード
+# (空バンク → early return) で CLI が起動できることだけ確認する。
 uv run joryu-seed-gen \
+  --mode check \
   --bank "$seed_bank" \
-  --fake-llm \
   --domain general_qa \
   --target-total 10 \
   --batch-size 4
-test -s "$seed_bank" || { echo "[verify] FAIL: seed_gen bank empty"; exit 1; }
-echo "[verify]  -> seed_gen bank lines=$(wc -l < "$seed_bank")" >&2
+echo "[verify]  -> seed_gen check CLI OK" >&2
 
 echo "[verify] step 5: joryu-stats --curation" >&2
 uv run joryu-stats --config "$cfg" --input "$out" --output "$stats" \
