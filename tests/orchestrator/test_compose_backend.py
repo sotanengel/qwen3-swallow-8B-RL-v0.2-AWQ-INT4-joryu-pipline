@@ -68,7 +68,7 @@ def test_compose_backend_stop_profile_uses_docker_not_compose(tmp_path: Path) ->
 
 def test_compose_backend_stop_other_gpu_profiles_calls_docker_stop(tmp_path: Path) -> None:
     calls: list[list[str]] = []
-    inspect_count = 0
+    stopped: set[str] = set()
 
     class _Proc:
         returncode = 0
@@ -77,17 +77,14 @@ def test_compose_backend_stop_other_gpu_profiles_calls_docker_stop(tmp_path: Pat
 
     def _run(cmd: list[str], **kwargs: object) -> _Proc:
         calls.append(cmd)
-        nonlocal inspect_count
         if cmd[:3] == ["docker", "inspect", "-f"]:
-            inspect_count += 1
-            if inspect_count <= 2:
-                return _Proc()
             proc = _Proc()
-            proc.stdout = "false"
+            proc.stdout = "false" if cmd[-1] in stopped else "true"
             return proc
-        proc = _Proc()
-        proc.stdout = "false"
-        return proc
+        if cmd[:2] in (["docker", "stop"], ["docker", "kill"], ["docker", "rm"]):
+            stopped.add(cmd[-1])
+            return _Proc()
+        return _Proc()
 
     backend = ComposeBackend(repo_root=str(tmp_path), docker_run=_run)
     backend.stop_other_gpu_profiles(ModelProfile.SEED_GEN, profiles=_profiles())
@@ -111,6 +108,25 @@ def test_compose_backend_stop_logs_progress(tmp_path: Path) -> None:
     backend._stop_gpu_service("joryu", log=logs.append)
     assert "[orchestrator] stopping container joryu" in logs
     assert "[orchestrator] stopped container joryu" in logs
+
+
+def test_compose_backend_start_profile_passes_compose_timeout(tmp_path: Path) -> None:
+    timeouts: list[float | None] = []
+
+    class _Proc:
+        returncode = 0
+        stdout = ""
+        stderr = ""
+
+    def _run(cmd: list[str], **kwargs: object) -> _Proc:
+        if cmd[:2] == ["docker", "compose"]:
+            timeouts.append(kwargs.get("timeout"))  # type: ignore[arg-type]
+        return _Proc()
+
+    backend = ComposeBackend(repo_root=str(tmp_path), docker_run=_run)
+    spec = ProfileSpec(name="seed_gen", service="joryu-seed", port=8110, compose_profile="seed_gen")
+    backend.start_profile(ModelProfile.SEED_GEN, spec=spec)
+    assert timeouts == [120.0]
 
 
 def test_compose_backend_uses_resolved_host_repo_root(

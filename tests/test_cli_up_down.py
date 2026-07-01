@@ -95,6 +95,33 @@ def _patch_runner(
 _STARTUP_IMAGE_PRUNE = ["docker", "image", "prune", "-f"]
 
 
+def test_up_skips_init_distill_when_profile_starting(monkeypatch: pytest.MonkeyPatch) -> None:
+    """STARTING/SWITCHING 中は joryu-up が FSM を distill active で上書きしない。"""
+    from joryu.orchestrator.state import OrchestratorState, OrchestratorStatus
+
+    init_calls: list[str] = []
+
+    class _Orch:
+        def get_state(self) -> OrchestratorState:
+            return OrchestratorState(
+                status=OrchestratorStatus.STARTING,
+                target=None,
+            )
+
+        def init_distill_active(self) -> None:
+            init_calls.append("called")
+
+    _patch_runner(monkeypatch)
+    monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: set())
+    monkeypatch.setattr(
+        "joryu.orchestrator.factory.build_orchestrator",
+        lambda *_args, **_kwargs: _Orch(),
+    )
+    rc = cli_up.main([])
+    assert rc == 0
+    assert init_calls == []
+
+
 def test_up_prunes_dangling_images_at_startup_without_build(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

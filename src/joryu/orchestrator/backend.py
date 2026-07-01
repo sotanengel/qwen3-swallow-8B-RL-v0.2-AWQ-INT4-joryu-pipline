@@ -16,6 +16,8 @@ from joryu.orchestrator.profile import ALWAYS_COMPOSE_PROFILE, ModelProfile, Pro
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_COMPOSE_TIMEOUT_S = 120.0
+
 
 class Backend(Protocol):
     def start_profile(self, profile: ModelProfile, *, spec: ProfileSpec) -> None: ...
@@ -90,19 +92,22 @@ class ComposeBackend:
     repo_root: str
     docker_run: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run
     urlopen_fn: Callable | None = None
+    compose_timeout_s: float = DEFAULT_COMPOSE_TIMEOUT_S
     _compose_cwd: str = field(init=False)
 
     def __post_init__(self) -> None:
         self._compose_cwd = str(resolve_host_repo_root(Path(self.repo_root)))
 
-    def _compose(self, *args: str) -> None:
+    def _compose(self, *args: str, timeout_s: float | None = None) -> None:
         cmd = ["docker", "compose", *args]
+        timeout = self.compose_timeout_s if timeout_s is None else timeout_s
         proc = self.docker_run(
             cmd,
             cwd=self._compose_cwd,
             capture_output=True,
             text=True,
             check=False,
+            timeout=timeout,
         )
         if proc.returncode != 0:
             stderr = (proc.stderr or proc.stdout or "").strip()

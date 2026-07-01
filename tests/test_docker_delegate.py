@@ -211,9 +211,11 @@ def test_stop_docker_container_kills_when_still_running() -> None:
         calls.append(cmd)
         if cmd[:2] == ["docker", "inspect"]:
             inspect_count += 1
-            if inspect_count <= 2:
+            if inspect_count <= 4:
                 return type("P", (), {"returncode": 0, "stdout": "true", "stderr": ""})()
             return type("P", (), {"returncode": 0, "stdout": "false", "stderr": ""})()
+        if cmd[:3] == ["docker", "update", "--restart=no"]:
+            return type("P", (), {"returncode": 0, "stdout": "", "stderr": ""})()
         if cmd[:2] == ["docker", "stop"]:
             return type("P", (), {"returncode": 0, "stdout": "", "stderr": ""})()
         if cmd[:2] == ["docker", "kill"]:
@@ -223,4 +225,30 @@ def test_stop_docker_container_kills_when_still_running() -> None:
     from joryu.docker_delegate import stop_docker_container
 
     assert stop_docker_container("joryu", docker_run=_run_with_kill) is True
+    assert any(c[:3] == ["docker", "update", "--restart=no"] for c in calls)
+    update_idx = next(
+        i for i, c in enumerate(calls) if c[:3] == ["docker", "update", "--restart=no"]
+    )
+    stop_idx = next(i for i, c in enumerate(calls) if c[:2] == ["docker", "stop"])
+    assert update_idx < stop_idx
     assert any(c[:2] == ["docker", "kill"] for c in calls)
+
+
+def test_stop_docker_container_rm_when_kill_insufficient() -> None:
+    calls: list[list[str]] = []
+    inspect_count = 0
+
+    def _run(cmd: list[str], **kwargs: object) -> object:
+        nonlocal inspect_count
+        calls.append(cmd)
+        if cmd[:2] == ["docker", "inspect"]:
+            inspect_count += 1
+            if inspect_count <= 5:
+                return type("P", (), {"returncode": 0, "stdout": "true", "stderr": ""})()
+            return type("P", (), {"returncode": 0, "stdout": "false", "stderr": ""})()
+        return type("P", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+
+    from joryu.docker_delegate import stop_docker_container
+
+    assert stop_docker_container("joryu", docker_run=_run) is True
+    assert any(c[:2] == ["docker", "rm"] for c in calls)

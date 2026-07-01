@@ -34,14 +34,21 @@ def stop_docker_container(
     *,
     grace_seconds: int = 10,
     kill_timeout_seconds: int = 15,
+    rm_timeout_seconds: int = 15,
     docker_run: Callable[..., Any] | None = None,
 ) -> bool:
     """同名コンテナが残っていれば停止 (再 run 前の GPU 占有防止)。
 
-    grace 秒以内に docker stop し、まだ running なら docker kill する。
+    on-failure restart による自動再起動を防ぐため、停止前に restart を無効化する。
+    grace 秒以内に docker stop し、まだ running なら docker kill、それでも残れば rm -f。
     停止できた (または元から停止) なら True。
     """
     runner = docker_run or subprocess.run
+    if not _container_exists(name, docker_run=runner):
+        return True
+    if _container_running(name, docker_run=runner):
+        _disable_container_restart(name, docker_run=runner)
+
     if not _container_running(name, docker_run=runner):
         return True
 
@@ -68,9 +75,47 @@ def stop_docker_container(
             )
         except subprocess.TimeoutExpired:
             logger.warning("docker kill timed out for %s", name)
+
+    if _container_running(name, docker_run=runner):
+        try:
+            runner(
+                ["docker", "rm", "-f", name],
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=rm_timeout_seconds,
+            )
+        except subprocess.TimeoutExpired:
+            logger.warning("docker rm timed out for %s", name)
             return False
 
     return not _container_running(name, docker_run=runner)
+
+
+def _container_exists(name: str, *, docker_run: Callable[..., Any]) -> bool:
+    try:
+        proc = docker_run(
+            ["docker", "inspect", "-f", "{{.State.Running}}", name],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError:
+        return False
+    return proc.returncode == 0
+
+
+def _disable_container_restart(name: str, *, docker_run: Callable[..., Any]) -> None:
+    try:
+        docker_run(
+            ["docker", "update", "--restart=no", name],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=15,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        logger.warning("docker update --restart=no failed for %s", name, exc_info=True)
 
 
 def _container_running(name: str, *, docker_run: Callable[..., Any]) -> bool:
