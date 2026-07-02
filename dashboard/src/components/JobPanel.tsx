@@ -48,14 +48,12 @@ export function JobPanel<Row extends JobRowLike>({
 }: JobPanelProps<Row>) {
   return (
     <>
-      {(title || subtitle) && (
-        <section className="section">
-          {title && <h2>{title}</h2>}
-          {subtitle && <p className="section-subtitle">{subtitle}</p>}
-          {error && <p className="error-banner">{error}</p>}
-          {form}
-        </section>
-      )}
+      <section className="section">
+        {title && <h2>{title}</h2>}
+        {subtitle && <p className="section-subtitle">{subtitle}</p>}
+        {error && <p className="error-banner">{error}</p>}
+        {form}
+      </section>
 
       <section className="section">
         <h2>{jobsHeader}</h2>
