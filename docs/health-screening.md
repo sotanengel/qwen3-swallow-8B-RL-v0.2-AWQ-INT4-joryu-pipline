@@ -12,7 +12,7 @@
 
 ### 推奨: compose profile 自動起動 (ブラウザ / API ジョブ)
 
-`joryu-up --detach` 後、ダッシュボード `/prompts` からスクリーニング curate ジョブを投入すると、
+`joryu-up --detach` 後、ダッシュボードのパイプラインハブ `/?stage=check` からプロンプトチェック (seed_gen check + LLM 品質スクリーニング) を実行すると、
 `ModelOrchestrator` が compose profile `screening` の `joryu-judge` (llama-server + GGUF) を lazy 起動する。
 `config.yaml` の `curate.screening.judge.base_url` はコンテナ内 URL `http://joryu-judge:8080` を指す。
 

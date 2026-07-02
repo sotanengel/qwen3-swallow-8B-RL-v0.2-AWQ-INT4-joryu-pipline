@@ -16,7 +16,7 @@ const HistogramChart = dynamic(
   },
 );
 
-export default function DistributionsPage() {
+export function DistributionsPanel() {
   const fastPoll = useDistillJobFastPoll();
   const [loaded, setLoaded] = useState(false);
   const stats = useIntervalPoll(

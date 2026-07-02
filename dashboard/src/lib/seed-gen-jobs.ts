@@ -1,4 +1,12 @@
-export type SeedGenJobStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled";
+import {
+  apiFetch,
+  createJobClient,
+  isActiveStatus,
+  statusLabelJa,
+  type BaseJobStatus,
+} from "./job-client";
+
+export type SeedGenJobStatus = BaseJobStatus;
 
 export type SeedGenMode = "create" | "check";
 
@@ -41,31 +49,6 @@ export type SeedGenStatus = {
   running_job_ids: string[];
 };
 
-const API_BASE =
-  (typeof process !== "undefined" && process.env.NEXT_PUBLIC_JORYU_API_URL) ||
-  "http://localhost:8000";
-
-async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers ?? {}),
-    },
-  });
-  if (!res.ok) {
-    let detail = res.statusText;
-    try {
-      const body = (await res.json()) as { detail?: string };
-      if (body.detail) detail = body.detail;
-    } catch {
-      /* ignore */
-    }
-    throw new Error(detail);
-  }
-  return res.json() as Promise<T>;
-}
-
 export function parseSeedGenJobRecord(data: unknown): SeedGenJobRecord {
   const row = data as SeedGenJobRecord;
   return {
@@ -91,33 +74,30 @@ export function parseSeedGenJobRecord(data: unknown): SeedGenJobRecord {
   };
 }
 
+const seedGenClient = createJobClient<
+  SeedGenJobSpec,
+  Partial<SeedGenJobSpec>,
+  SeedGenJobRecord
+>({
+  basePath: "/api/seed-gen/jobs",
+  parseRecord: parseSeedGenJobRecord,
+});
+
 export async function loadSeedGenStatus(): Promise<SeedGenStatus> {
   return apiFetch<SeedGenStatus>("/api/seed-gen/status");
 }
 
-export async function listSeedGenJobs(): Promise<SeedGenJobRecord[]> {
-  const rows = await apiFetch<unknown[]>("/api/seed-gen/jobs");
-  return rows.map(parseSeedGenJobRecord);
-}
+export const listSeedGenJobs = () => seedGenClient.list();
+export const createSeedGenJob = (body: Partial<SeedGenJobSpec>) =>
+  seedGenClient.create(body);
+export const cancelSeedGenJob = (id: string) => seedGenClient.cancel(id);
+export const getSeedGenJobLogs = (id: string, offset = 0) =>
+  seedGenClient.getLogs(id, offset);
 
-export async function createSeedGenJob(body: Partial<SeedGenJobSpec>): Promise<SeedGenJobRecord> {
-  const row = await apiFetch<unknown>("/api/seed-gen/jobs", {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
-  return parseSeedGenJobRecord(row);
-}
-
-export async function getSeedGenJobLogs(id: string, offset = 0): Promise<{ chunk: string; offset: number }> {
-  return apiFetch(`/api/seed-gen/jobs/${id}/logs?offset=${offset}`);
-}
-
-export async function cancelSeedGenJob(id: string): Promise<SeedGenJobRecord> {
-  const row = await apiFetch<unknown>(`/api/seed-gen/jobs/${id}/cancel`, { method: "POST" });
-  return parseSeedGenJobRecord(row);
-}
-
-export async function appendManualPrompt(prompt: string, domain: string): Promise<{ id: string; domain: string }> {
+export async function appendManualPrompt(
+  prompt: string,
+  domain: string,
+): Promise<{ id: string; domain: string }> {
   return apiFetch("/api/seed-gen/prompts", {
     method: "POST",
     body: JSON.stringify({ prompt, domain }),
@@ -125,7 +105,7 @@ export async function appendManualPrompt(prompt: string, domain: string): Promis
 }
 
 export function isSeedGenJobActive(status: SeedGenJobStatus): boolean {
-  return status === "queued" || status === "running";
+  return isActiveStatus(status);
 }
 
 export function seedGenModeLabel(mode: SeedGenMode): string {
@@ -133,18 +113,5 @@ export function seedGenModeLabel(mode: SeedGenMode): string {
 }
 
 export function seedGenStatusLabel(status: SeedGenJobStatus): string {
-  switch (status) {
-    case "queued":
-      return "待機中";
-    case "running":
-      return "実行中";
-    case "succeeded":
-      return "成功";
-    case "failed":
-      return "失敗";
-    case "cancelled":
-      return "中止";
-    default:
-      return status;
-  }
+  return statusLabelJa(status);
 }

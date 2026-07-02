@@ -34,28 +34,52 @@ afterEach(() => {
 });
 
 describe("NavLinks", () => {
-  it("marks home link active on root path", () => {
+  it("renders exactly 4 navigation items", () => {
+    render(<NavLinks />);
+    const links = screen.getAllByRole("link");
+    expect(links).toHaveLength(4);
+    expect(links.map((l) => l.textContent)).toEqual([
+      "パイプライン",
+      "データ",
+      "統計",
+      "チャット",
+    ]);
+  });
+
+  it("marks the pipeline link active on the root path", () => {
     mockUsePathname.mockReturnValue("/");
     render(<NavLinks />);
-    const home = screen.getByRole("link", { name: "概要" });
-    expect(home.className).toContain("nav-link-active");
+    const pipeline = screen.getByRole("link", { name: "パイプライン" });
+    expect(pipeline.className).toContain("nav-link-active");
     expect(screen.getByRole("link", { name: "チャット" }).className).not.toContain(
       "nav-link-active",
     );
   });
 
-  it("marks chat link active on /chat path", () => {
+  it("marks the chat link active on the /chat path", () => {
     mockUsePathname.mockReturnValue("/chat");
     render(<NavLinks />);
     expect(screen.getByRole("link", { name: "チャット" }).className).toContain(
       "nav-link-active",
     );
-    expect(screen.getByRole("link", { name: "概要" }).className).not.toContain("nav-link-active");
+    expect(screen.getByRole("link", { name: "パイプライン" }).className).not.toContain(
+      "nav-link-active",
+    );
   });
 
-  it("marks outputs link active on nested output detail path", () => {
+  it("marks the data link active on a nested output detail path", () => {
     mockUsePathname.mockReturnValue("/outputs/abc123");
     render(<NavLinks />);
-    expect(screen.getByRole("link", { name: "出力一覧" }).className).toContain("nav-link-active");
+    expect(screen.getByRole("link", { name: "データ" }).className).toContain(
+      "nav-link-active",
+    );
+  });
+
+  it("marks the stats link active on a stats tab URL", () => {
+    mockUsePathname.mockReturnValue("/stats");
+    render(<NavLinks />);
+    expect(screen.getByRole("link", { name: "統計" }).className).toContain(
+      "nav-link-active",
+    );
   });
 });

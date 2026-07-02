@@ -1,109 +1,202 @@
 "use client";
 
-import { useIntervalPoll } from "@/lib/useIntervalPoll";
-import { useDistillJobFastPoll } from "@/lib/useDistillJobFastPoll";
-import { EMPTY_STATS, JoryuStats, loadStats, sortByCount, statsDataChanged } from "@/lib/stats";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
-function StatCard({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="card">
-      <h3>{label}</h3>
-      <div className="value">{value}</div>
-    </div>
+import { PipelineStageCard, type PipelineStageId } from "@/components/PipelineStageCard";
+import { CheckStagePanel } from "@/components/pipeline/CheckStagePanel";
+import { CurateStagePanel } from "@/components/pipeline/CurateStagePanel";
+import { DistillStagePanel } from "@/components/pipeline/DistillStagePanel";
+import { PromptsStagePanel } from "@/components/pipeline/PromptsStagePanel";
+import type { CurateJobRecord } from "@/lib/curate-jobs";
+import type { JobRecord } from "@/lib/jobs";
+import { EMPTY_STATS, loadStats, statsDataChanged } from "@/lib/stats";
+import type { SeedGenJobRecord } from "@/lib/seed-gen-jobs";
+import { loadSeedGenStatus } from "@/lib/seed-gen-jobs";
+import { EMPTY_SCREENING, loadScreening, screeningDataChanged } from "@/lib/screening";
+import { useIntervalPoll } from "@/lib/useIntervalPoll";
+
+const STAGE_IDS: PipelineStageId[] = ["prompts", "check", "distill", "curate", "screening"];
+
+function useActiveStage(): [PipelineStageId, (id: PipelineStageId) => void] {
+  const params = useSearchParams();
+  const router = useRouter();
+  const raw = params.get("stage");
+  const active: PipelineStageId = STAGE_IDS.includes(raw as PipelineStageId)
+    ? (raw as PipelineStageId)
+    : "prompts";
+  const setActive = useCallback(
+    (id: PipelineStageId) => {
+      router.push(`/?stage=${id}`);
+    },
+    [router],
   );
+  return [active, setActive];
 }
 
-function HistogramTable({
-  rows,
-  keyLabel,
-}: {
-  rows: Array<{ key: string; count: number }>;
-  keyLabel: string;
-}) {
-  if (rows.length === 0) return <p className="muted">データなし</p>;
+function HubContent() {
+  const [active, setActive] = useActiveStage();
+  const [lastPromptsJob, setLastPromptsJob] = useState<SeedGenJobRecord | null>(null);
+  const [lastCheckJob, setLastCheckJob] = useState<SeedGenJobRecord | null>(null);
+  const [lastDistillJob, setLastDistillJob] = useState<JobRecord | null>(null);
+  const [lastCurateJob, setLastCurateJob] = useState<CurateJobRecord | null>(null);
+
+  const stats = useIntervalPoll(loadStats, EMPTY_STATS, {
+    shouldUpdate: statsDataChanged,
+    intervalMs: 3000,
+  });
+  const seedStatus = useIntervalPoll(loadSeedGenStatus, null, { intervalMs: 3000 });
+  const screening = useIntervalPoll(loadScreening, EMPTY_SCREENING, {
+    shouldUpdate: screeningDataChanged,
+    intervalMs: 3000,
+  });
+
+  const checkCompleted = useMemo(
+    () => lastCheckJob !== null && lastCheckJob.status === "succeeded",
+    [lastCheckJob],
+  );
+
+  const promptsMetric = seedStatus
+    ? `${seedStatus.bank_total.toLocaleString()} 件`
+    : "—";
+  const distillMetric = stats.total ? `${stats.total.toLocaleString()} レコード` : "—";
+  const screeningMetric = screening.total
+    ? `${screening.total.toLocaleString()} 件`
+    : "—";
+
+  const [handlePromptsLastJob, handleCheckLastJob, handleDistillLastJob, handleCurateLastJob] =
+    useMemo(
+      () => [
+        (j: SeedGenJobRecord | null) => setLastPromptsJob(j),
+        (j: SeedGenJobRecord | null) => setLastCheckJob(j),
+        (j: JobRecord | null) => setLastDistillJob(j),
+        (j: CurateJobRecord | null) => setLastCurateJob(j),
+      ],
+      [],
+    );
+
+  useEffect(() => {
+    // ステージ遷移時にスクロール位置を上に戻す UX 上の配慮
+    if (typeof window !== "undefined" && typeof window.scrollTo === "function") {
+      try {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      } catch {
+        /* jsdom / non-DOM 環境 */
+      }
+    }
+  }, [active]);
+
   return (
-    <table>
-      <thead>
-        <tr>
-          <th>{keyLabel}</th>
-          <th className="text-right">件数</th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((r) => (
-          <tr key={r.key}>
-            <td>{r.key}</td>
-            <td className="text-right">{r.count.toLocaleString()}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    <>
+      <section className="section">
+        <h2>パイプライン</h2>
+        <p className="section-subtitle">
+          プロンプト生成 → プロンプトチェック (LLM) → 蒸留 → 高品質抽出 → 健全性 の順で実行します。
+          カードを選ぶと下部にステージ別のパネルが開きます。
+          統計や履歴は <Link href="/stats">/stats</Link>、出力は <Link href="/outputs">/outputs</Link> で確認できます。
+        </p>
+        <div className="grid" data-testid="pipeline-stages">
+          <PipelineStageCard
+            index={1}
+            id="prompts"
+            title="プロンプト生成"
+            description="seed_gen create + 手動追加。LLM がプロンプト候補を生成し Stage1 dedup を通します。"
+            metric={promptsMetric}
+            lastStatus={lastPromptsJob?.status}
+            active={active === "prompts"}
+            onSelect={setActive}
+          />
+          <PipelineStageCard
+            index={2}
+            id="check"
+            title="プロンプトチェック (LLM)"
+            description="seed_gen check + LLM 品質スクリーニング (連動起動)。作成したプロンプトは必ずここを通します。"
+            metric={
+              lastCheckJob
+                ? `最新チェック: ${lastCheckJob.status}`
+                : "未実施"
+            }
+            lastStatus={lastCheckJob?.status}
+            active={active === "check"}
+            onSelect={setActive}
+            warning={
+              !checkCompleted && lastPromptsJob
+                ? "作成済みプロンプトのチェックが未完了です。"
+                : undefined
+            }
+          />
+          <PipelineStageCard
+            index={3}
+            id="distill"
+            title="蒸留"
+            description="joryu-distill: style × temperature × top_p × tools の直積で蒸留を実行します。"
+            metric={distillMetric}
+            lastStatus={lastDistillJob?.status}
+            active={active === "distill"}
+            onSelect={setActive}
+            warning={
+              !checkCompleted
+                ? "プロンプトチェック未完了。②を先に実行してください。"
+                : undefined
+            }
+          />
+          <PipelineStageCard
+            index={4}
+            id="curate"
+            title="高品質抽出"
+            description="joryu-curate: 蒸留 JSONL に LLM-RUBRIC 判定と閾値フィルタを適用します。"
+            metric={distillMetric}
+            lastStatus={lastCurateJob?.status}
+            active={active === "curate"}
+            onSelect={setActive}
+          />
+          <PipelineStageCard
+            index={5}
+            id="screening"
+            title="健全性"
+            description="健全性スクリーニング結果 (screening.json) を確認します。詳細は /stats?tab=screening。"
+            metric={screeningMetric}
+            active={active === "screening"}
+            onSelect={setActive}
+            actionLabel="/stats を開く"
+          />
+        </div>
+      </section>
+
+      <section className="section" data-testid="pipeline-active-panel" data-active={active}>
+        {active === "prompts" && (
+          <PromptsStagePanel onLastJob={handlePromptsLastJob} />
+        )}
+        {active === "check" && <CheckStagePanel onLastJob={handleCheckLastJob} />}
+        {active === "distill" && (
+          <DistillStagePanel
+            checkCompleted={checkCompleted}
+            onLastJob={handleDistillLastJob}
+          />
+        )}
+        {active === "curate" && <CurateStagePanel onLastJob={handleCurateLastJob} />}
+        {active === "screening" && (
+          <div className="card">
+            <h3>健全性ステージ</h3>
+            <p>
+              健全性スクリーニングの詳細は{" "}
+              <Link href="/stats?tab=screening">/stats?tab=screening</Link> をご覧ください。
+            </p>
+            <p className="muted">
+              スクリーニングは「プロンプトチェック」ステージから curate と一緒に自動起動されます。
+            </p>
+          </div>
+        )}
+      </section>
+    </>
   );
 }
 
 export default function HomePage() {
-  const fastPoll = useDistillJobFastPoll();
-  const stats = useIntervalPoll(loadStats, EMPTY_STATS, {
-    shouldUpdate: statsDataChanged,
-    intervalMs: 3000,
-    fastPoll,
-  });
-
-  const modeRows = sortByCount(stats.modes);
-  const modelRows = sortByCount(stats.models);
-  const topCategories = sortByCount(stats.categories, 10);
-  const toolNameRows = sortByCount(stats.tool_name_counts ?? {}, 10);
-  const toolCallRatePct = ((stats.tool_call_rate ?? 0) * 100).toFixed(1);
-  const plannedMissPct = ((stats.tool_planned_but_not_called_rate ?? 0) * 100).toFixed(1);
-
   return (
-    <>
-      <section className="grid">
-        <StatCard label="総レコード数" value={stats.total.toLocaleString()} />
-        <StatCard label="平均回答長 (文字)" value={Math.round(stats.answer_length.mean)} />
-        <StatCard label="最大回答長 (文字)" value={stats.answer_length.max} />
-        <StatCard
-          label="thinking 行数"
-          value={(stats.modes.thinking ?? 0).toLocaleString()}
-        />
-      </section>
-
-      {(stats.tool_records ?? 0) > 0 && (
-        <section className="section">
-          <h2>ツール呼び出し</h2>
-          <section className="grid">
-            <StatCard label="ツール付きレコード" value={(stats.tool_records ?? 0).toLocaleString()} />
-            <StatCard label="tool_call 実行率" value={`${toolCallRatePct}%`} />
-            <StatCard
-              label="レコードあたり tool_calls"
-              value={(stats.tool_calls_per_record ?? 0).toFixed(2)}
-            />
-            <StatCard label="思考のみ (未実行) 率" value={`${plannedMissPct}%`} />
-          </section>
-          <HistogramTable rows={toolNameRows} keyLabel="tool" />
-        </section>
-      )}
-
-      <section className="section">
-        <h2>モデル別</h2>
-        <HistogramTable rows={modelRows} keyLabel="model" />
-      </section>
-
-      <section className="section">
-        <h2>モード別</h2>
-        <HistogramTable rows={modeRows} keyLabel="mode" />
-      </section>
-
-      <section className="section">
-        <h2>カテゴリ上位 10</h2>
-        <HistogramTable rows={topCategories} keyLabel="category" />
-      </section>
-
-      {stats._meta?.generated_at && (
-        <p className="meta-text">
-          生成時刻: {stats._meta.generated_at} / source: {stats._meta.source_path}
-        </p>
-      )}
-    </>
+    <Suspense fallback={<p className="muted">パイプラインを初期化しています…</p>}>
+      <HubContent />
+    </Suspense>
   );
 }

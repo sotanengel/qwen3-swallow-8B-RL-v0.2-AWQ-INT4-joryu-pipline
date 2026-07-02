@@ -9,7 +9,7 @@ import {
 
 const HEALTH_KEYS = ["L-01", "L-02", "L-03", "L-04", "L-05"];
 
-export default function ScreeningPage() {
+export function ScreeningPanel() {
   const data = useIntervalPoll(
     async () => loadScreening(),
     EMPTY_SCREENING,
@@ -20,7 +20,6 @@ export default function ScreeningPage() {
 
   return (
     <div>
-      <h2>健全性スクリーニング</h2>
       <p className="muted">
         `joryu-curate --screening` の集計 (`screening.json`)。総件数: {data.total}
       </p>
