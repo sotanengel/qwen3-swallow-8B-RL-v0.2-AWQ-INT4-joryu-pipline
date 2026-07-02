@@ -6,8 +6,9 @@ FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS builder
 
 WORKDIR /app
 
-ENV UV_COMPILE_BYTECODE=1 \
-    UV_LINK_MODE=copy
+# UV_COMPILE_BYTECODE は外す。torch 等の巨大 site-packages で bytecode compile 時に
+# Python 起動が 60s タイムアウトして uv sync が exit 2 する事象を回避するため。
+ENV UV_LINK_MODE=copy
 
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project --extra api --extra seed_gen

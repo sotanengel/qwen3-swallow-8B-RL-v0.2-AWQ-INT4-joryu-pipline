@@ -163,6 +163,13 @@ def test_dockerfile_app_syncs_on_top_of_base_venv() -> None:
     assert "COPY --from=builder /app/src /app/src" in dockerfile
 
 
+def test_dockerfile_job_does_not_enable_uv_compile_bytecode() -> None:
+    """UV_COMPILE_BYTECODE=1 は巨大 site-packages で Python 起動 60s タイムアウトを招く。"""
+    dockerfile = (REPO_ROOT / "Dockerfile.job").read_text(encoding="utf-8")
+    assert "UV_COMPILE_BYTECODE=1" not in dockerfile
+    assert "UV_LINK_MODE=copy" in dockerfile
+
+
 def test_pyproject_vllm_pinned_to_security_tag() -> None:
     """vLLM は Dependabot CVE #3-#7 修正入り tag 経由で解決する (Closes #377)."""
     text = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
