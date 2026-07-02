@@ -13,7 +13,7 @@ Qwen3-Swallow-8B-RL-v0.2-AWQ-INT4 (joryu) を使ったローカル日本語デ�
 - **Qwen3 思考モード固定** (公式 enable_thinking=True、`--mode` フラグは廃止)
 - **ツール呼び出し記録** (`tools.yaml` + JSONL 行 `tool_ids` / ad-hoc `tools`)
 - **zstd 圧縮 + SHA256 + meta.json** で蒸留データを軽量に持ち運び
-- **Next.js ダッシュボード**: 検索・分布可視化・**蒸留ジョブ投入** (`/jobs`)・**インタラクティブチャット** (`/chat`)
+- **Next.js ダッシュボード**: パイプラインハブ (`/`) から生成→チェック(LLM)→蒸留→抽出→健全性を実行、統計は `/stats`、出力閲覧は `/outputs`、並列チャットは `/chat`
 - すべて **Docker** で動作 (Windows → コンテナへ自動委譲)
 - TDD: ruff / pre-commit / pytest / GitHub Actions
 
@@ -52,13 +52,17 @@ uv run joryu-export --bundle-tar
 # 6. ダッシュボード + API + vLLM 常駐デーモン起動
 uv run joryu-up --detach
 
-# 6b. ブラウザワークフロー (ウィザードなし)
-#     1. /jobs — 蒸留 (distill / Qwen3)
-#     2. /prompts — プロンプト生成 (seed_gen / Qwen2.5, orchestrator が joryu-seed を lazy 起動)
-#     3. /prompts — スクリーニング (screening / Llama GGUF, joryu-judge を lazy 起動)
-#     4. /jobs — 再蒸留
+# 6b. ブラウザワークフロー — パイプラインハブ (/) から順に実行
+#     1. / (?stage=prompts) — プロンプト生成 (seed_gen create / Qwen2.5)
+#     2. / (?stage=check)   — プロンプトチェック (seed_gen check + LLM 品質スクリーニング) ★必須
+#     3. / (?stage=distill) — 蒸留 (distill / Qwen3, tools / style / temperature / top_p を指定)
+#     4. / (?stage=curate)  — 高品質抽出 (curate + rubric)
+#     5. / (?stage=screening) 健全性ステージ → /stats?tab=screening で結果を確認
+#     ナビは 4 項目: パイプライン(/) / データ(/outputs) / 統計(/stats) / チャット(/chat)
+#     統計は /stats のタブ切替（概要 / 分布 / 抽出品質 / 健全性）で参照
+#     旧 URL (/jobs, /prompts, /curation, /distributions, /screening, /search) は permanent redirect
 #     ヘッダの LLM ステータスバーと GET /api/system/models で profile 状態を確認
-#     または http://localhost:3000/chat でスタイル別並列対話（蒸留データ化）
+#     チャット: http://localhost:3000/chat でスタイル別並列対話（蒸留データ化）
 #     API: http://localhost:8000  (ローカル専用・認証なし)
 #     vLLM デーモン: http://localhost:8100/health (`vllm serve`, ready まで joryu-up が待機)
 #     OpenAI 互換: http://localhost:8100/v1/models
@@ -109,7 +113,7 @@ image 構成 (PR #330 で分離):
 
 ## ジョブ API とダッシュボード
 
-`joryu-api` (FastAPI, port 8000) が蒸留ジョブの投入・状態照会を担当する。ダッシュボードの `/jobs` 画面から `joryu-distill` 相当のパラメータで実行できる。
+`joryu-api` (FastAPI, port 8000) が蒸留ジョブの投入・状態照会を担当する。ダッシュボードのパイプラインハブ `/?stage=distill` から `joryu-distill` 相当のパラメータで実行できる。
 
 ```powershell
 # 既定起動 (dashboard + api + vLLM 常駐 joryu)
@@ -122,7 +126,7 @@ cd dashboard && npm run dev
 
 ジョブ状態は `data/jobs/` に JSON で永続化される（gitignore）。成功時は自動で `joryu-stats` が走り、概要ページの統計が更新される。
 
-`/jobs` 画面では **文体**、**temperature / top_p スイープ**に加え、`tools.yaml` で定義された **ツール**（チェックボックス）と **tool 実行ループ**（`tool_loop` + `max_turns`）を指定できる。ツール ID はプロンプト行に `tool_ids` が無い行にのみ適用される（行に既存の `tool_ids` がある場合は行優先）。蒸留は常に Qwen3 thinking モードで動作する (#94)。
+`/?stage=distill` 画面では **文体**、**temperature / top_p スイープ**に加え、`tools.yaml` で定義された **ツール**（チェックボックス）と **tool 実行ループ**（`tool_loop` + `max_turns`）を指定できる。ツール ID はプロンプト行に `tool_ids` が無い行にのみ適用される（行に既存の `tool_ids` がある場合は行優先）。蒸留は常に Qwen3 thinking モードで動作する (#94)。プロンプトチェック (`/?stage=check`) 未完了時は蒸留パネルに警告が表示される。
 
 api コンテナから GPU ジョブを実行する場合、Docker デーモンが参照できるホスト側リポジトリパスへ自動変換する（`/proc/self/mountinfo`）。解決できない場合のみ `JORYU_HOST_REPO_ROOT` を手動指定する。
 

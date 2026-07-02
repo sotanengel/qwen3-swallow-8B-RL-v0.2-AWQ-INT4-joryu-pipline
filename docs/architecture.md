@@ -54,7 +54,7 @@ tools.yaml ───┤
                           dashboard/public/{stats,curation}.json
                                     │
                                     ▼
-                          Next.js (recharts, 検索, /jobs, /curation)
+                          Next.js (recharts, 検索, / パイプラインハブ, /stats)
                           http://localhost:3000
                                     ▲
                                     │ POST/GET /api/jobs
