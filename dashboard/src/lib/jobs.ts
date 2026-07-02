@@ -1,4 +1,13 @@
-export type JobStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled";
+import {
+  apiFetch,
+  createJobClient,
+  isActiveStatus,
+  statusLabelJa,
+  type BaseJobStatus,
+  type LogResponse,
+} from "./job-client";
+
+export type JobStatus = BaseJobStatus;
 
 /** Python `joryu.jobs.models.DistillJobSpec` と同一フィールド。 */
 export type DistillJobSpec = {
@@ -47,6 +56,8 @@ export type CreateJobRequest = {
 
 export type DurationUnit = "h" | "m";
 
+export type { LogResponse };
+
 export function formatJobDuration(value: number | "", unit: DurationUnit): string {
   if (value === "" || value <= 0) {
     return "";
@@ -64,36 +75,6 @@ export function defaultJobSelections(options: JobOptions): {
     toolIds: options.tools.map((t) => t.id),
     toolLoop: true,
   };
-}
-
-export type LogResponse = {
-  chunk: string;
-  offset: number;
-};
-
-const API_BASE =
-  (typeof process !== "undefined" && process.env.NEXT_PUBLIC_JORYU_API_URL) ||
-  "http://localhost:8000";
-
-async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers ?? {}),
-    },
-  });
-  if (!res.ok) {
-    let detail = res.statusText;
-    try {
-      const body = (await res.json()) as { detail?: string };
-      if (body.detail) detail = body.detail;
-    } catch {
-      /* ignore */
-    }
-    throw new Error(detail);
-  }
-  return res.json() as Promise<T>;
 }
 
 export function parseJobRecord(data: unknown): JobRecord {
@@ -124,49 +105,29 @@ export function parseJobRecord(data: unknown): JobRecord {
   };
 }
 
+const distillClient = createJobClient<
+  DistillJobSpec,
+  CreateJobRequest,
+  JobRecord
+>({
+  basePath: "/api/jobs",
+  parseRecord: parseJobRecord,
+});
+
 export async function loadJobOptions(): Promise<JobOptions> {
   return apiFetch<JobOptions>("/api/jobs/options");
 }
 
-export async function listJobs(): Promise<JobRecord[]> {
-  const rows = await apiFetch<unknown[]>("/api/jobs");
-  return rows.map(parseJobRecord);
-}
-
-export async function createJob(body: CreateJobRequest): Promise<JobRecord> {
-  const row = await apiFetch<unknown>("/api/jobs", {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
-  return parseJobRecord(row);
-}
-
-export async function getJobLogs(id: string, offset = 0): Promise<LogResponse> {
-  return apiFetch<LogResponse>(`/api/jobs/${id}/logs?offset=${offset}`);
-}
-
-export async function cancelJob(id: string): Promise<JobRecord> {
-  const row = await apiFetch<unknown>(`/api/jobs/${id}/cancel`, { method: "POST" });
-  return parseJobRecord(row);
-}
+export const listJobs = () => distillClient.list();
+export const createJob = (body: CreateJobRequest) => distillClient.create(body);
+export const cancelJob = (id: string) => distillClient.cancel(id);
+export const getJobLogs = (id: string, offset = 0) =>
+  distillClient.getLogs(id, offset);
 
 export function statusLabel(status: JobStatus): string {
-  switch (status) {
-    case "queued":
-      return "待機中";
-    case "running":
-      return "実行中";
-    case "succeeded":
-      return "成功";
-    case "failed":
-      return "失敗";
-    case "cancelled":
-      return "中止";
-    default:
-      return status;
-  }
+  return statusLabelJa(status);
 }
 
 export function isJobActive(status: JobStatus): boolean {
-  return status === "queued" || status === "running";
+  return isActiveStatus(status);
 }

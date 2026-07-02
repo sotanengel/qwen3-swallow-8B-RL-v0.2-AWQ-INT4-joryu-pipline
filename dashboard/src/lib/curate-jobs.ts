@@ -1,4 +1,13 @@
-export type CurateJobStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled";
+import {
+  apiFetch,
+  createJobClient,
+  isActiveStatus,
+  statusLabelJa,
+  type BaseJobStatus,
+  type LogResponse,
+} from "./job-client";
+
+export type CurateJobStatus = BaseJobStatus;
 
 export type CurateJobSpec = {
   config: string;
@@ -36,35 +45,7 @@ export type CreateCurateJobRequest = {
   src?: string;
 };
 
-export type LogResponse = {
-  chunk: string;
-  offset: number;
-};
-
-const API_BASE =
-  (typeof process !== "undefined" && process.env.NEXT_PUBLIC_JORYU_API_URL) ||
-  "http://localhost:8000";
-
-async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers ?? {}),
-    },
-  });
-  if (!res.ok) {
-    let detail = res.statusText;
-    try {
-      const body = (await res.json()) as { detail?: string };
-      if (body.detail) detail = body.detail;
-    } catch {
-      /* ignore */
-    }
-    throw new Error(detail);
-  }
-  return res.json() as Promise<T>;
-}
+export type { LogResponse };
 
 export function parseCurateJobRecord(data: unknown): CurateJobRecord {
   const row = data as CurateJobRecord;
@@ -91,49 +72,30 @@ export function parseCurateJobRecord(data: unknown): CurateJobRecord {
   };
 }
 
+const curateClient = createJobClient<
+  CurateJobSpec,
+  CreateCurateJobRequest,
+  CurateJobRecord
+>({
+  basePath: "/api/curate/jobs",
+  parseRecord: parseCurateJobRecord,
+});
+
 export async function loadCurateJobOptions(): Promise<CurateJobOptions> {
   return apiFetch<CurateJobOptions>("/api/curate/jobs/options");
 }
 
-export async function listCurateJobs(): Promise<CurateJobRecord[]> {
-  const rows = await apiFetch<unknown[]>("/api/curate/jobs");
-  return rows.map(parseCurateJobRecord);
-}
-
-export async function createCurateJob(body: CreateCurateJobRequest): Promise<CurateJobRecord> {
-  const row = await apiFetch<unknown>("/api/curate/jobs", {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
-  return parseCurateJobRecord(row);
-}
-
-export async function getCurateJobLogs(id: string, offset = 0): Promise<LogResponse> {
-  return apiFetch<LogResponse>(`/api/curate/jobs/${id}/logs?offset=${offset}`);
-}
-
-export async function cancelCurateJob(id: string): Promise<CurateJobRecord> {
-  const row = await apiFetch<unknown>(`/api/curate/jobs/${id}/cancel`, { method: "POST" });
-  return parseCurateJobRecord(row);
-}
+export const listCurateJobs = () => curateClient.list();
+export const createCurateJob = (body: CreateCurateJobRequest) =>
+  curateClient.create(body);
+export const cancelCurateJob = (id: string) => curateClient.cancel(id);
+export const getCurateJobLogs = (id: string, offset = 0) =>
+  curateClient.getLogs(id, offset);
 
 export function isCurateJobActive(status: CurateJobStatus): boolean {
-  return status === "queued" || status === "running";
+  return isActiveStatus(status);
 }
 
 export function curateStatusLabel(status: CurateJobStatus): string {
-  switch (status) {
-    case "queued":
-      return "待機中";
-    case "running":
-      return "実行中";
-    case "succeeded":
-      return "成功";
-    case "failed":
-      return "失敗";
-    case "cancelled":
-      return "中止";
-    default:
-      return status;
-  }
+  return statusLabelJa(status);
 }
