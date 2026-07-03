@@ -121,11 +121,11 @@ def _patch_runner(
             return _Done()
         return _Done()
 
-    monkeypatch.setattr("joryu.compose.subprocess.run", _fake_run)
+    monkeypatch.setattr("joryu.infra.docker.compose.subprocess.run", _fake_run)
     monkeypatch.setattr("joryu.cli.up.schedule_open_dashboard", lambda **_: None)
     monkeypatch.setattr("joryu.cli.up.open_dashboard_when_ready", lambda **_: None)
     monkeypatch.setattr("joryu.cli.up.wait_for_up_services", lambda _services: True)
-    monkeypatch.setattr("joryu.preflight.should_up_mcp", lambda _root: False)
+    monkeypatch.setattr("joryu.infra.preflight.should_up_mcp", lambda _root: False)
     monkeypatch.setattr("joryu.cli.up.is_first_up_run", lambda _root: False)
     # 空き容量チェックは環境依存なので既定で no-op 化 (insufficient disk テストでは上書き)
     monkeypatch.setattr("joryu.cli.up.check_disk_space", lambda *_args, **_kwargs: None)
@@ -138,10 +138,12 @@ def _patch_runner(
         "joryu.cli.up.remove_foreign_project_joryu_containers", lambda **_kwargs: None
     )
     monkeypatch.setattr("joryu.cli.up.stop_joryu_for_up", lambda **_kwargs: None)
-    monkeypatch.setattr("joryu.preflight.services_missing_build_at_head", lambda *_a, **_k: set())
-    monkeypatch.setattr("joryu.preflight.git_head_at", lambda *_a, **_k: "test-head")
+    monkeypatch.setattr(
+        "joryu.infra.preflight.services_missing_build_at_head", lambda *_a, **_k: set()
+    )
+    monkeypatch.setattr("joryu.infra.preflight.git_head_at", lambda *_a, **_k: "test-head")
     monkeypatch.setattr("joryu.cli.up.save_up_state", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr("joryu.preflight.docker_image_exists", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr("joryu.infra.preflight.docker_image_exists", lambda *_args, **_kwargs: True)
     monkeypatch.setattr("joryu.cli.up.needs_vllm_base_build", lambda *_args, **_kwargs: False)
     monkeypatch.setattr(
         "joryu.orchestrator.factory.build_orchestrator",
@@ -413,7 +415,9 @@ def test_up_builds_joryu_when_image_missing(monkeypatch: pytest.MonkeyPatch) -> 
     """joryu-job:latest が無い (api job 実行不可) なら build 対象に積む。"""
     calls = _patch_runner(monkeypatch)
     monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: set())
-    monkeypatch.setattr("joryu.preflight.docker_image_exists", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(
+        "joryu.infra.preflight.docker_image_exists", lambda *_args, **_kwargs: False
+    )
     rc = cli_up.main([])
     assert rc == 0
     assert calls[0] == _STARTUP_IMAGE_PRUNE
@@ -455,7 +459,7 @@ def test_up_aborts_on_insufficient_disk(monkeypatch: pytest.MonkeyPatch) -> None
         include_vllm_base: bool = False,
         disk_usage_fn: object = None,
     ) -> None:
-        from joryu.preflight import PreflightError
+        from joryu.infra.preflight import PreflightError
 
         raise PreflightError("disk full")
 
@@ -488,7 +492,7 @@ def test_up_auto_prunes_and_continues_when_disk_recovered(
     ) -> None:
         attempts.append(1)
         if len(attempts) == 1:
-            from joryu.preflight import PreflightError
+            from joryu.infra.preflight import PreflightError
 
             raise PreflightError("disk tight, retry after prune")
 
@@ -628,7 +632,7 @@ def test_up_foreground_schedules_browser_before_compose(monkeypatch: pytest.Monk
         return _Done()
 
     monkeypatch.setattr("joryu.cli.up.schedule_open_dashboard", _schedule)
-    monkeypatch.setattr("joryu.compose.subprocess.run", _fake_run)
+    monkeypatch.setattr("joryu.infra.docker.compose.subprocess.run", _fake_run)
     cli_up.main([])
     assert order == ["compose", "schedule", "compose"]
 
@@ -654,7 +658,7 @@ def test_up_aborts_when_prompt_bank_missing(monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: set())
 
     def _fail_prompt_bank(_root: object) -> None:
-        from joryu.preflight import PreflightError
+        from joryu.infra.preflight import PreflightError
 
         raise PreflightError("prompt bank missing")
 
@@ -720,9 +724,9 @@ def test_up_compose_failure_runs_rollback(monkeypatch: pytest.MonkeyPatch) -> No
             return _FailUp()
         return type("R", (), {"returncode": 0})()
 
-    monkeypatch.setattr("joryu.compose.subprocess.run", _fake_run)
+    monkeypatch.setattr("joryu.infra.docker.compose.subprocess.run", _fake_run)
     monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: set())
-    monkeypatch.setattr("joryu.preflight.joryu_container_running", lambda **_: False)
+    monkeypatch.setattr("joryu.infra.preflight.joryu_container_running", lambda **_: False)
     rc = cli_up.main(["--detach"])
     assert rc == 1
     assert any(cmd[0:2] == ["docker", "compose"] and "-f" in cmd and "down" in cmd for cmd in calls)
@@ -731,7 +735,7 @@ def test_up_compose_failure_runs_rollback(monkeypatch: pytest.MonkeyPatch) -> No
 def test_up_includes_mcp_when_config_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
     calls = _patch_runner(monkeypatch)
     monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: set())
-    monkeypatch.setattr("joryu.preflight.should_up_mcp", lambda _root: True)
+    monkeypatch.setattr("joryu.infra.preflight.should_up_mcp", lambda _root: True)
     rc = cli_up.main([])
     assert rc == 0
     assert calls[1] == [*_UP_WITH_DISTILL, "dashboard", "mcp", "api", "joryu"]

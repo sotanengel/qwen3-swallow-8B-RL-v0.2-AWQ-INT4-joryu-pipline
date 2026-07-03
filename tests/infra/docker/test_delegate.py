@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from joryu.docker_delegate import build_docker_command, should_use_docker
+from joryu.infra.docker.delegate import build_docker_command, should_use_docker
 
 
 def test_force_docker_wins() -> None:
@@ -133,9 +133,9 @@ def test_run_in_docker_captures_stderr_on_failure(
     """returncode != 0 のとき subprocess stderr が capture され logging に記録される。"""
     import logging
 
-    from joryu import docker_delegate
+    from joryu.infra.docker import delegate as docker_delegate
 
-    caplog.set_level(logging.WARNING, logger="joryu.docker_delegate")
+    caplog.set_level(logging.WARNING, logger="joryu.infra.docker.delegate")
 
     config_path = tmp_path / "config.yaml"
     config_path.write_text("model: {}\ndistill:\n  styles_file: styles.yaml\n", encoding="utf-8")
@@ -189,7 +189,7 @@ def test_build_docker_command_allocates_tty_when_requested(tmp_path: Path) -> No
 
 
 def test_is_docker_container_running_true() -> None:
-    from joryu.docker_delegate import is_docker_container_running
+    from joryu.infra.docker.delegate import is_docker_container_running
 
     def _run(cmd: list[str], **kwargs: object) -> object:
         return type("P", (), {"returncode": 0, "stdout": "true", "stderr": ""})()
@@ -198,7 +198,7 @@ def test_is_docker_container_running_true() -> None:
 
 
 def test_is_docker_container_running_false_when_missing() -> None:
-    from joryu.docker_delegate import is_docker_container_running
+    from joryu.infra.docker.delegate import is_docker_container_running
 
     def _run(cmd: list[str], **kwargs: object) -> object:
         return type("P", (), {"returncode": 1, "stdout": "", "stderr": ""})()
@@ -213,7 +213,7 @@ def test_stop_docker_container_skips_when_not_running() -> None:
         calls.append(cmd)
         return type("P", (), {"returncode": 1, "stdout": "", "stderr": ""})()
 
-    from joryu.docker_delegate import stop_docker_container
+    from joryu.infra.docker.delegate import stop_docker_container
 
     assert stop_docker_container("joryu", docker_run=_run) is True
     assert len(calls) == 1
@@ -240,7 +240,7 @@ def test_stop_docker_container_kills_when_still_running() -> None:
             return type("P", (), {"returncode": 0, "stdout": "", "stderr": ""})()
         raise AssertionError(f"unexpected cmd: {cmd}")
 
-    from joryu.docker_delegate import stop_docker_container
+    from joryu.infra.docker.delegate import stop_docker_container
 
     assert stop_docker_container("joryu", docker_run=_run_with_kill) is True
     assert any(c[:3] == ["docker", "update", "--restart=no"] for c in calls)
@@ -266,7 +266,7 @@ def test_stop_docker_container_rm_when_kill_insufficient() -> None:
             return type("P", (), {"returncode": 0, "stdout": "false", "stderr": ""})()
         return type("P", (), {"returncode": 0, "stdout": "", "stderr": ""})()
 
-    from joryu.docker_delegate import stop_docker_container
+    from joryu.infra.docker.delegate import stop_docker_container
 
     assert stop_docker_container("joryu", docker_run=_run) is True
     assert any(c[:2] == ["docker", "rm"] for c in calls)

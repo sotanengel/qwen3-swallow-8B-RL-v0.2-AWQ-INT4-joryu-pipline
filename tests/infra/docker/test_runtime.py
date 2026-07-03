@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from joryu.docker_delegate import build_docker_command
-from joryu.docker_runtime import container_config_rel, prepare_distill_docker_mounts
+from joryu.infra.docker.delegate import build_docker_command
+from joryu.infra.docker.runtime import container_config_rel, prepare_distill_docker_mounts
 
 
 def test_container_config_rel_windows_absolute_string(tmp_path: Path) -> None:

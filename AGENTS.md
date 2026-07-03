@@ -55,9 +55,9 @@ bash scripts/setup-dev.sh
 実装時は少なくとも次を更新する:
 
 1. `docker-compose.yml` — サービス定義
-2. `src/joryu/preflight.py` — `resolve_up_services` / `should_up_*` / `path_affects_service` / `services_to_build`
-3. `src/joryu/readiness.py` — `wait_for_up_services`（health URL があれば ready 待ち）
-4. `tests/test_preflight.py` / `tests/test_cli_up_down.py` / `tests/test_readiness.py` — TDD で起動対象・待機順序を固定
+2. `src/joryu/infra/preflight.py` — `resolve_up_services` / `should_up_*` / `path_affects_service` / `services_to_build`
+3. `src/joryu/infra/readiness.py` — `wait_for_up_services`（health URL があれば ready 待ち）
+4. `tests/infra/test_preflight.py` / `tests/test_cli_up_down.py` / `tests/infra/test_readiness.py` — TDD で起動対象・待機順序を固定
 
 起動確認・ユーザーへの案内は **`uv run joryu-up`（必要なら `--detach`）** に統一する。例: MCP は `config.yaml` の `mcp.enabled` 時に `joryu-up` が `mcp` コンテナも up する。
 

@@ -10,8 +10,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
 
-from joryu.compose_invoke import ComposeProject, compose_command_prefix, resolve_compose_project
-from joryu.docker_delegate import is_docker_container_running, stop_docker_container
+from joryu.infra.docker.compose_invoke import (
+    ComposeProject,
+    compose_command_prefix,
+    resolve_compose_project,
+)
+from joryu.infra.docker.delegate import is_docker_container_running, stop_docker_container
 from joryu.orchestrator.profile import ALWAYS_COMPOSE_PROFILE, ModelProfile, ProfileSpec
 
 logger = logging.getLogger(__name__)
@@ -168,7 +172,7 @@ class ComposeBackend:
         self, profile: ModelProfile, *, spec: ProfileSpec, timeout_s: float = 1.0
     ) -> bool:
         del profile, timeout_s
-        from joryu.readiness import is_profile_healthy
+        from joryu.infra.readiness import is_profile_healthy
 
         return is_profile_healthy(spec, urlopen_fn=self.urlopen_fn)
 

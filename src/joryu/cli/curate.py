@@ -59,7 +59,7 @@ from joryu.curate.stats import (
 )
 from joryu.curate.style_presets import load_style_rules
 from joryu.curate.writer import CurateWriter, ScreeningWriter
-from joryu.preflight import git_head_at
+from joryu.infra.git import git_head_at
 
 
 def build_parser() -> argparse.ArgumentParser:

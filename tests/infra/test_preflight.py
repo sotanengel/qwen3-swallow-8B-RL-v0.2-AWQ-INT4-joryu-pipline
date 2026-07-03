@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from joryu.preflight import (
+from joryu.infra.preflight import (
     DISK_REQUIRED_GB,
     PreflightError,
     changed_services_from_git,
@@ -43,10 +43,10 @@ from joryu.preflight import (
     [
         ("src/joryu/cli/up.py", {"joryu-job"}),
         ("src/joryu/distill.py", {"api", "joryu-job"}),
-        ("src/joryu/preflight.py", {"api", "joryu-job"}),
+        ("src/joryu/infra/preflight.py", {"api", "joryu-job"}),
         ("src/joryu/jobs/runner.py", {"api", "mcp"}),
-        ("src/joryu/docker_delegate.py", {"api", "joryu-job"}),
-        ("src/joryu/docker_runtime.py", {"api", "joryu-job"}),
+        ("src/joryu/infra/docker/delegate.py", {"api", "joryu-job"}),
+        ("src/joryu/infra/docker/runtime.py", {"api", "joryu-job"}),
         ("src/joryu/stats.py", {"api", "joryu-job"}),
         (
             "docker-compose.yml",
@@ -140,7 +140,7 @@ def test_services_to_build_skips_joryu_when_image_exists_and_no_diff() -> None:
 def test_services_to_build_rebuilds_unbuilt_at_current_head(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr("joryu.preflight.git_head_at", lambda _root, **_: "head-abc")
+    monkeypatch.setattr("joryu.infra.preflight.git_head_at", lambda _root, **_: "head-abc")
     save_up_state(tmp_path, "head-abc")
     assert services_missing_build_at_head(["dashboard", "api"], tmp_path) == {
         "dashboard",
@@ -159,7 +159,7 @@ def test_services_to_build_rebuilds_unbuilt_at_current_head(
 def test_services_to_build_skips_when_built_at_head(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr("joryu.preflight.git_head_at", lambda _root, **_: "head-abc")
+    monkeypatch.setattr("joryu.infra.preflight.git_head_at", lambda _root, **_: "head-abc")
     save_up_state(tmp_path, "head-abc", built_services=["dashboard", "api", "joryu-job"])
     assert services_missing_build_at_head(["dashboard", "api"], tmp_path) == set()
     assert (
@@ -596,7 +596,7 @@ def test_ensure_curation_runs_with_skip_llm(tmp_path: Path, monkeypatch) -> None
         return 0
 
     monkeypatch.setattr("joryu.cli.curate.main", fake_curate)
-    monkeypatch.setattr("joryu.preflight.joryu_container_running", lambda **_: False)
+    monkeypatch.setattr("joryu.infra.preflight.joryu_container_running", lambda **_: False)
     rc = ensure_curation(tmp_path, ["dashboard", "api"])
     assert rc == 0
     assert calls == [["--config", "config.yaml", "--skip-llm"]]
@@ -696,7 +696,7 @@ def test_ensure_curation_skips_llm_when_joryu_in_up_services(
         return 0
 
     monkeypatch.setattr("joryu.cli.curate.main", fake_curate)
-    monkeypatch.setattr("joryu.preflight.joryu_container_running", lambda **_: True)
+    monkeypatch.setattr("joryu.infra.preflight.joryu_container_running", lambda **_: True)
     rc = ensure_curation(tmp_path, ["dashboard", "api", "joryu"])
     assert rc == 0
     assert calls == [["--config", "config.yaml", "--skip-llm"]]
@@ -709,7 +709,7 @@ def test_stop_joryu_for_up_noop_when_not_running(monkeypatch) -> None:
         calls.append(cmd)
         return _InspectResult()
 
-    monkeypatch.setattr("joryu.preflight.joryu_container_running", lambda **_: False)
+    monkeypatch.setattr("joryu.infra.preflight.joryu_container_running", lambda **_: False)
     stop_joryu_for_up(docker_run=fake_run)
     assert calls == []
 
@@ -721,7 +721,7 @@ def test_stop_joryu_for_up_stops_running_container(monkeypatch) -> None:
         calls.append(cmd)
         return _InspectResult()
 
-    monkeypatch.setattr("joryu.preflight.joryu_container_running", lambda **_: True)
+    monkeypatch.setattr("joryu.infra.preflight.joryu_container_running", lambda **_: True)
     stop_joryu_for_up(docker_run=fake_run)
     assert calls == [["docker", "stop", "--time", "30", "joryu"]]
 
@@ -738,7 +738,7 @@ def test_ensure_vllm_limits_runs_probe_when_needed(tmp_path: Path, monkeypatch) 
         return 0
 
     monkeypatch.setattr("joryu.vllm.probe.run_vllm_probe", fake_probe)
-    monkeypatch.setattr("joryu.preflight.docker_image_exists", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr("joryu.infra.preflight.docker_image_exists", lambda *_args, **_kwargs: True)
     rc = ensure_vllm_limits(tmp_path, up_services=["dashboard", "api"])
     assert rc == 0
     assert len(calls) == 1

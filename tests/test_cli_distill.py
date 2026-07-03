@@ -129,7 +129,7 @@ def test_main_installs_hard_deadline_when_duration_set(
     def _fake_install(seconds: int) -> None:
         installed.append(seconds)
 
-    monkeypatch.setattr("joryu.hard_deadline.install_hard_deadline", _fake_install)
+    monkeypatch.setattr("joryu.infra.hard_deadline.install_hard_deadline", _fake_install)
 
     rc = cli_distill.main(
         ["--no-docker", "--config", str(cfg_yaml), "--out", str(out), "--duration", "45s"],

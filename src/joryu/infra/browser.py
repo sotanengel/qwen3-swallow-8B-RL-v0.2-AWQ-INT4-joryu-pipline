@@ -8,7 +8,7 @@ import webbrowser
 from collections.abc import Callable
 from typing import Protocol
 
-from joryu.readiness import DASHBOARD_URL, wait_for_dashboard
+from joryu.infra.readiness import DASHBOARD_URL, wait_for_dashboard
 
 DEFAULT_READY_TIMEOUT_S = 120.0
 

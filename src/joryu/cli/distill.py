@@ -12,7 +12,7 @@ from joryu.cli.common import add_config_argument
 from joryu.core.config import load_config
 from joryu.core.variants import parse_comma_list, parse_float_list
 from joryu.distill import default_stats_refresher, load_style_presets_from_config, run_distill
-from joryu.docker_delegate import (
+from joryu.infra.docker.delegate import (
     DEFAULT_IMAGE,
     JORYU_DISTILL_HOST_CONTAINER,
     run_in_docker,
@@ -121,7 +121,7 @@ def main(argv: list[str] | None = None, *, _client: SupportsChat | None = None) 
         return 2
     if secs is not None:
         deadline = time.time() + secs
-        from joryu.hard_deadline import install_hard_deadline
+        from joryu.infra.hard_deadline import install_hard_deadline
 
         install_hard_deadline(secs)
 

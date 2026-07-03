@@ -6,13 +6,13 @@ import urllib.error
 
 import pytest
 
-from joryu.browser import (
+from joryu.infra.browser import (
     DASHBOARD_URL,
     open_dashboard,
     open_dashboard_when_ready,
     schedule_open_dashboard,
 )
-from joryu.readiness import wait_for_dashboard
+from joryu.infra.readiness import wait_for_dashboard
 
 
 class _FakeResponse:
@@ -44,7 +44,7 @@ def test_wait_for_dashboard_returns_true_on_200(monkeypatch: pytest.MonkeyPatch)
             raise urllib.error.URLError("connection refused")
         return _FakeResponse(200)
 
-    monkeypatch.setattr("joryu.readiness.urllib.request.urlopen", _urlopen)
+    monkeypatch.setattr("joryu.infra.readiness.urllib.request.urlopen", _urlopen)
     assert wait_for_dashboard(poll_interval_s=0, timeout_s=1)
 
 
@@ -52,14 +52,14 @@ def test_wait_for_dashboard_returns_false_on_timeout(monkeypatch: pytest.MonkeyP
     def _urlopen(url: str, timeout: int = 0) -> _FakeResponse:
         raise urllib.error.URLError("down")
 
-    monkeypatch.setattr("joryu.readiness.urllib.request.urlopen", _urlopen)
+    monkeypatch.setattr("joryu.infra.readiness.urllib.request.urlopen", _urlopen)
     assert wait_for_dashboard(poll_interval_s=0, timeout_s=0.01) is False
 
 
 def test_open_dashboard_uses_browser(caplog: pytest.LogCaptureFixture) -> None:
     import logging
 
-    caplog.set_level(logging.INFO, logger="joryu.browser")
+    caplog.set_level(logging.INFO, logger="joryu.infra.browser")
     browser = _FakeBrowser()
     open_dashboard(DASHBOARD_URL, browser=browser)
     assert browser.urls == [DASHBOARD_URL]
@@ -72,7 +72,7 @@ def test_open_dashboard_uses_startfile_on_windows(
 ) -> None:
     import logging
 
-    caplog.set_level(logging.INFO, logger="joryu.browser")
+    caplog.set_level(logging.INFO, logger="joryu.infra.browser")
     opened: list[str] = []
     monkeypatch.setattr("sys.platform", "win32")
 
@@ -88,7 +88,7 @@ def test_open_dashboard_uses_startfile_on_windows(
 def test_open_dashboard_when_ready_skips_if_not_ready(caplog: pytest.LogCaptureFixture) -> None:
     import logging
 
-    caplog.set_level(logging.WARNING, logger="joryu.browser")
+    caplog.set_level(logging.WARNING, logger="joryu.infra.browser")
     open_dashboard_when_ready(wait_fn=lambda _url: False, open_fn=lambda **_kw: None)
     assert any("skipped opening browser" in r.message for r in caplog.records)
 

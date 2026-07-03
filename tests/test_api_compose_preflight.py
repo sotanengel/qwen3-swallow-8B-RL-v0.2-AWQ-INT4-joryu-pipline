@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from joryu.api.app import create_app
-from joryu.compose_invoke import ComposeProject
+from joryu.infra.docker.compose_invoke import ComposeProject
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 

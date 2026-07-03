@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from joryu.docker_delegate import (
+from joryu.infra.docker.delegate import (
     JORYU_COMPOSE_CONTAINER_NAMES,
     JORYU_DISTILL_HOST_CONTAINER,
     JORYU_PROBE_CONTAINER,

@@ -6,7 +6,7 @@ import argparse
 import sys
 
 from joryu.cli.common import add_config_argument
-from joryu.docker_delegate import DEFAULT_IMAGE
+from joryu.infra.docker.delegate import DEFAULT_IMAGE
 from joryu.vllm.probe import run_vllm_probe
 
 

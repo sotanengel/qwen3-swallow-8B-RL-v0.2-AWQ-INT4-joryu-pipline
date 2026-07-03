@@ -13,14 +13,14 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from joryu.api.routes import chat, curate, dashboard, jobs, search, seed_gen, system
 from joryu.chat.session import ChatSessionStore
-from joryu.compose_invoke import (
+from joryu.core.config import load_config
+from joryu.core.http_client import close_shared_async_client
+from joryu.infra.docker.compose_invoke import (
     assert_compose_contract_from_file,
     resolve_compose_project,
     should_validate_compose_at_startup,
     validate_compose_profiles,
 )
-from joryu.core.config import load_config
-from joryu.core.http_client import close_shared_async_client
 from joryu.jobs.runner import JobRunner, default_jobs_dir
 from joryu.jobs.store import JobStore
 from joryu.mcp.runtime import probe_mcp_health

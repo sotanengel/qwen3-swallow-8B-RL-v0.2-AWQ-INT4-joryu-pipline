@@ -22,9 +22,9 @@ def test_persist_turn_refreshes_stats_json(tmp_path: Path, monkeypatch) -> None:
         assert force is True
         return 0
 
-    monkeypatch.setattr("joryu.preflight.ensure_stats_json", fake_ensure_stats)
+    monkeypatch.setattr("joryu.infra.preflight.ensure_stats_json", fake_ensure_stats)
     monkeypatch.setattr(
-        "joryu.preflight.sync_dashboard_responses_copy",
+        "joryu.infra.preflight.sync_dashboard_responses_copy",
         lambda _root: None,
     )
 

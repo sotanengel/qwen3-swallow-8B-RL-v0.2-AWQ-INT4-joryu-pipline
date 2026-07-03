@@ -13,7 +13,7 @@ import respx
 from fastapi.testclient import TestClient
 
 from joryu.api.app import create_app
-from joryu.preflight import ensure_dashboard_data_paths
+from joryu.infra.preflight import ensure_dashboard_data_paths
 from joryu.tooling.impl import weather as weather_mod
 from tests.conftest import FakeVllmClient
 from tests.test_api_chat import STYLES_YAML, TOOLS_YAML, _parse_sse

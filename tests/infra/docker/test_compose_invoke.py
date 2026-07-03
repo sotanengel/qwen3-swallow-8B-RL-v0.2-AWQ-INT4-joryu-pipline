@@ -8,7 +8,7 @@ import pytest
 import yaml
 
 from joryu.api.app import create_app
-from joryu.compose_invoke import (
+from joryu.infra.docker.compose_invoke import (
     ComposeProject,
     assert_compose_contract,
     assert_compose_contract_from_file,
@@ -18,7 +18,7 @@ from joryu.compose_invoke import (
     validate_compose_profiles,
 )
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 def test_resolve_compose_project_uses_host_compose_file(tmp_path: Path) -> None:
@@ -83,7 +83,7 @@ def test_resolve_compose_project_uses_mountinfo_host_path_with_local_bind_mount(
     app_dir.mkdir()
     monkeypatch.chdir(app_dir)
     monkeypatch.setattr(
-        "joryu.compose_invoke.resolve_host_repo_root",
+        "joryu.infra.docker.compose_invoke.resolve_host_repo_root",
         lambda _root, **_: Path("C:/host/repo"),
     )
     project = resolve_compose_project(workspace, env={"JORYU_REPO_ROOT": str(workspace)})
@@ -105,7 +105,7 @@ def test_create_app_compose_preflight_with_9p_host_path(
     monkeypatch.chdir(app_dir)
     monkeypatch.setattr("joryu.api.app.should_validate_compose_at_startup", lambda: True)
     monkeypatch.setattr(
-        "joryu.compose_invoke.resolve_host_repo_root",
+        "joryu.infra.docker.compose_invoke.resolve_host_repo_root",
         lambda _root, **_: Path("C:/host/repo"),
     )
     monkeypatch.setattr("joryu.api.app.validate_compose_profiles", lambda *_a, **_k: None)

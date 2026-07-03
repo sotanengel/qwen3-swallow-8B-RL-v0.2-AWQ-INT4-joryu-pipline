@@ -29,8 +29,8 @@ import logging
 import sys
 from pathlib import Path
 
-from joryu.browser import open_dashboard_when_ready, schedule_open_dashboard
-from joryu.compose import (
+from joryu.infra.browser import open_dashboard_when_ready, schedule_open_dashboard
+from joryu.infra.docker.compose import (
     compose_down_command,
     compose_up_command,
     image_prune_command,
@@ -42,13 +42,12 @@ from joryu.compose import (
     staged_build_commands,
     vllm_base_build_command,
 )
-from joryu.compose_invoke import resolve_compose_project
-from joryu.docker_delegate import (
+from joryu.infra.docker.compose_invoke import resolve_compose_project
+from joryu.infra.docker.delegate import (
     remove_foreign_project_joryu_containers,
     stop_orphan_joryu_containers,
 )
-from joryu.orchestrator.profile import ALL_COMPOSE_PROFILES
-from joryu.preflight import (
+from joryu.infra.preflight import (
     PreflightError,
     changed_services_from_git,
     check_disk_space,
@@ -66,7 +65,8 @@ from joryu.preflight import (
     should_force_recreate,
     stop_joryu_for_up,
 )
-from joryu.readiness import wait_for_up_services
+from joryu.infra.readiness import wait_for_up_services
+from joryu.orchestrator.profile import ALL_COMPOSE_PROFILES
 
 logger = logging.getLogger(__name__)
 

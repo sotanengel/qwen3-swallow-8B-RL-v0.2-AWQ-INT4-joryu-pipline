@@ -8,7 +8,7 @@ import threading
 import time
 from pathlib import Path
 
-from joryu.job_process import JobProcess, terminate_process_tree
+from joryu.infra.job_process import JobProcess, terminate_process_tree
 
 
 def test_lifecycle_terminate_process_tree_waits_for_graceful_exit(tmp_path: Path) -> None:

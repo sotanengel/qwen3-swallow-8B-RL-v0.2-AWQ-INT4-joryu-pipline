@@ -6,8 +6,8 @@ import argparse
 import sys
 from pathlib import Path
 
-from joryu.compose import compose_down_command, run
-from joryu.compose_invoke import resolve_compose_project
+from joryu.infra.docker.compose import compose_down_command, run
+from joryu.infra.docker.compose_invoke import resolve_compose_project
 from joryu.orchestrator.profile import ALL_COMPOSE_PROFILES
 
 

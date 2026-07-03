@@ -16,8 +16,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from joryu.distill import STATS_REFRESH_INTERVAL_SEC
-from joryu.docker_paths import map_path_for_docker, resolve_host_repo_root
-from joryu.job_process import terminate_process_tree
+from joryu.infra.docker.paths import map_path_for_docker, resolve_host_repo_root
+from joryu.infra.job_process import terminate_process_tree
 from joryu.jobs.models import (
     CurateJobSpec,
     DistillJobSpec,
@@ -138,8 +138,8 @@ def build_compose_run_command(repo_root: Path, spec: DistillJobSpec) -> list[str
 
 
 def build_docker_delegate_command(repo_root: Path, spec: DistillJobSpec) -> list[str]:
-    from joryu.docker_delegate import DEFAULT_IMAGE, build_docker_command
-    from joryu.docker_runtime import prepare_distill_docker_mounts
+    from joryu.infra.docker.delegate import DEFAULT_IMAGE, build_docker_command
+    from joryu.infra.docker.runtime import prepare_distill_docker_mounts
 
     host_root = resolve_host_repo_root(repo_root)
 
@@ -150,7 +150,7 @@ def build_docker_delegate_command(repo_root: Path, spec: DistillJobSpec) -> list
     if should_use_api_docker_delegate():
         hf_cache: Path | str = "hf-cache"
     else:
-        from joryu.docker_delegate import hf_cache_dir
+        from joryu.infra.docker.paths import hf_cache_dir
 
         hf_cache_path = hf_cache_dir()
         hf_cache_path.mkdir(parents=True, exist_ok=True)
@@ -241,8 +241,8 @@ def build_curate_docker_delegate_command(
     *,
     job_id: str,
 ) -> list[str]:
-    from joryu.docker_delegate import DEFAULT_IMAGE, build_docker_command
-    from joryu.docker_runtime import prepare_distill_docker_mounts
+    from joryu.infra.docker.delegate import DEFAULT_IMAGE, build_docker_command
+    from joryu.infra.docker.runtime import prepare_distill_docker_mounts
 
     host_root = resolve_host_repo_root(repo_root)
 
@@ -253,7 +253,7 @@ def build_curate_docker_delegate_command(
     if should_use_api_docker_delegate():
         hf_cache: Path | str = "hf-cache"
     else:
-        from joryu.docker_delegate import hf_cache_dir
+        from joryu.infra.docker.paths import hf_cache_dir
 
         hf_cache_path = hf_cache_dir()
         hf_cache_path.mkdir(parents=True, exist_ok=True)
@@ -569,7 +569,7 @@ class JobRunner:
         stop_refresh = threading.Event()
         refresh_thread: threading.Thread | None = None
         if record.kind == JobKind.DISTILL and isinstance(record.spec, DistillJobSpec):
-            from joryu.preflight import (
+            from joryu.infra.preflight import (
                 PreflightError,
                 ensure_dashboard_data_paths,
                 ensure_vllm_limits,
