@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from joryu.preflight import ensure_dashboard_data_paths, sync_dashboard_responses_copy
+from joryu.infra.preflight import ensure_dashboard_data_paths, sync_dashboard_responses_copy
 
 
 @pytest.fixture

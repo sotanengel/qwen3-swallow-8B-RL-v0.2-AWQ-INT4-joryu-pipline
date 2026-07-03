@@ -267,12 +267,6 @@ def should_use_docker(
     return sys_name == "Windows"
 
 
-def hf_cache_dir() -> Path:
-    if hf_home := os.environ.get("HF_HOME"):
-        return Path(hf_home)
-    return Path.home() / ".cache" / "huggingface"
-
-
 def build_docker_command(
     *,
     image: str,
@@ -364,7 +358,7 @@ def run_in_docker(
         logger.error("[joryu] config not found: %s", config_path)
         return 2
 
-    from joryu.docker_runtime import prepare_distill_docker_mounts
+    from joryu.infra.docker.runtime import prepare_distill_docker_mounts
 
     try:
         mounts = prepare_distill_docker_mounts(cwd, config_path, config_rel=config)

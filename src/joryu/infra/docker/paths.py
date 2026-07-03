@@ -12,6 +12,12 @@ from collections.abc import Callable
 from pathlib import Path, PurePosixPath
 
 
+def hf_cache_dir() -> Path:
+    if hf_home := os.environ.get("HF_HOME"):
+        return Path(hf_home)
+    return Path.home() / ".cache" / "huggingface"
+
+
 def _is_under(path: Path, root: Path) -> bool:
     try:
         path.resolve().relative_to(root.resolve())

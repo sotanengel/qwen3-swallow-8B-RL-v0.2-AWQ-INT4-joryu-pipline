@@ -8,7 +8,7 @@ from pathlib import Path
 
 from joryu.core.config import load_config
 from joryu.core.paths import dashboard_public
-from joryu.docker_delegate import hf_cache_dir
+from joryu.infra.docker.paths import hf_cache_dir
 
 
 @dataclass

@@ -7,7 +7,7 @@ import urllib.error
 
 import pytest
 
-from joryu.readiness import (
+from joryu.infra.readiness import (
     API_HEALTH_URL,
     MCP_HEALTH_URL,
     VLLM_HEALTH_URL,
@@ -74,8 +74,8 @@ def test_vllm_health_body_ready_rejects_json_body() -> None:
 
 
 def test_llama_server_health_ready() -> None:
+    from joryu.infra.readiness import is_profile_healthy, llama_server_health_ready
     from joryu.orchestrator.profile import ProfileSpec
-    from joryu.readiness import is_profile_healthy, llama_server_health_ready
 
     assert llama_server_health_ready(json.dumps({"status": "ok"}).encode()) is True
     assert llama_server_health_ready(b"{}") is False
@@ -94,8 +94,8 @@ def test_llama_server_health_ready() -> None:
 
 
 def test_wait_for_profile_daemon_success() -> None:
+    from joryu.infra.readiness import wait_for_profile_daemon
     from joryu.orchestrator.profile import ProfileSpec
-    from joryu.readiness import wait_for_profile_daemon
 
     spec = ProfileSpec(name="distill", service="joryu", port=8100)
     calls = {"n": 0}
@@ -154,7 +154,7 @@ def test_wait_for_api_uses_health_url(monkeypatch: pytest.MonkeyPatch) -> None:
         seen.append(url)
         return True
 
-    monkeypatch.setattr("joryu.readiness.wait_for_http_ok", _wait)
+    monkeypatch.setattr("joryu.infra.readiness.wait_for_http_ok", _wait)
     assert wait_for_api()
     assert seen == [API_HEALTH_URL]
 
@@ -167,8 +167,8 @@ def test_wait_for_dashboard_accepts_custom_url(monkeypatch: pytest.MonkeyPatch) 
         seen.append(url)
         return True
 
-    monkeypatch.setattr("joryu.readiness.wait_for_http_ok", _wait)
-    from joryu.readiness import wait_for_dashboard
+    monkeypatch.setattr("joryu.infra.readiness.wait_for_http_ok", _wait)
+    from joryu.infra.readiness import wait_for_dashboard
 
     assert wait_for_dashboard("http://custom:3000")
     assert seen == ["http://custom:3000"]
@@ -182,7 +182,7 @@ def test_wait_for_vllm_daemon_uses_default_url(monkeypatch: pytest.MonkeyPatch) 
         seen.append(url)
         return True
 
-    monkeypatch.setattr("joryu.readiness.wait_for_vllm_health", _wait)
+    monkeypatch.setattr("joryu.infra.readiness.wait_for_vllm_health", _wait)
     wait_for_vllm_daemon()
     assert seen == [VLLM_HEALTH_URL]
 
@@ -194,7 +194,7 @@ def test_wait_for_mcp_uses_health_url(monkeypatch: pytest.MonkeyPatch) -> None:
         seen.append(url)
         return True
 
-    monkeypatch.setattr("joryu.readiness.wait_for_http_ok", _wait)
+    monkeypatch.setattr("joryu.infra.readiness.wait_for_http_ok", _wait)
     assert wait_for_mcp()
     assert seen == [MCP_HEALTH_URL]
 
@@ -222,9 +222,9 @@ def test_wait_for_up_services_waits_for_mcp(monkeypatch: pytest.MonkeyPatch) -> 
         order.append("dashboard")
         return True
 
-    monkeypatch.setattr("joryu.readiness.wait_for_api", _api)
-    monkeypatch.setattr("joryu.readiness.wait_for_mcp", _mcp)
-    monkeypatch.setattr("joryu.readiness.wait_for_vllm_daemon", _vllm)
-    monkeypatch.setattr("joryu.readiness.wait_for_dashboard", _dash)
+    monkeypatch.setattr("joryu.infra.readiness.wait_for_api", _api)
+    monkeypatch.setattr("joryu.infra.readiness.wait_for_mcp", _mcp)
+    monkeypatch.setattr("joryu.infra.readiness.wait_for_vllm_daemon", _vllm)
+    monkeypatch.setattr("joryu.infra.readiness.wait_for_dashboard", _dash)
     assert wait_for_up_services(["dashboard", "mcp", "api", "joryu"]) is True
     assert order == ["api", "mcp", "vllm", "dashboard"]

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from joryu.docker_paths import map_path_for_docker, resolve_host_repo_root
+from joryu.infra.docker.paths import map_path_for_docker, resolve_host_repo_root
 
 _BIND_MOUNTINFO = """
 123 456 0:1 / /workspace rw,relatime - fakeowner /host_mnt/c/Users/dev/repo rw

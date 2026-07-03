@@ -11,6 +11,8 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Protocol
 
+from joryu.infra.git import _git_lines, _GitRunner, git_head_at
+
 # Docker build に最低限欲しいホスト空き容量 (GB)。
 # 過去は full from-scratch build を想定した保守的見積 (dashboard=5/api=2/joryu=25, 計32GB)
 # だったが、既存 image が存在する rebuild 系では layer cache が効くため実消費はもっと小さい。
@@ -52,15 +54,15 @@ _JORYU_JOB_RUNTIME_PATHS = frozenset(
     {
         "docker-compose.yml",
         "src/joryu/distill.py",
-        "src/joryu/docker_delegate.py",
-        "src/joryu/docker_runtime.py",
+        "src/joryu/infra/docker/delegate.py",
+        "src/joryu/infra/docker/runtime.py",
         "src/joryu/stats.py",
-        "src/joryu/preflight.py",
+        "src/joryu/infra/preflight.py",
         "src/joryu/paths.py",
         "src/joryu/vllm_client.py",
         "src/joryu/vllm_limits.py",
         "src/joryu/vllm_probe.py",
-        "src/joryu/readiness.py",
+        "src/joryu/infra/readiness.py",
         "src/joryu/jobs/runner.py",
         "src/joryu/cli/distill.py",
         "src/joryu/cli/stats.py",
@@ -90,18 +92,6 @@ _UP_STATE_REL = Path("data") / ".joryu" / "up-state.json"
 
 class PreflightError(Exception):
     """preflight 失敗 (ディスク不足など)。"""
-
-
-class _GitRunner(Protocol):
-    def __call__(
-        self,
-        args: list[str],
-        *,
-        cwd: Path,
-        capture_output: bool,
-        text: bool,
-        check: bool,
-    ) -> subprocess.CompletedProcess[str]: ...
 
 
 class _InspectRunner(Protocol):
@@ -168,19 +158,6 @@ def path_affects_service(path: str) -> set[str]:
     return set()
 
 
-def _git_lines(repo_root: Path, args: list[str], git_runner: _GitRunner) -> list[str]:
-    result = git_runner(
-        args,
-        cwd=repo_root,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if result.returncode != 0:
-        return []
-    return [line for line in result.stdout.splitlines() if line.strip()]
-
-
 def up_state_path(repo_root: Path) -> Path:
     return repo_root / _UP_STATE_REL
 
@@ -233,12 +210,6 @@ def services_missing_build_at_head(
     state = load_up_state(repo_root)
     built: dict[str, str] = dict((state or {}).get("built_services") or {})
     return {svc for svc in up_services if built.get(svc) != head}
-
-
-def git_head_at(repo_root: Path, *, git_runner: _GitRunner | None = None) -> str | None:
-    runner = git_runner or subprocess.run
-    lines = _git_lines(repo_root, ["git", "rev-parse", "HEAD"], runner)
-    return lines[0] if lines else None
 
 
 def _paths_from_working_tree(repo_root: Path, git_runner: _GitRunner) -> set[str]:
@@ -755,7 +726,7 @@ def ensure_vllm_limits(
         )
 
     from joryu.core.paths import DEFAULT_CONFIG
-    from joryu.docker_delegate import stop_orphan_joryu_containers
+    from joryu.infra.docker.delegate import stop_orphan_joryu_containers
     from joryu.vllm.probe import run_vllm_probe
 
     stop_orphan_joryu_containers()

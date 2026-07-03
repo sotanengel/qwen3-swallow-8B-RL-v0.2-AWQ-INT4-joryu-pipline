@@ -11,7 +11,7 @@ from pathlib import Path
 
 import yaml
 
-from joryu.docker_paths import resolve_host_repo_root
+from joryu.infra.docker.paths import resolve_host_repo_root
 
 logger = logging.getLogger(__name__)
 

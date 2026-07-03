@@ -29,7 +29,7 @@ build_job_command = RunnerStrategyFactory.build_job_command
 
 @pytest.fixture(autouse=True)
 def _skip_vllm_probe_in_runner(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("joryu.preflight.ensure_vllm_limits", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("joryu.infra.preflight.ensure_vllm_limits", lambda *_args, **_kwargs: None)
 
 
 def test_build_job_command_uses_local_distill_when_vllm_daemon(
@@ -165,14 +165,14 @@ def test_runner_executes_queued_job(tmp_path: Path, monkeypatch) -> None:
 
 
 def test_runner_distill_fails_when_vllm_probe_preflight_fails(tmp_path: Path, monkeypatch) -> None:
-    from joryu.preflight import PreflightError
+    from joryu.infra.preflight import PreflightError
 
     monkeypatch.setattr("joryu.jobs.runner.STATS_REFRESH_INTERVAL_SEC", 3600.0)
 
     def fail_probe(*_args, **_kwargs) -> None:
         raise PreflightError("probe failed")
 
-    monkeypatch.setattr("joryu.preflight.ensure_vllm_limits", fail_probe)
+    monkeypatch.setattr("joryu.infra.preflight.ensure_vllm_limits", fail_probe)
 
     store = JobStore(tmp_path)
     spec = DistillJobSpec(count=1)
@@ -668,7 +668,7 @@ def test_runner_ensure_dashboard_data_paths_on_distill_start(tmp_path: Path, mon
     monkeypatch.setattr("joryu.jobs.runner.STATS_REFRESH_INTERVAL_SEC", 3600.0)
     called: list[Path] = []
     monkeypatch.setattr(
-        "joryu.preflight.ensure_dashboard_data_paths",
+        "joryu.infra.preflight.ensure_dashboard_data_paths",
         lambda root: called.append(root),
     )
 

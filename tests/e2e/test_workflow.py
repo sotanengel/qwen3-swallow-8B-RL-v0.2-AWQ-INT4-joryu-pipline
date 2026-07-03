@@ -16,7 +16,7 @@ from joryu.jobs.store import JobStore
 
 @pytest.fixture(autouse=True)
 def _skip_vllm_probe_in_workflow(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("joryu.preflight.ensure_vllm_limits", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("joryu.infra.preflight.ensure_vllm_limits", lambda *_args, **_kwargs: None)
 
 
 @pytest.fixture

@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from joryu.compose_invoke import ComposeProject
+from joryu.infra.docker.compose_invoke import ComposeProject
 from joryu.orchestrator.backend import ComposeBackend
 from joryu.orchestrator.profile import ModelProfile, ProfileSpec
 

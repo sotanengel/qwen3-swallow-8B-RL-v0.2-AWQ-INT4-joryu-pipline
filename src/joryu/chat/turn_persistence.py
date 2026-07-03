@@ -65,7 +65,7 @@ class TurnPersistence:
         )
         with JsonlAppendWriter(session.out_path) as writer:
             writer.write(record)
-        from joryu.preflight import ensure_stats_json, sync_dashboard_responses_copy
+        from joryu.infra.preflight import ensure_stats_json, sync_dashboard_responses_copy
 
         sync_dashboard_responses_copy(session.repo_root)
         ensure_stats_json(session.repo_root, force=True)

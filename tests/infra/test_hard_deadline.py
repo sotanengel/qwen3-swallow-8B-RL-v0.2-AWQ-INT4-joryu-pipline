@@ -6,7 +6,7 @@ import types
 
 import pytest
 
-from joryu.hard_deadline import install_hard_deadline
+from joryu.infra.hard_deadline import install_hard_deadline
 
 
 def test_install_hard_deadline_noop_for_non_positive() -> None:
@@ -27,7 +27,7 @@ def test_install_hard_deadline_uses_timer_when_no_sigalrm(
         def start(self) -> None:
             return None
 
-    monkeypatch.setattr("joryu.hard_deadline.signal", types.SimpleNamespace())
-    monkeypatch.setattr("joryu.hard_deadline.threading.Timer", _Timer)
+    monkeypatch.setattr("joryu.infra.hard_deadline.signal", types.SimpleNamespace())
+    monkeypatch.setattr("joryu.infra.hard_deadline.threading.Timer", _Timer)
     install_hard_deadline(30)
     assert fired == [30]
