@@ -1,11 +1,11 @@
-"""progress_reporter.py: 蒸留ループのターミナル進捗表示。"""
+"""distill/progress_reporter.py: 蒸留ループのターミナル進捗表示。"""
 
 from __future__ import annotations
 
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from joryu.progress_reporter import (
+from joryu.distill.progress_reporter import (
     DistillProgressReporter,
     estimate_remaining,
     format_duration,

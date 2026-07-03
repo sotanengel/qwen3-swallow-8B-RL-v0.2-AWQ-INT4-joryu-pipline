@@ -1,11 +1,11 @@
-"""distill_retry.py: 打ち切り検出時の同一条件再試行。"""
+"""distill/retry.py: 打ち切り検出時の同一条件再試行。"""
 
 from __future__ import annotations
 
 import time
 from typing import Any
 
-from joryu.distill_retry import TRUNCATION_RETRY_ALERT_THRESHOLD, generate_until_complete
+from joryu.distill.retry import TRUNCATION_RETRY_ALERT_THRESHOLD, generate_until_complete
 from joryu.vllm.protocol import ChatResult
 
 

@@ -1,4 +1,4 @@
-"""distill_live.py: 蒸留 live アラート状態。"""
+"""distill/live.py: 蒸留 live アラート状態。"""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 
 from joryu.distill import default_stats_refresher
-from joryu.distill_live import DistillLiveState
+from joryu.distill.live import DistillLiveState
 
 
 def test_default_stats_refresher_includes_distill_live(tmp_path: Path, monkeypatch) -> None:
