@@ -30,6 +30,10 @@ def test_screening_prompt_bank_llm_only(
     dst = tmp_path / "out"
     judge = FakeJudgeClient(prompt_health_scores={k: 5 for k in PROMPT_HEALTH_RUBRIC_KEYS})
     monkeypatch.setenv("JORYU_CURATE_FAKE_JUDGE", "0")
+    # cfg.distill.out_dir defaults to "data/distilled", which makes resolve_repo_root()
+    # match its "distilled"-parent heuristic against cwd. Pin JORYU_REPO_ROOT to tmp_path
+    # so the screening.json/curation.json dashboard writes stay isolated from the real repo tree.
+    monkeypatch.setenv("JORYU_REPO_ROOT", str(tmp_path))
     rc = curate_main(
         [
             "--screening",
@@ -46,3 +50,7 @@ def test_screening_prompt_bank_llm_only(
     assert (dst / "screening.ok.jsonl").exists()
     scores = (dst / "scores.jsonl").read_text(encoding="utf-8").strip().splitlines()
     assert len(scores) == 2
+    # repo-root-relative dashboard writes must land under the isolated JORYU_REPO_ROOT,
+    # never in the real repo's dashboard/public/ (regression guard for issue #424).
+    assert (tmp_path / "dashboard" / "public" / "screening.json").exists()
+    assert (tmp_path / "dashboard" / "public" / "curation.json").exists()
