@@ -19,8 +19,8 @@ from joryu.compose_invoke import (
     should_validate_compose_at_startup,
     validate_compose_profiles,
 )
-from joryu.config import load_config
-from joryu.http_client import close_shared_async_client
+from joryu.core.config import load_config
+from joryu.core.http_client import close_shared_async_client
 from joryu.jobs.runner import JobRunner, default_jobs_dir
 from joryu.jobs.store import JobStore
 from joryu.mcp_runtime import probe_mcp_health

@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from joryu.config import Config
+from joryu.core.config import Config
 from joryu.distill import run_distill
 from tests.helpers.jsonl import read_jsonl, write_jsonl
 
@@ -264,7 +264,7 @@ def test_deadline_stops_loop(tmp_path: Path) -> None:
 
 
 def test_run_distill_style_temperature_cartesian(tmp_path: Path) -> None:
-    from joryu.styles import load_styles
+    from joryu.core.styles import load_styles
 
     bank = tmp_path / "bank.jsonl"
     _write_bank(bank, [{"prompt": "P1"}])
@@ -290,7 +290,7 @@ def test_run_distill_style_temperature_cartesian(tmp_path: Path) -> None:
 
 
 def test_run_distill_same_prompt_different_style_not_skipped(tmp_path: Path) -> None:
-    from joryu.styles import load_styles
+    from joryu.core.styles import load_styles
 
     bank = tmp_path / "bank.jsonl"
     _write_bank(bank, [{"prompt": "P1"}])
@@ -542,9 +542,9 @@ def test_run_distill_records_suspected_unparsed_when_unknown_tool(tmp_path: Path
 
 
 def test_variant_run_key_differs_by_tools(tmp_path: Path) -> None:
+    from joryu.core.prompt_bank import EffectiveSampling, PromptRow
+    from joryu.core.variants import DistillVariant
     from joryu.distill import variant_run_key
-    from joryu.prompt_bank import EffectiveSampling, PromptRow
-    from joryu.variants import DistillVariant
 
     row = PromptRow(prompt="P1")
     search_tool = {
@@ -637,7 +637,7 @@ def test_run_distill_override_tool_ids_applies_only_to_empty_rows(tmp_path: Path
 
 def test_run_distill_applies_tool_call_recovery(tmp_path: Path) -> None:
     """#110: intent あり & tool_calls 空 → named function 強制リトライ。"""
-    from joryu.config import load_config
+    from joryu.core.config import load_config
     from joryu.tool_calls import ParsedToolCall
     from joryu.vllm_client import ChatResult
 

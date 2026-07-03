@@ -5,8 +5,8 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from joryu.config import Config
-from joryu.paths import DEFAULT_CONFIG, resolve_distill_output, resolve_optional_config
+from joryu.core.config import Config
+from joryu.core.paths import DEFAULT_CONFIG, resolve_distill_output, resolve_optional_config
 
 
 def add_config_argument(

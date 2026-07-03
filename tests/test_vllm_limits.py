@@ -99,7 +99,7 @@ def test_clamp_model_limits_with_probe(tmp_path) -> None:
 
 
 def test_vllm_config_fingerprint_changes_with_num_ctx() -> None:
-    from joryu.config import Config
+    from joryu.core.config import Config
 
     cfg_a = Config()
     cfg_b = Config()
@@ -112,7 +112,7 @@ def test_vllm_config_fingerprint_changes_with_num_ctx() -> None:
 
 def test_vllm_config_fingerprint_changes_with_memory_savers() -> None:
     """KV cache dtype や prefix caching を変えるとプローブ結果は再取得すべき。"""
-    from joryu.config import Config
+    from joryu.core.config import Config
 
     cfg_a = Config()
     cfg_b = Config()

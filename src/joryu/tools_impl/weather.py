@@ -8,7 +8,7 @@ from functools import lru_cache
 
 import httpx
 
-from joryu.datetime_context import now_jst
+from joryu.core.datetime_context import now_jst
 
 GEOCODING_URL = "https://geocoding-api.open-meteo.com/v1/search"
 FORECAST_URL = "https://api.open-meteo.com/v1/forecast"

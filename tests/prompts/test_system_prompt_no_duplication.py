@@ -5,10 +5,10 @@ from __future__ import annotations
 from pathlib import Path
 
 from joryu.chat.streamer import build_column_system_prompt
-from joryu.config import load_config
-from joryu.datetime_context import format_date_context_ja, now_jst
-from joryu.styles import load_styles
-from joryu.system_prompt import _FACTUAL_GUARD, build_system_prompt
+from joryu.core.config import load_config
+from joryu.core.datetime_context import format_date_context_ja, now_jst
+from joryu.core.styles import load_styles
+from joryu.core.system_prompt import _FACTUAL_GUARD, build_system_prompt
 from joryu.tools import ToolDefinition, load_tools
 
 REPO_ROOT = Path(__file__).resolve().parents[2]

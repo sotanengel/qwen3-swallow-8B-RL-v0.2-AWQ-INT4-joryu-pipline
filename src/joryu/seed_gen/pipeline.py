@@ -15,8 +15,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from joryu.core.prompt_bank import load_prompt_bank
 from joryu.jobs.models import SEED_GEN_MODE_CHECK, SEED_GEN_MODE_CREATE
-from joryu.prompt_bank import load_prompt_bank
 from joryu.prompt_dedup import ExactDedup
 from joryu.seed_gen.config import SeedGenConfig
 from joryu.seed_gen.counts import count_by_domain

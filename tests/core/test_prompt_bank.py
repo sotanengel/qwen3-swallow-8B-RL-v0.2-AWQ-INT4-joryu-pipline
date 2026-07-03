@@ -4,8 +4,13 @@ from pathlib import Path
 
 import pytest
 
-from joryu.config import Config
-from joryu.prompt_bank import EffectiveSampling, PromptRow, load_prompt_bank, merge_with_defaults
+from joryu.core.config import Config
+from joryu.core.prompt_bank import (
+    EffectiveSampling,
+    PromptRow,
+    load_prompt_bank,
+    merge_with_defaults,
+)
 
 
 def _write_jsonl(path: Path, lines: list[str]) -> None:
@@ -104,7 +109,7 @@ def test_invalid_row_skipped_with_warning(tmp_path: Path, caplog: pytest.LogCapt
             '{"prompt":""}',
         ],
     )
-    with caplog.at_level(logging.WARNING, logger="joryu.prompt_bank"):
+    with caplog.at_level(logging.WARNING, logger="joryu.core.prompt_bank"):
         rows = load_prompt_bank(p)
     assert [r.prompt for r in rows] == ["ok"]
     assert any("skip" in rec.message.lower() for rec in caplog.records)
@@ -153,8 +158,8 @@ def test_load_missing_file(tmp_path: Path) -> None:
 
 
 def test_merge_with_defaults_appends_tool_hint_when_tools_resolved() -> None:
+    from joryu.core.variants import expand_variants
     from joryu.tools import load_tools
-    from joryu.variants import expand_variants
 
     cfg = Config()
     row = PromptRow(prompt="p", tool_ids=["search"])
@@ -166,9 +171,9 @@ def test_merge_with_defaults_appends_tool_hint_when_tools_resolved() -> None:
 
 
 def test_merge_with_defaults_uses_invocation_rules_in_hint() -> None:
-    from joryu.prompt_bank import format_tool_usage_hint
+    from joryu.core.prompt_bank import format_tool_usage_hint
+    from joryu.core.variants import expand_variants
     from joryu.tools import load_tools
-    from joryu.variants import expand_variants
 
     cfg = Config()
     row = PromptRow(prompt="p", tool_ids=["search"])
@@ -184,8 +189,8 @@ def test_merge_with_defaults_uses_invocation_rules_in_hint() -> None:
 
 
 def test_merge_with_defaults_legacy_hint_without_invocation_rules(tmp_path: Path) -> None:
+    from joryu.core.variants import expand_variants
     from joryu.tools import load_tools
-    from joryu.variants import expand_variants
 
     p = tmp_path / "tools.yaml"
     p.write_text(

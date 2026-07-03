@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from joryu.paths import resolve_cli_config_path, resolve_config_relative
+from joryu.core.paths import resolve_cli_config_path, resolve_config_relative
 
 
 def test_resolve_config_relative_from_config_parent(tmp_path: Path) -> None:

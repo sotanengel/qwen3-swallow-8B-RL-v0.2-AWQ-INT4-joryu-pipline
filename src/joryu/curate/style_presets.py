@@ -10,7 +10,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from joryu.yaml_util import load_yaml_mapping
+from joryu.core.yaml_util import load_yaml_mapping
 
 
 @dataclass(frozen=True)

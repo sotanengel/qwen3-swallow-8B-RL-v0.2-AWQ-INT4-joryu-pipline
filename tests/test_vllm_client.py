@@ -9,7 +9,7 @@ import re
 
 import pytest
 
-from joryu.config import Config
+from joryu.core.config import Config
 from joryu.vllm_client import (
     ChatResult,
     SupportsChat,

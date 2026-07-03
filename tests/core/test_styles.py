@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from joryu.styles import StylePreset, apply_style, load_styles, resolve_style_ids
+from joryu.core.styles import StylePreset, apply_style, load_styles, resolve_style_ids
 
 
 def test_load_styles_from_repo_default() -> None:

@@ -131,7 +131,7 @@ def _should_open_browser(args: argparse.Namespace, up_services: list[str]) -> bo
 
 
 def main(argv: list[str] | None = None) -> int:
-    from joryu.logging_config import setup_logging
+    from joryu.core.logging_config import setup_logging
 
     setup_logging()
     args = build_parser().parse_args(argv)

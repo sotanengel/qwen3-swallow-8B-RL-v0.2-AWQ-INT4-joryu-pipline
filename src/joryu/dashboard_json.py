@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from joryu.atomic_io import atomic_write_text
+from joryu.core.atomic_io import atomic_write_text
 
 
 def write_dashboard_json(

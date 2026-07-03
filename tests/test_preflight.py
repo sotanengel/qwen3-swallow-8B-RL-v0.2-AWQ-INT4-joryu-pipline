@@ -354,7 +354,7 @@ def test_resolve_prompt_bank_seed_path_uses_default_seed(tmp_path: Path) -> None
     seed = tmp_path / "scripts" / "seeds" / "training_prompts.jsonl"
     seed.parent.mkdir(parents=True)
     seed.write_text('{"prompt":"seed"}\n', encoding="utf-8")
-    from joryu.config import Config
+    from joryu.core.config import Config
 
     assert resolve_prompt_bank_seed_path(tmp_path, Config()) == seed.resolve()
 
@@ -402,7 +402,7 @@ def test_resolve_prompt_csv_path_prefers_config(tmp_path: Path) -> None:
         f'distill:\n  prompt_csv: "{csv_path.as_posix()}"\n',
         encoding="utf-8",
     )
-    from joryu.paths import resolve_optional_config
+    from joryu.core.paths import resolve_optional_config
 
     cfg = resolve_optional_config(cfg_path)
     assert resolve_prompt_csv_path(tmp_path, cfg) == csv_path.resolve()
@@ -412,7 +412,7 @@ def test_resolve_prompt_csv_path_uses_env(tmp_path: Path, monkeypatch: pytest.Mo
     csv_path = tmp_path / "env.csv"
     csv_path.write_text("分野,プロンプト\n国語,桜\n", encoding="utf-8")
     monkeypatch.setenv("JORYU_PROMPT_CSV", str(csv_path))
-    from joryu.config import Config
+    from joryu.core.config import Config
 
     assert resolve_prompt_csv_path(tmp_path, Config()) == csv_path.resolve()
 
@@ -615,7 +615,7 @@ def test_vllm_limits_probe_needed_skips_frontend_only(tmp_path: Path) -> None:
 
 
 def test_vllm_limits_probe_needed_skips_fresh_limits(tmp_path: Path) -> None:
-    from joryu.config import Config
+    from joryu.core.config import Config
     from joryu.vllm_limits import VllmLimits, vllm_config_fingerprint, write_probe_limits
 
     cfg_yaml = "model:\n  limits_probe_file: data/vllm_limits.json\n"
@@ -633,7 +633,7 @@ def test_vllm_limits_probe_needed_skips_fresh_limits(tmp_path: Path) -> None:
 def test_vllm_limits_probe_needed_joryu_built_skips_when_daemon_up_and_fresh(
     tmp_path: Path,
 ) -> None:
-    from joryu.config import Config
+    from joryu.core.config import Config
     from joryu.vllm_limits import VllmLimits, vllm_config_fingerprint, write_probe_limits
 
     cfg_yaml = "model:\n  limits_probe_file: data/vllm_limits.json\n"
@@ -657,7 +657,7 @@ def test_vllm_limits_probe_needed_joryu_built_skips_when_daemon_up_and_fresh(
 def test_vllm_limits_probe_needed_joryu_built_still_probes_api_only(
     tmp_path: Path,
 ) -> None:
-    from joryu.config import Config
+    from joryu.core.config import Config
     from joryu.vllm_limits import VllmLimits, vllm_config_fingerprint, write_probe_limits
 
     cfg_yaml = "model:\n  limits_probe_file: data/vllm_limits.json\n"
@@ -763,7 +763,7 @@ def test_should_force_recreate_skips_dashboard_only_change() -> None:
 
 
 def test_ensure_vllm_limits_skips_when_fresh(tmp_path: Path, monkeypatch) -> None:
-    from joryu.config import Config
+    from joryu.core.config import Config
     from joryu.vllm_limits import VllmLimits, vllm_config_fingerprint, write_probe_limits
 
     cfg_yaml = "model:\n  limits_probe_file: data/vllm_limits.json\n"

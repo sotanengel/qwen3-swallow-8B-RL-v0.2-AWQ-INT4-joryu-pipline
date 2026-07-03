@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from joryu.config import Config, ProfileSpecConfig, load_config
+from joryu.core.config import Config, ProfileSpecConfig, load_config
 from joryu.orchestrator.backend import resolve_backend
 from joryu.orchestrator.profile import ModelProfile, ProfileSpec
 from joryu.orchestrator.service import ModelOrchestrator

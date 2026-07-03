@@ -2,10 +2,10 @@
 
 import pytest
 
-from joryu.config import Config
-from joryu.prompt_bank import PromptRow
-from joryu.styles import StylePreset, load_styles
-from joryu.variants import (
+from joryu.core.config import Config
+from joryu.core.prompt_bank import PromptRow
+from joryu.core.styles import StylePreset, load_styles
+from joryu.core.variants import (
     DistillVariant,
     expand_variants,
     parse_comma_list,

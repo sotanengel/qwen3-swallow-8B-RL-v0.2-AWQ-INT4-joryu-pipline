@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
 
-from joryu.paths import DEFAULT_CONFIG
+from joryu.core.paths import DEFAULT_CONFIG
 
 
 class JobStatus(StrEnum):
@@ -46,7 +46,7 @@ class DistillJobSpec:
     @classmethod
     def from_cli_namespace(cls, args: argparse.Namespace) -> DistillJobSpec:
         """joryu-distill CLI の argparse.Namespace から仕様を構築する。"""
-        from joryu.variants import parse_comma_list
+        from joryu.core.variants import parse_comma_list
 
         style = parse_comma_list(args.style) if getattr(args, "style", "") else []
         tool_ids = (

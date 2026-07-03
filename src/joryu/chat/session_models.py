@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from joryu.styles import StylePreset
+from joryu.core.styles import StylePreset
 
 TITLE_MAX_LEN = 30
 

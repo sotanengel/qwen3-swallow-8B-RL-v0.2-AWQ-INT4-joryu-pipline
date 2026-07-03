@@ -16,7 +16,7 @@ from joryu.chat.session_models import (
     ChatSessionState,
     SessionListItem,
 )
-from joryu.styles import StylePreset
+from joryu.core.styles import StylePreset
 from joryu.tool_executor import ToolExecutor
 
 __all__ = [

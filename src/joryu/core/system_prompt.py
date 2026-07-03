@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from joryu.prompt_bank import format_tool_usage_hint
-from joryu.styles import StylePreset
+from joryu.core.prompt_bank import format_tool_usage_hint
+from joryu.core.styles import StylePreset
 from joryu.tools import ToolDefinition
 
 _FACTUAL_GUARD = (

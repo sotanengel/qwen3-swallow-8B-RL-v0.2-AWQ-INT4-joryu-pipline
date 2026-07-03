@@ -1,6 +1,6 @@
 """counts module tests."""
 
-from joryu.prompt_bank import PromptRow
+from joryu.core.prompt_bank import PromptRow
 from joryu.seed_gen.config import SeedGenConfig
 from joryu.seed_gen.counts import count_by_domain, resolve_row_domain
 

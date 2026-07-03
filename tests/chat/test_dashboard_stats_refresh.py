@@ -6,7 +6,7 @@ from pathlib import Path
 
 from joryu.chat.session import ChatColumn, ChatSession, ChatSessionConfig, ChatSessionState
 from joryu.chat.turn_persistence import TurnPersistence
-from joryu.styles import StylePreset
+from joryu.core.styles import StylePreset
 from joryu.vllm_client import ChatResult
 
 

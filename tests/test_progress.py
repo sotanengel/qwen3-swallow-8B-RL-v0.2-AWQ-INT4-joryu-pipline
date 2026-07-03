@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 
-from joryu.config import Config
+from joryu.core.config import Config
 from joryu.progress import load_done_keys, run_key_from_parts, run_key_from_record
 
 

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from joryu.config import Config, ModelsConfig
+from joryu.core.config import Config, ModelsConfig
 from joryu.orchestrator.factory import (
     auto_restore_profile,
     build_orchestrator,

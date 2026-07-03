@@ -9,8 +9,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-from joryu.atomic_io import atomic_write_text
-from joryu.config import Config
+from joryu.core.atomic_io import atomic_write_text
+from joryu.core.config import Config
 
 logger = logging.getLogger(__name__)
 

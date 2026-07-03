@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from joryu.config import CurateSignalThresholds
+from joryu.core.config import CurateSignalThresholds
 from joryu.curate.signals.health import (
     CtrlChar,
     EndWell,

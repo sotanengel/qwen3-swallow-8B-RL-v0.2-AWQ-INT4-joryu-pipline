@@ -8,7 +8,7 @@ from typing import Annotated, Any
 from fastapi import Depends, HTTPException, Request
 
 from joryu.chat.session import ChatSessionStore
-from joryu.config import load_config
+from joryu.core.config import load_config
 from joryu.jobs.runner import JobRunner
 from joryu.jobs.store import JobStore
 from joryu.orchestrator.profile import ModelProfile

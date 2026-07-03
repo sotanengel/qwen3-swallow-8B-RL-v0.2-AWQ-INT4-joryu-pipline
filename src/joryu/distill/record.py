@@ -7,7 +7,7 @@ from dataclasses import asdict
 from datetime import UTC, datetime
 from typing import Any
 
-from joryu.prompt_bank import EffectiveSampling, PromptRow
+from joryu.core.prompt_bank import EffectiveSampling, PromptRow
 from joryu.vllm.protocol import ChatResult
 
 logger = logging.getLogger(__name__)

@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from joryu.chat.session import ChatSessionStore
-from joryu.styles import StylePreset
+from joryu.core.styles import StylePreset
 from joryu.tool_executor import StubToolExecutor
 
 

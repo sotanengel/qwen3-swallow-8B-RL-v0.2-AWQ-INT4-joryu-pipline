@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from joryu.config_resolver import resolve_config_path
+from joryu.core.config_resolver import resolve_config_path
 from joryu.schema import SchemaVersion, validate_mapping_schema
 from joryu.streaming.sse import SSEDecoder, SSEEncoder
 

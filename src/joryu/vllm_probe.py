@@ -6,8 +6,8 @@ import gc
 import logging
 from pathlib import Path
 
-from joryu.config import load_config
-from joryu.paths import DEFAULT_CONFIG, resolve_limits_probe_path, resolve_repo_root
+from joryu.core.config import load_config
+from joryu.core.paths import DEFAULT_CONFIG, resolve_limits_probe_path, resolve_repo_root
 from joryu.vllm_limits import (
     PROBE_CANDIDATES,
     VllmLimits,

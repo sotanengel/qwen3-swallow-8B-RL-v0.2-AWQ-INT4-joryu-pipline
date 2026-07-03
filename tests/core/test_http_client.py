@@ -7,7 +7,7 @@ import asyncio
 import httpx
 import pytest
 
-from joryu.http_client import (
+from joryu.core.http_client import (
     build_httpx_timeout,
     get_shared_async_client,
     reset_shared_async_client_for_tests,

@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from joryu.config import Config
+from joryu.core.config import Config
+from joryu.core.prompt_bank import EffectiveSampling, PromptRow
 from joryu.distill.pipeline import DistillPipeline
 from joryu.distill.protocol import DistillContext
 from joryu.distill.stages import LoopStage
-from joryu.prompt_bank import EffectiveSampling, PromptRow
 from tests.conftest import FakeVllmClient
 
 

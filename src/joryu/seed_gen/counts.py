@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from joryu.prompt_bank import PromptRow
+from joryu.core.prompt_bank import PromptRow
 from joryu.seed_gen.config import SeedGenConfig
 
 

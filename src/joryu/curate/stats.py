@@ -13,9 +13,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from joryu.core.paths import CURATION_JSON_REL, SCREENING_JSON_REL
 from joryu.curate.judge_client import HEALTH_RUBRIC_KEYS, RUBRIC_KEYS
 from joryu.dashboard_json import write_dashboard_json
-from joryu.paths import CURATION_JSON_REL, SCREENING_JSON_REL
 from joryu.stats import length_bins
 
 DEFAULT_CURATION_OUTPUT = CURATION_JSON_REL

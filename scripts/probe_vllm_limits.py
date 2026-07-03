@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import argparse
 
-from joryu.paths import DEFAULT_CONFIG
+from joryu.core.paths import DEFAULT_CONFIG
 from joryu.vllm_probe import run_probe
 
 

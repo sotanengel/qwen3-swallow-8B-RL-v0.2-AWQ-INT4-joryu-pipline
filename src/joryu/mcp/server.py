@@ -6,7 +6,7 @@ from __future__ import annotations
 def create_mcp_server():
     from mcp.server.fastmcp import FastMCP
 
-    from joryu.datetime_context import format_date_context_ja, now_jst
+    from joryu.core.datetime_context import format_date_context_ja, now_jst
     from joryu.tools_impl.fetch import fetch_url as fetch_impl
     from joryu.tools_impl.search import web_search as search_impl
     from joryu.tools_impl.weather import fetch_weather as weather_impl

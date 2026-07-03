@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from joryu.config import Config
+from joryu.core.config import Config
 from joryu.curate.cache import CacheIndex
 from joryu.curate.pipeline import PipelineBuilder
 from joryu.curate.signals import SignalResult

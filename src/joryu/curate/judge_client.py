@@ -568,8 +568,8 @@ def resolve_screening_judge(
 ) -> JudgeClient:
     """健全性スクリーニング用 judge を構築する。"""
     if provider == "vllm":
-        from joryu.config import Config, load_config
-        from joryu.paths import DEFAULT_CONFIG, resolve_repo_root
+        from joryu.core.config import Config, load_config
+        from joryu.core.paths import DEFAULT_CONFIG, resolve_repo_root
 
         root = resolve_repo_root()
         cfg_path = (root / DEFAULT_CONFIG) if root else Path(DEFAULT_CONFIG)

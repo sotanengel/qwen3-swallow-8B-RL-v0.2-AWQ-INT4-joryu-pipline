@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from joryu.config import Config, load_config
+from joryu.core.config import Config, load_config
 
 DEFAULT_CONFIG = "config.yaml"
 DASHBOARD_PUBLIC_DIR = "dashboard/public"

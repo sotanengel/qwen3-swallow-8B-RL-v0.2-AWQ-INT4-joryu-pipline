@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from joryu.config import Config
+from joryu.core.config import Config
 from joryu.distill import run_distill
 from joryu.tool_calls import ParsedToolCall
 from joryu.tool_executor import StubToolExecutor

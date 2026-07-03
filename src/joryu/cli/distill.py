@@ -10,7 +10,8 @@ import time
 from pathlib import Path
 
 from joryu.cli.common import add_config_argument
-from joryu.config import load_config
+from joryu.core.config import load_config
+from joryu.core.variants import parse_comma_list, parse_float_list
 from joryu.distill import default_stats_refresher, load_style_presets_from_config, run_distill
 from joryu.docker_delegate import (
     DEFAULT_IMAGE,
@@ -19,7 +20,6 @@ from joryu.docker_delegate import (
     should_use_docker,
 )
 from joryu.jobs.models import DistillJobSpec
-from joryu.variants import parse_comma_list, parse_float_list
 from joryu.vllm_client import SupportsChat
 
 logger = logging.getLogger(__name__)

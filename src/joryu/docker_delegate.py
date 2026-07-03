@@ -374,7 +374,7 @@ def run_in_docker(
 
     if "--style" in extra_args or any(a.startswith("--style") for a in extra_args):
         if mounts.styles_path is None:
-            from joryu.config import load_config
+            from joryu.core.config import load_config
 
             cfg = load_config(config_path)
             candidate = (config_path.parent / cfg.distill.styles_file).resolve()

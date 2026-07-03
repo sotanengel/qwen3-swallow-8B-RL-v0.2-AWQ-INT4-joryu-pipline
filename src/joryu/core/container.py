@@ -4,12 +4,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from joryu.config import Config, load_config
-from joryu.config_resolver import resolve_config_path
+from joryu.core.config import Config, load_config
+from joryu.core.config_resolver import resolve_config_path
 from joryu.tool_executor import ToolExecutor, build_default_executor
-from joryu.vllm.factory import resolve_chat_client
-from joryu.vllm.protocol import SupportsChat
+
+if TYPE_CHECKING:
+    from joryu.vllm.protocol import SupportsChat
 
 
 @dataclass
@@ -23,6 +25,8 @@ class DependencyContainer:
 
     @classmethod
     def build(cls, config_path: str | Path | None = None) -> DependencyContainer:
+        from joryu.vllm.factory import resolve_chat_client
+
         path = resolve_config_path(config_path)
         cfg = load_config(path)
         client = resolve_chat_client(cfg.model, cfg.vllm)
