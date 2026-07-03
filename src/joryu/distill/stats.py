@@ -7,7 +7,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from joryu.dashboard_json import write_dashboard_json
-from joryu.distill_live import DistillLiveState
+from joryu.distill.live import DistillLiveState
 from joryu.stats import compute_stats, resolve_stats_output_path
 
 STATS_REFRESH_INTERVAL_SEC = 3.0
