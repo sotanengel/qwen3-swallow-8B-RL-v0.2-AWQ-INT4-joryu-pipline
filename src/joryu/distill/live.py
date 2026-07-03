@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
-from joryu.distill_retry import TRUNCATION_RETRY_ALERT_THRESHOLD
+from joryu.distill.retry import TRUNCATION_RETRY_ALERT_THRESHOLD
 
 
 @dataclass
