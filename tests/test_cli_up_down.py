@@ -710,6 +710,33 @@ def test_serve_alias_still_works(monkeypatch: pytest.MonkeyPatch) -> None:
     assert calls[1] == [*_UP_WITH_DISTILL, "dashboard"]
 
 
+def test_serve_help_exits_zero_and_prints_usage(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`joryu-serve --help` は docker を起動せず exit 0 で usage を表示する (#425)。"""
+    from joryu.cli import serve as cli_serve
+
+    monkeypatch.setattr("sys.argv", ["joryu-serve", "--help"])
+    with pytest.raises(SystemExit) as exc_info:
+        cli_serve.main()
+    assert exc_info.value.code == 0
+    captured = capsys.readouterr()
+    assert "usage:" in captured.out
+
+
+def test_serve_no_argv_reads_sys_argv(monkeypatch: pytest.MonkeyPatch) -> None:
+    """argv=None (console-script 標準呼び出し) では sys.argv[1:] を forwarded に使う。"""
+    from joryu.cli import serve as cli_serve
+
+    calls = _patch_runner(monkeypatch)
+    monkeypatch.setattr("joryu.cli.up.changed_services_from_git", lambda _root: set())
+    monkeypatch.setattr("sys.argv", ["joryu-serve"])
+    rc = cli_serve.main()
+    assert rc == 0
+    assert calls[0] == _STARTUP_IMAGE_PRUNE
+    assert calls[1] == [*_UP_WITH_DISTILL, "dashboard"]
+
+
 def test_up_compose_failure_runs_rollback(monkeypatch: pytest.MonkeyPatch) -> None:
     calls = _patch_runner(monkeypatch)
 

@@ -8,7 +8,7 @@ from joryu.cli.up import main as up_main
 
 
 def main(argv: list[str] | None = None) -> int:
-    forwarded = list(argv) if argv is not None else []
+    forwarded = list(argv) if argv is not None else list(sys.argv[1:])
     if "--frontend-only" not in forwarded:
         forwarded.insert(0, "--frontend-only")
     return up_main(forwarded)
