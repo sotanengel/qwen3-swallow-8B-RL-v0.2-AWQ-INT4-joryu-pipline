@@ -9,7 +9,7 @@ from joryu.core.config import load_config
 from joryu.core.datetime_context import format_date_context_ja, now_jst
 from joryu.core.styles import load_styles
 from joryu.core.system_prompt import _FACTUAL_GUARD, build_system_prompt
-from joryu.tools import ToolDefinition, load_tools
+from joryu.tooling.registry import ToolDefinition, load_tools
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 

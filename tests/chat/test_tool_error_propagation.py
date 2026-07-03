@@ -10,8 +10,8 @@ import pytest
 import respx
 
 from joryu.chat.tool_loop import ToolLoopRunner
-from joryu.tool_calls import ParsedToolCall
-from joryu.tool_executor import McpToolExecutor, ToolUpstreamError
+from joryu.tooling.calls import ParsedToolCall
+from joryu.tooling.executor import McpToolExecutor, ToolUpstreamError
 from tests.conftest import FakeVllmClient
 
 _WEATHER_TOOLS = [

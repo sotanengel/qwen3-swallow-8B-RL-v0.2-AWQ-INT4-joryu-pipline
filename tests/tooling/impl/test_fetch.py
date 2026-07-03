@@ -1,4 +1,4 @@
-"""tools_impl.fetch のテスト。"""
+"""tooling.impl.fetch のテスト。"""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import httpx
 import pytest
 import respx
 
-from joryu.tools_impl.fetch import fetch_url
+from joryu.tooling.impl.fetch import fetch_url
 
 
 def test_fetch_url_rejects_non_http() -> None:

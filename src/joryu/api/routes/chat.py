@@ -17,7 +17,7 @@ from joryu.api.deps import (
 )
 from joryu.chat.service import ChatService
 from joryu.chat.session import ChatSession, ChatSessionStore
-from joryu.tool_executor import ToolExecutor
+from joryu.tooling.executor import ToolExecutor
 from joryu.vllm.protocol import SupportsChat, SupportsChatStream
 
 router = APIRouter()

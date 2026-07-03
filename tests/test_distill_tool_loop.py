@@ -6,8 +6,8 @@ from pathlib import Path
 
 from joryu.core.config import Config
 from joryu.distill import run_distill
-from joryu.tool_calls import ParsedToolCall
-from joryu.tool_executor import StubToolExecutor
+from joryu.tooling.calls import ParsedToolCall
+from joryu.tooling.executor import StubToolExecutor
 from tests.helpers.jsonl import read_jsonl, write_jsonl
 
 from .conftest import FakeVllmClient

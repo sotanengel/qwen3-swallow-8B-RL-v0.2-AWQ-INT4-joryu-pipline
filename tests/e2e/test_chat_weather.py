@@ -15,8 +15,8 @@ from tests.conftest import FakeVllmClient
 from tests.test_api_chat import STYLES_YAML, TOOLS_YAML, _parse_sse
 
 from joryu.api.app import create_app
-from joryu.tool_executor import McpToolExecutor
-from joryu.tools_impl import weather as weather_mod
+from joryu.tooling.executor import McpToolExecutor
+from joryu.tooling.impl import weather as weather_mod
 
 pytestmark = [pytest.mark.e2e_chat, pytest.mark.timeout(15)]
 

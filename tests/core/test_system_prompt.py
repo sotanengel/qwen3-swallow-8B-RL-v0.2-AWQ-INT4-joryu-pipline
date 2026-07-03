@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from joryu.core.styles import StylePreset
 from joryu.core.system_prompt import build_system_prompt
-from joryu.tools import ToolDefinition
+from joryu.tooling.registry import ToolDefinition
 
 
 def test_build_system_prompt_style_is_last() -> None:

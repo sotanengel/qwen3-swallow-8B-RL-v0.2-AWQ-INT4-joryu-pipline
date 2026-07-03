@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from joryu.vllm.protocol import ChatResult
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from joryu.vllm.protocol import ChatResult
 
 
 class ToolLoopDecisionMaker:

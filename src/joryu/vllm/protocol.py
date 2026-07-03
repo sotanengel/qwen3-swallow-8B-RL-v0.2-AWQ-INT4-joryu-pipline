@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
-from joryu.tool_calls import ParsedToolCall
+if TYPE_CHECKING:
+    from joryu.tooling.calls import ParsedToolCall
 
 
 @dataclass(frozen=True)

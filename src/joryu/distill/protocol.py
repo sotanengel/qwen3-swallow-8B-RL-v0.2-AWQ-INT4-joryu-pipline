@@ -7,7 +7,7 @@ from typing import Any, Protocol
 
 from joryu.core.config import Config
 from joryu.core.prompt_bank import EffectiveSampling, PromptRow
-from joryu.tool_executor import ToolExecutor
+from joryu.tooling.executor import ToolExecutor
 from joryu.vllm.protocol import SupportsChat
 
 

@@ -8,7 +8,7 @@ from pathlib import Path
 from joryu.chat.session import ChatColumn, ChatSession, ChatSessionConfig, ChatSessionState
 from joryu.chat.tool_loop import ToolLoopRunner
 from joryu.core.styles import StylePreset
-from joryu.tool_executor import StubToolExecutor
+from joryu.tooling.executor import StubToolExecutor
 from tests.conftest import FakeStreamClient, FakeVllmClient
 
 

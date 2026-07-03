@@ -159,7 +159,7 @@ def test_load_missing_file(tmp_path: Path) -> None:
 
 def test_merge_with_defaults_appends_tool_hint_when_tools_resolved() -> None:
     from joryu.core.variants import expand_variants
-    from joryu.tools import load_tools
+    from joryu.tooling.registry import load_tools
 
     cfg = Config()
     row = PromptRow(prompt="p", tool_ids=["search"])
@@ -173,7 +173,7 @@ def test_merge_with_defaults_appends_tool_hint_when_tools_resolved() -> None:
 def test_merge_with_defaults_uses_invocation_rules_in_hint() -> None:
     from joryu.core.prompt_bank import format_tool_usage_hint
     from joryu.core.variants import expand_variants
-    from joryu.tools import load_tools
+    from joryu.tooling.registry import load_tools
 
     cfg = Config()
     row = PromptRow(prompt="p", tool_ids=["search"])
@@ -190,7 +190,7 @@ def test_merge_with_defaults_uses_invocation_rules_in_hint() -> None:
 
 def test_merge_with_defaults_legacy_hint_without_invocation_rules(tmp_path: Path) -> None:
     from joryu.core.variants import expand_variants
-    from joryu.tools import load_tools
+    from joryu.tooling.registry import load_tools
 
     p = tmp_path / "tools.yaml"
     p.write_text(
@@ -216,7 +216,7 @@ def test_merge_with_defaults_no_tool_hint_without_tools() -> None:
 
 
 def test_merge_with_defaults_lowers_repetition_penalty_for_tools() -> None:
-    from joryu.tools import load_tools
+    from joryu.tooling.registry import load_tools
 
     cfg = Config()
     cfg.distill.tools_repetition_penalty = 1.0
@@ -233,7 +233,7 @@ def test_merge_with_defaults_keeps_model_penalty_without_tools() -> None:
 
 
 def test_merge_row_repetition_penalty_overrides_tools_default() -> None:
-    from joryu.tools import load_tools
+    from joryu.tooling.registry import load_tools
 
     cfg = Config()
     row = PromptRow(prompt="p", tool_ids=["search"], sampling={"repetition_penalty": 1.2})

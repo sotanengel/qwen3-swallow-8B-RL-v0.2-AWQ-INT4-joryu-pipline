@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from joryu.core.prompt_bank import format_tool_usage_hint
 from joryu.core.styles import StylePreset
-from joryu.tools import ToolDefinition
+
+if TYPE_CHECKING:
+    from joryu.tooling.registry import ToolDefinition
 
 _FACTUAL_GUARD = (
     "天気・気温・統計などの事実情報や固有数値は、必ずツール経由で取得してください。"

@@ -638,7 +638,7 @@ def test_run_distill_override_tool_ids_applies_only_to_empty_rows(tmp_path: Path
 def test_run_distill_applies_tool_call_recovery(tmp_path: Path) -> None:
     """#110: intent あり & tool_calls 空 → named function 強制リトライ。"""
     from joryu.core.config import load_config
-    from joryu.tool_calls import ParsedToolCall
+    from joryu.tooling.calls import ParsedToolCall
     from joryu.vllm.protocol import ChatResult
 
     bank = tmp_path / "bank.jsonl"

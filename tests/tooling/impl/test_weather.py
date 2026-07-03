@@ -1,4 +1,4 @@
-"""tools_impl.weather のテスト。"""
+"""tooling.impl.weather のテスト。"""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ import httpx
 import pytest
 import respx
 
-from joryu.tools_impl import weather as weather_mod
+from joryu.tooling.impl import weather as weather_mod
 
 
 @respx.mock

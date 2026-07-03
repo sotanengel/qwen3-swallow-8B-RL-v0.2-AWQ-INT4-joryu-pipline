@@ -93,7 +93,7 @@ def test_expand_variants_applies_style_to_system_prompt() -> None:
 
 
 def test_expand_variants_resolves_tools_registry() -> None:
-    from joryu.tools import load_tools
+    from joryu.tooling.registry import load_tools
 
     cfg = Config()
     rows = [PromptRow(prompt="P1", tool_ids=["search"])]

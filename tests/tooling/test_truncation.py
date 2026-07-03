@@ -1,6 +1,6 @@
 """truncation.py: 途中打ち切り検出。"""
 
-from joryu.truncation import answer_looks_truncated, record_looks_truncated
+from joryu.tooling.truncation import answer_looks_truncated, record_looks_truncated
 
 
 def test_answer_ends_with_punctuation_ok() -> None:

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from joryu.tool_call_recovery import recover_tool_call
+from joryu.tooling.call_recovery import recover_tool_call
 from joryu.vllm.protocol import ChatResult
 
 
@@ -23,7 +23,7 @@ class NoThinkFallbackClient:
         tool_choice: dict[str, Any] | str | None = None,
         **sampling_overrides: Any,
     ) -> ChatResult:
-        from joryu.tool_calls import ParsedToolCall
+        from joryu.tooling.calls import ParsedToolCall
 
         self.calls.append(
             {

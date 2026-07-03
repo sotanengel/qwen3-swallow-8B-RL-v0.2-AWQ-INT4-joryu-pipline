@@ -94,7 +94,7 @@ def test_failure_g_prompt_dedup() -> None:
 
 
 def test_failure_f_second_turn_tool_execution() -> None:
-    from joryu.tool_executor import StubToolExecutor
+    from joryu.tooling.executor import StubToolExecutor
 
     turn1 = '{"name": "weather", "arguments": {"location": "Tokyo"}}'
     turn2 = "東京は晴れです。"

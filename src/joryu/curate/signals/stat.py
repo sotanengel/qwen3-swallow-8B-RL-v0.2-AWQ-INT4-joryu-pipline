@@ -100,7 +100,7 @@ class Truncated:
     version: str = "v2"
 
     def evaluate(self, record: dict[str, Any]) -> SignalResult:
-        from joryu.truncation import record_looks_truncated
+        from joryu.tooling.truncation import record_looks_truncated
 
         fr = record.get("finish_reason")
         if fr == "length":

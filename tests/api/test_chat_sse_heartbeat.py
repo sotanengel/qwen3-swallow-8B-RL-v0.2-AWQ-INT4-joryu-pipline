@@ -11,7 +11,7 @@ import pytest
 from joryu.chat import sse as sse_mod
 from joryu.chat.service import ChatService
 from joryu.chat.session import ChatSessionStore
-from joryu.tool_calls import ParsedToolCall
+from joryu.tooling.calls import ParsedToolCall
 from tests.conftest import FakeVllmClient
 from tests.test_api_chat import STYLES_YAML, TOOLS_YAML
 

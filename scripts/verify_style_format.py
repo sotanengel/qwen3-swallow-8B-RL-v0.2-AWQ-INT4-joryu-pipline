@@ -22,7 +22,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT / "src") not in sys.path:
     sys.path.insert(0, str(ROOT / "src"))
 
-from joryu.style_format import aggregate_by_style, check_style_format_criteria  # noqa: E402
+from joryu.tooling.style_format import aggregate_by_style, check_style_format_criteria  # noqa: E402
 
 VERIFY_PROMPTS = [
     {"prompt": "桜の特徴を教えてください", "category": "国語"},

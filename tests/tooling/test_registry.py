@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from joryu.tools import ToolDefinition, load_tools, merge_tools, resolve_tool_ids
+from joryu.tooling.registry import ToolDefinition, load_tools, merge_tools, resolve_tool_ids
 
 
 def test_load_tools_reads_repo_tools_yaml() -> None:

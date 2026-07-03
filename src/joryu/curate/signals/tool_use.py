@@ -6,7 +6,7 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-from joryu.tool_intent import thinking_plans_tool_use
+from joryu.tooling.intent import thinking_plans_tool_use
 
 from . import SignalResult
 

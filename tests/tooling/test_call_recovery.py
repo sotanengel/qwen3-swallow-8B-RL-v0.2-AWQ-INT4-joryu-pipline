@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from joryu.tool_call_recovery import build_named_function_tool_choice, recover_tool_call
+from joryu.tooling.call_recovery import build_named_function_tool_choice, recover_tool_call
 from joryu.vllm.protocol import ChatResult
 
 
@@ -23,7 +23,7 @@ class RecoveryFakeClient:
         tool_choice: dict[str, Any] | str | None = None,
         **sampling_overrides: Any,
     ) -> ChatResult:
-        from joryu.tool_calls import ParsedToolCall
+        from joryu.tooling.calls import ParsedToolCall
 
         self.calls.append(
             {
@@ -86,7 +86,7 @@ def test_recover_tool_call_retries_with_named_function() -> None:
 
 
 def test_recover_tool_call_skips_when_not_needed() -> None:
-    from joryu.tool_calls import ParsedToolCall
+    from joryu.tooling.calls import ParsedToolCall
 
     client = RecoveryFakeClient()
     chat = ChatResult(

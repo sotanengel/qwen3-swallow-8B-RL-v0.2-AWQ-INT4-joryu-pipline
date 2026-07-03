@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from joryu.tool_calls import extract_tool_calls_with_diagnostics
+from joryu.tooling.calls import extract_tool_calls_with_diagnostics
 from joryu.vllm.common import extract_known_tool_names
 from joryu.vllm.protocol import ChatResult
 

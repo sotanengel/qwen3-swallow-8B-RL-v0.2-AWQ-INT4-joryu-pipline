@@ -8,7 +8,7 @@ import operator
 from collections.abc import Callable
 from typing import Any, Protocol
 
-from joryu.tool_calls import ParsedToolCall
+from joryu.tooling.calls import ParsedToolCall
 
 _SAFE_BINOPS = {
     ast.Add: operator.add,
@@ -84,7 +84,7 @@ def _calc_fn(arguments: dict[str, Any]) -> str:
 
 
 def _search_fn(arguments: dict[str, Any]) -> str:
-    from joryu.tools_impl.search import web_search
+    from joryu.tooling.impl.search import web_search
 
     query = arguments.get("query")
     if not isinstance(query, str) or not query.strip():
@@ -96,7 +96,7 @@ def _search_fn(arguments: dict[str, Any]) -> str:
 
 
 def _fetch_url_fn(arguments: dict[str, Any]) -> str:
-    from joryu.tools_impl.fetch import fetch_url
+    from joryu.tooling.impl.fetch import fetch_url
 
     url = arguments.get("url")
     if not isinstance(url, str) or not url.strip():
@@ -105,7 +105,7 @@ def _fetch_url_fn(arguments: dict[str, Any]) -> str:
 
 
 def _weather_fn(arguments: dict[str, Any]) -> str:
-    from joryu.tools_impl.weather import fetch_weather
+    from joryu.tooling.impl.weather import fetch_weather
 
     location = arguments.get("location")
     if not isinstance(location, str) or not location.strip():
@@ -184,7 +184,7 @@ class McpToolExecutor:
     def _run_remote(self, call: ParsedToolCall) -> str:
         import httpx
 
-        from joryu.mcp_runtime import log_mcp_fallback
+        from joryu.mcp.runtime import log_mcp_fallback
 
         mcp_tool = "web_search" if call.name == "search" else call.name
         timeout = httpx.Timeout(

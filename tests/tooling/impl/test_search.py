@@ -1,11 +1,11 @@
-"""tools_impl.search のテスト。"""
+"""tooling.impl.search のテスト。"""
 
 from __future__ import annotations
 
 import httpx
 import respx
 
-from joryu.tools_impl.search import TavilyProvider, web_search
+from joryu.tooling.impl.search import TavilyProvider, web_search
 
 
 @respx.mock
@@ -51,13 +51,13 @@ def test_search_fn_falls_back_to_stub_without_api_key(monkeypatch) -> None:
 
 def test_search_fn_truncates_query() -> None:
     long_q = "x" * 300
-    from joryu.tools_impl.search import _truncate_query
+    from joryu.tooling.impl.search import _truncate_query
 
     assert len(_truncate_query(long_q)) == 256
 
 
 def test_format_search_results_truncates_long_snippet() -> None:
-    from joryu.tools_impl.search import SearchResult, format_search_results
+    from joryu.tooling.impl.search import SearchResult, format_search_results
 
     long_snippet = "s" * 20_000
     out = format_search_results(
