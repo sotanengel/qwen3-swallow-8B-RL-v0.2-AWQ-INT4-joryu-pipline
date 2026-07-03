@@ -7,33 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from joryu.cli.distill import build_parser, parse_duration
-
-
-def test_parse_duration_hours() -> None:
-    assert parse_duration("2h") == 7200
-
-
-def test_parse_duration_minutes() -> None:
-    assert parse_duration("30m") == 1800
-
-
-def test_parse_duration_seconds() -> None:
-    assert parse_duration("45s") == 45
-
-
-def test_parse_duration_compound() -> None:
-    assert parse_duration("1h30m") == 5400
-
-
-def test_parse_duration_empty_returns_none() -> None:
-    assert parse_duration("") is None
-    assert parse_duration(None) is None  # type: ignore[arg-type]
-
-
-def test_parse_duration_bad() -> None:
-    with pytest.raises(ValueError):
-        parse_duration("two hours")
+from joryu.cli.distill import build_parser
 
 
 def test_parser_defaults() -> None:

@@ -26,6 +26,7 @@ from joryu.jobs.models import (
     JobStatus,
     SeedGenJobSpec,
 )
+from joryu.jobs.profile import required_profile
 from joryu.jobs.store import JobStore
 
 if TYPE_CHECKING:
@@ -195,12 +196,6 @@ def curate_job_dst_rel(job_id: str) -> str:
 
 def _curate_argv_with_dst(spec: CurateJobSpec, job_id: str) -> list[str]:
     return [*spec.to_curate_argv(), "--dst", curate_job_dst_rel(job_id)]
-
-
-def build_job_command(repo_root: Path, record: JobRecord) -> list[str]:
-    from joryu.jobs.strategy import RunnerStrategyFactory
-
-    return RunnerStrategyFactory.build_job_command(repo_root, record)
 
 
 def build_distill_command(repo_root: Path, spec: DistillJobSpec) -> list[str]:
@@ -441,7 +436,7 @@ class JobRunner:
         self._run_command: RunCommand = run_command or _default_run_command(repo_root)
         self._refresh_stats = refresh_stats or make_refresh_stats(repo_root)
         self._refresh_curation = refresh_curation or make_refresh_curation(repo_root)
-        self._command_builder = command_builder or build_job_command
+        self._command_builder = command_builder
         self._lock = threading.Lock()
         self._queue: list[str] = []
         self._running_id: str | None = None
@@ -452,6 +447,13 @@ class JobRunner:
     @property
     def running_id(self) -> str | None:
         return self._running_id
+
+    def _build_job_command(self, record: JobRecord) -> list[str]:
+        if self._command_builder is not None:
+            return self._command_builder(self.repo_root, record)
+        from joryu.jobs.strategy import RunnerStrategyFactory
+
+        return RunnerStrategyFactory.build_job_command(self.repo_root, record)
 
     def reconcile_stale_jobs(self) -> int:
         """API 再起動時に orphaned な QUEUED/RUNNING 記録を終端状態へ回収する。"""
@@ -530,8 +532,6 @@ class JobRunner:
         threading.Thread(target=_stop, daemon=True).start()
 
     def _run_job(self, job_id: str) -> None:
-        from joryu.orchestrator.required import required_profile
-
         record = self.store.load(job_id)
         record.status = JobStatus.RUNNING
         record.started_at = datetime.now(UTC).isoformat()
@@ -622,7 +622,7 @@ class JobRunner:
             refresh_thread.start()
 
         try:
-            cmd = self._command_builder(self.repo_root, record)
+            cmd = self._build_job_command(record)
             cmd = _inject_container_name(cmd, container_name)
             with _temporary_env(profile_env):
                 exit_code = self._run_command(

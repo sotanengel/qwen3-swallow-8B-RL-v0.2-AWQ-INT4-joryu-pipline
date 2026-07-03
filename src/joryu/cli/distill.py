@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import logging
-import re
 import sys
 import time
 from pathlib import Path
@@ -19,6 +18,7 @@ from joryu.docker_delegate import (
     run_in_docker,
     should_use_docker,
 )
+from joryu.jobs.duration import parse_duration
 from joryu.jobs.models import DistillJobSpec
 from joryu.vllm.protocol import SupportsChat
 
@@ -88,30 +88,6 @@ def build_parser() -> argparse.ArgumentParser:
     g.add_argument("--docker", action="store_true", help="常に Docker delegate を使う")
     g.add_argument("--no-docker", action="store_true", help="Docker delegate を無効化")
     return p
-
-
-_DURATION_RE = re.compile(r"(\d+)\s*(h|m|s)")
-
-
-def parse_duration(text: str | None) -> int | None:
-    """`2h`, `30m`, `45s`, `1h30m` などを秒数に変換。空/None は None。"""
-    if not text:
-        return None
-    total = 0
-    found = False
-    for match in _DURATION_RE.finditer(text):
-        found = True
-        value = int(match.group(1))
-        unit = match.group(2)
-        if unit == "h":
-            total += value * 3600
-        elif unit == "m":
-            total += value * 60
-        else:
-            total += value
-    if not found:
-        raise ValueError(f"could not parse duration: {text!r}")
-    return total
 
 
 def main(argv: list[str] | None = None, *, _client: SupportsChat | None = None) -> int:
