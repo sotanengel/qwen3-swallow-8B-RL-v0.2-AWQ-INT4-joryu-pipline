@@ -6,7 +6,7 @@ from pathlib import Path
 
 import yaml
 
-from joryu.config import Config, load_config
+from joryu.core.config import Config, load_config
 
 
 def _write(path: Path, payload: dict) -> None:

@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from joryu.paths import DEFAULT_CONFIG, resolve_repo_root
+from joryu.core.paths import DEFAULT_CONFIG, resolve_repo_root
 
 
 def resolve_config_path(config_path: str | Path | None = None) -> Path:

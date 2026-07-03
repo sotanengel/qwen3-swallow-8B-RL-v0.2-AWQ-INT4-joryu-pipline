@@ -12,7 +12,7 @@ from typing import Any, Literal
 import httpx
 
 from joryu.completion_normalize import normalize_chat_result
-from joryu.http_client import build_httpx_timeout, get_shared_async_client
+from joryu.core.http_client import build_httpx_timeout, get_shared_async_client
 from joryu.tool_calls import ParsedToolCall
 from joryu.vllm.common import extract_known_tool_names, resolve_serve_effective_max_tokens
 from joryu.vllm.protocol import ChatResult, VllmError

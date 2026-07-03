@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from joryu.datetime_context import JST, format_date_context_ja, now_jst
+from joryu.core.datetime_context import JST, format_date_context_ja, now_jst
 
 JST_TZ = ZoneInfo("Asia/Tokyo")
 

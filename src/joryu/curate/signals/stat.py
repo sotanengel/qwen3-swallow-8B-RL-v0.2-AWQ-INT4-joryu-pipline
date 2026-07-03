@@ -12,7 +12,7 @@ from collections import Counter
 from dataclasses import dataclass
 from typing import Any
 
-from joryu.config import CurateSignalThresholds
+from joryu.core.config import CurateSignalThresholds
 from joryu.curate.minhash_index import GlobalDuplicateIndex
 from joryu.curate.style_presets import DEFAULT_STYLE_RULES, StyleRule
 

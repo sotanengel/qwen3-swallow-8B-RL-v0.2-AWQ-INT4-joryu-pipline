@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from joryu.config import CurateSignalThresholds
+from joryu.core.config import CurateSignalThresholds
 from joryu.curate.scoring import CompositeScore
 from joryu.curate.signals.stat import (
     SAMP_OUT_CODE,

@@ -6,9 +6,9 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from joryu.config import load_config
+from joryu.core.config import load_config
+from joryu.core.paths import dashboard_public
 from joryu.docker_delegate import hf_cache_dir
-from joryu.paths import dashboard_public
 
 
 @dataclass

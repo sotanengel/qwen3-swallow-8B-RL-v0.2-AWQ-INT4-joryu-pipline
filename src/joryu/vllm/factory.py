@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import os
 
-from joryu.config import ModelConfig, VllmConfig
-from joryu.paths import resolve_limits_probe_path
+from joryu.core.config import ModelConfig, VllmConfig
+from joryu.core.paths import resolve_limits_probe_path
 from joryu.vllm.common import DEFAULT_LOCAL_VLLM_URL
 from joryu.vllm.inproc import VllmClient
 from joryu.vllm.protocol import SupportsChat, SupportsChatStream, VllmError

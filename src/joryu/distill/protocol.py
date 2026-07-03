@@ -5,8 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
-from joryu.config import Config
-from joryu.prompt_bank import EffectiveSampling, PromptRow
+from joryu.core.config import Config
+from joryu.core.prompt_bank import EffectiveSampling, PromptRow
 from joryu.tool_executor import ToolExecutor
 from joryu.vllm.protocol import SupportsChat
 

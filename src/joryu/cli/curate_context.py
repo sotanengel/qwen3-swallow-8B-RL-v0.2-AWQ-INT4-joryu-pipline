@@ -6,7 +6,7 @@ import argparse
 from dataclasses import dataclass
 from pathlib import Path
 
-from joryu.config import Config
+from joryu.core.config import Config
 from joryu.curate.cache import CacheIndex
 from joryu.curate.judge_client import JudgeClient
 from joryu.curate.signals import Signal

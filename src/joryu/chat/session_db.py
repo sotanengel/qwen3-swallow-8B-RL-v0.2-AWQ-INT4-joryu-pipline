@@ -14,7 +14,7 @@ from joryu.chat.session_models import (
     ChatSessionState,
     SessionListItem,
 )
-from joryu.styles import StylePreset
+from joryu.core.styles import StylePreset
 
 
 def _ensure_schema(conn: sqlite3.Connection) -> None:

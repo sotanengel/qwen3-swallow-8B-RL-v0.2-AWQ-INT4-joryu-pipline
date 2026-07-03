@@ -8,7 +8,7 @@ from pathlib import Path
 
 from joryu.chat.session import ChatSessionStore
 from joryu.chat.session_db import SessionDatabase
-from joryu.styles import StylePreset
+from joryu.core.styles import StylePreset
 from joryu.tool_executor import StubToolExecutor
 
 

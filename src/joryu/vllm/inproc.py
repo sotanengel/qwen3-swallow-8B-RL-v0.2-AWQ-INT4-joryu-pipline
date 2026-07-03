@@ -7,8 +7,8 @@ import threading
 from typing import Any
 
 from joryu.completion_normalize import normalize_chat_result
-from joryu.config import ModelConfig, VllmConfig
-from joryu.paths import resolve_limits_probe_path
+from joryu.core.config import ModelConfig, VllmConfig
+from joryu.core.paths import resolve_limits_probe_path
 from joryu.vllm.common import (
     build_offline_chat_kwargs,
     clamp_max_tokens_for_context,

@@ -9,8 +9,8 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
+from joryu.core.paths import SCREENING_JSON_REL
 from joryu.orchestrator.service import ModelOrchestrator
-from joryu.paths import SCREENING_JSON_REL
 
 router = APIRouter()
 live_router = APIRouter()

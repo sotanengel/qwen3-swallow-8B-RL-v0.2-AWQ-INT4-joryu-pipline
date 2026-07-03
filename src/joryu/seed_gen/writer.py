@@ -12,8 +12,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from joryu.core.prompt_bank import load_prompt_bank
 from joryu.io.jsonl import iter_jsonl
-from joryu.prompt_bank import load_prompt_bank
 
 logger = logging.getLogger(__name__)
 

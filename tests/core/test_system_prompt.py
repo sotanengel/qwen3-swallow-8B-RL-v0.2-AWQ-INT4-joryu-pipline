@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from joryu.styles import StylePreset
-from joryu.system_prompt import build_system_prompt
+from joryu.core.styles import StylePreset
+from joryu.core.system_prompt import build_system_prompt
 from joryu.tools import ToolDefinition
 
 

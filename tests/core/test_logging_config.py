@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import sys
 
-from joryu.logging_config import setup_logging
+from joryu.core.logging_config import setup_logging
 
 
 def test_setup_logging_uses_stderr(capsys) -> None:

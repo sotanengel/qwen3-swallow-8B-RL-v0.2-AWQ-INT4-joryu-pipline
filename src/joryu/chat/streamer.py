@@ -10,8 +10,8 @@ from joryu.chat.generate_retry import chat_needs_retry, run_tool_loop_with_retry
 from joryu.chat.session import ChatColumn, ChatSession
 from joryu.chat.tool_loop import ToolLoopRunner
 from joryu.chat.turn_persistence import TurnPersistence
-from joryu.styles import StylePreset
-from joryu.system_prompt import build_system_prompt
+from joryu.core.styles import StylePreset
+from joryu.core.system_prompt import build_system_prompt
 from joryu.tool_executor import ToolExecutor
 from joryu.tools import ToolDefinition
 from joryu.vllm_client import SupportsChat, SupportsChatStream

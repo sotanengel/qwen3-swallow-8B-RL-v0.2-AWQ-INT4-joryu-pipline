@@ -305,7 +305,7 @@ def is_first_up_run(repo_root: Path) -> bool:
 
 def should_up_mcp(repo_root: Path) -> bool:
     """config.yaml の mcp.enabled + url が設定されていれば compose up 対象。"""
-    from joryu.config import load_config
+    from joryu.core.config import load_config
 
     try:
         cfg = load_config(repo_root / "config.yaml")
@@ -562,8 +562,8 @@ def ensure_prompt_bank(
     log: Callable[[str], None] | None = None,
 ) -> None:
     """prompt bank JSONL が無ければ seed JSONL のコピーまたは CSV 変換で用意する。"""
+    from joryu.core.paths import DEFAULT_CONFIG, resolve_optional_config
     from joryu.migrate import csv_to_jsonl
-    from joryu.paths import DEFAULT_CONFIG, resolve_optional_config
 
     cfg = resolve_optional_config(repo_root / DEFAULT_CONFIG)
     bank_path = (repo_root / cfg.distill.prompt_bank).resolve()
@@ -592,7 +592,7 @@ def ensure_prompt_bank(
 
 def resolve_distill_jsonl(repo_root: Path) -> Path:
     """config から蒸留 JSONL の絶対パスを返す。"""
-    from joryu.paths import DEFAULT_CONFIG, resolve_optional_config
+    from joryu.core.paths import DEFAULT_CONFIG, resolve_optional_config
 
     cfg = resolve_optional_config(repo_root / DEFAULT_CONFIG)
     return repo_root / cfg.distill.out_dir / cfg.distill.out_file
@@ -617,7 +617,7 @@ def ensure_stats_json(
 ) -> int | None:
     """responses.jsonl から stats.json を更新する。スキップ時は None。"""
     from joryu.cli.stats import main as stats_main
-    from joryu.paths import DEFAULT_CONFIG, resolve_stats_output_path
+    from joryu.core.paths import DEFAULT_CONFIG, resolve_stats_output_path
 
     jsonl = resolve_distill_jsonl(repo_root)
     if not force and not jsonl_has_content(jsonl):
@@ -632,7 +632,7 @@ def ensure_stats_json(
 
 def curation_needs_refresh(repo_root: Path) -> bool:
     """curation.json が未生成または蒸留 JSONL より古いか。"""
-    from joryu.paths import CURATION_JSON_REL
+    from joryu.core.paths import CURATION_JSON_REL
 
     jsonl = resolve_distill_jsonl(repo_root)
     if not jsonl_has_content(jsonl):
@@ -687,7 +687,7 @@ def ensure_curation(
         return None
 
     from joryu.cli.curate import main as curate_main
-    from joryu.paths import DEFAULT_CONFIG
+    from joryu.core.paths import DEFAULT_CONFIG
 
     use_llm = "joryu" not in up_services and joryu_container_running()
     argv = ["--config", DEFAULT_CONFIG]
@@ -701,7 +701,7 @@ def ensure_curation(
 
 def resolve_vllm_limits_path(repo_root: Path) -> Path:
     """config.model.limits_probe_file の絶対パスを返す。"""
-    from joryu.paths import DEFAULT_CONFIG, resolve_limits_probe_path, resolve_optional_config
+    from joryu.core.paths import DEFAULT_CONFIG, resolve_limits_probe_path, resolve_optional_config
 
     cfg = resolve_optional_config(repo_root / DEFAULT_CONFIG)
     return resolve_limits_probe_path(cfg.model.limits_probe_file, repo_root=repo_root)
@@ -719,7 +719,7 @@ def vllm_limits_probe_needed(
         return True
     if "api" not in up_services and "joryu" not in up_services:
         return False
-    from joryu.paths import DEFAULT_CONFIG, resolve_optional_config
+    from joryu.core.paths import DEFAULT_CONFIG, resolve_optional_config
     from joryu.vllm_limits import limits_probe_stale, vllm_config_fingerprint
 
     limits_path = resolve_vllm_limits_path(repo_root)
@@ -754,8 +754,8 @@ def ensure_vllm_limits(
             " VRAM プローブの前に joryu-job イメージを build してください。"
         )
 
+    from joryu.core.paths import DEFAULT_CONFIG
     from joryu.docker_delegate import stop_orphan_joryu_containers
-    from joryu.paths import DEFAULT_CONFIG
     from joryu.vllm_probe import run_vllm_probe
 
     stop_orphan_joryu_containers()
@@ -773,7 +773,7 @@ def ensure_vllm_limits(
 
 def ensure_dashboard_data_paths(repo_root: Path) -> None:
     """蒸留 JSONL を dashboard から参照できるようディレクトリと symlink を整備する。"""
-    from joryu.paths import DEFAULT_CONFIG, dashboard_public, resolve_optional_config
+    from joryu.core.paths import DEFAULT_CONFIG, dashboard_public, resolve_optional_config
 
     cfg = resolve_optional_config(repo_root / DEFAULT_CONFIG)
 
@@ -827,7 +827,7 @@ def _ensure_dashboard_link(public_path: Path, target: Path) -> None:
 
 def sync_dashboard_responses_copy(repo_root: Path) -> None:
     """copy フォールバック時のみ chat 追記後に dashboard 側 JSONL を同期する。"""
-    from joryu.paths import DEFAULT_CONFIG, dashboard_public, resolve_optional_config
+    from joryu.core.paths import DEFAULT_CONFIG, dashboard_public, resolve_optional_config
 
     cfg = resolve_optional_config(repo_root / DEFAULT_CONFIG)
     jsonl_path = repo_root / cfg.distill.out_dir / cfg.distill.out_file

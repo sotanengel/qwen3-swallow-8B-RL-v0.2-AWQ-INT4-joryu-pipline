@@ -9,7 +9,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from joryu.config import Config
+from joryu.core.config import Config
 from joryu.io.jsonl import iter_jsonl
 from joryu.tools import ToolDefinition, merge_tools, resolve_tool_ids
 

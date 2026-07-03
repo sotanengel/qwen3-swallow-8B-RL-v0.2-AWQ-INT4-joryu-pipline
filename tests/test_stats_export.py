@@ -66,7 +66,7 @@ def test_resolve_repo_root_returns_none_for_custom_out_path(tmp_path: Path) -> N
 
 
 def test_resolve_limits_probe_path_uses_repo_root(tmp_path: Path, monkeypatch) -> None:
-    from joryu.paths import resolve_limits_probe_path
+    from joryu.core.paths import resolve_limits_probe_path
 
     monkeypatch.setenv("JORYU_REPO_ROOT", str(tmp_path))
     resolved = resolve_limits_probe_path("data/vllm_limits.json")

@@ -7,9 +7,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from joryu.core.paths import STATS_JSON_REL, resolve_repo_root, resolve_stats_output_path
 from joryu.dashboard_json import write_dashboard_json
 from joryu.io.jsonl import iter_jsonl
-from joryu.paths import STATS_JSON_REL, resolve_repo_root, resolve_stats_output_path
 from joryu.tool_intent import thinking_plans_tool_use
 from joryu.truncation import record_looks_truncated
 

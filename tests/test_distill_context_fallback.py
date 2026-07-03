@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from joryu.config import Config
+from joryu.core.config import Config
 from joryu.distill import run_distill
 from joryu.vllm.protocol import VllmError
 from tests.helpers.jsonl import read_jsonl, write_jsonl

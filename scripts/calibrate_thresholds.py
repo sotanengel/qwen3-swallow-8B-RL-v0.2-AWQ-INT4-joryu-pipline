@@ -9,7 +9,7 @@ import logging
 import sys
 from pathlib import Path
 
-from joryu.logging_config import setup_logging
+from joryu.core.logging_config import setup_logging
 
 logger = logging.getLogger(__name__)
 

@@ -706,8 +706,8 @@ def make_refresh_curation(repo_root: Path) -> Callable[[CurateJobSpec, str], int
     """curate ジョブ実行中/終了時に curation.json を更新する。"""
 
     def refresh_curation(_spec: CurateJobSpec, job_id: str) -> int:
+        from joryu.core.paths import CURATION_JSON_REL
         from joryu.curate.stats import write_curation_json
-        from joryu.paths import CURATION_JSON_REL
 
         scores = curate_job_dst(repo_root, job_id) / "scores.jsonl"
         if not scores.exists():

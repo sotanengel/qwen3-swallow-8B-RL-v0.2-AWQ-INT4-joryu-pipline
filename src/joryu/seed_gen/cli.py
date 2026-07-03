@@ -7,8 +7,8 @@ import logging
 import os
 from pathlib import Path
 
+from joryu.core.logging_config import setup_logging
 from joryu.jobs.models import SEED_GEN_MODE_CREATE, SEED_GEN_MODES
-from joryu.logging_config import setup_logging
 from joryu.seed_gen.config import (
     DEFAULT_DOMAINS_REL,
     DEFAULT_TARGET_TOTAL,

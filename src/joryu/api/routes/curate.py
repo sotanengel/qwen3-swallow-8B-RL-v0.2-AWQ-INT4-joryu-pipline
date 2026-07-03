@@ -8,12 +8,12 @@ from fastapi import APIRouter, Body, HTTPException, Request
 from pydantic import BaseModel
 
 from joryu.api.deps import assert_profile_enqueueable, get_orchestrator
+from joryu.core.paths import DEFAULT_CONFIG
 from joryu.jobs.models import CurateJobSpec, JobKind, JobRecord
 from joryu.jobs.runner import JobRunner
 from joryu.jobs.store import JobStore
 from joryu.jobs.validate import validate_curate_job_spec
 from joryu.orchestrator.required import required_profile_from_spec
-from joryu.paths import DEFAULT_CONFIG
 from joryu.preflight import jsonl_has_content, resolve_distill_jsonl
 
 router = APIRouter()

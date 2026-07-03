@@ -7,7 +7,7 @@ from pathlib import Path
 
 from joryu.chat.session import ChatColumn, ChatSession
 from joryu.chat.streamer import stream_column_turn
-from joryu.styles import StylePreset
+from joryu.core.styles import StylePreset
 from joryu.tool_executor import StubToolExecutor
 from tests.conftest import FakeVllmClient
 
@@ -165,8 +165,8 @@ def test_stream_system_prompt_contains_today_date(tmp_path: Path, monkeypatch) -
     from datetime import datetime
     from zoneinfo import ZoneInfo
 
-    from joryu import datetime_context as dt_ctx
     from joryu.chat.session import ChatSessionConfig, ChatSessionState
+    from joryu.core import datetime_context as dt_ctx
 
     fixed = datetime(2026, 6, 27, 8, 0, tzinfo=ZoneInfo("Asia/Tokyo"))
     date_line = dt_ctx.format_date_context_ja(fixed)

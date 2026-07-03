@@ -67,7 +67,7 @@ export:
 def weather_client(repo_root: Path, monkeypatch):
     fixed = datetime(2026, 6, 27, 8, 0, tzinfo=ZoneInfo("Asia/Tokyo"))
     monkeypatch.setattr(
-        "joryu.datetime_context.now_jst",
+        "joryu.core.datetime_context.now_jst",
         lambda clock=None: fixed,
     )
 

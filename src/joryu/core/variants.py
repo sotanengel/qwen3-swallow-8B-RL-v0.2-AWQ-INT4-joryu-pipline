@@ -5,10 +5,10 @@ from __future__ import annotations
 import copy
 from dataclasses import dataclass
 
-from joryu.config import Config
-from joryu.prompt_bank import EffectiveSampling, PromptRow, merge_with_defaults
-from joryu.styles import StylePreset
-from joryu.system_prompt import build_system_prompt
+from joryu.core.config import Config
+from joryu.core.prompt_bank import EffectiveSampling, PromptRow, merge_with_defaults
+from joryu.core.styles import StylePreset
+from joryu.core.system_prompt import build_system_prompt
 from joryu.tools import ToolDefinition, resolve_tool_ids
 
 

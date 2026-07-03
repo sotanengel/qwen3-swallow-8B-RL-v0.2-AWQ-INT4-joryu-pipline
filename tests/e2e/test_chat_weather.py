@@ -79,7 +79,7 @@ export:
 @pytest.fixture
 def fixed_jst(monkeypatch: pytest.MonkeyPatch) -> None:
     fixed = datetime(2026, 6, 27, 8, 0, tzinfo=ZoneInfo("Asia/Tokyo"))
-    monkeypatch.setattr("joryu.datetime_context.now_jst", lambda clock=None: fixed)
+    monkeypatch.setattr("joryu.core.datetime_context.now_jst", lambda clock=None: fixed)
     monkeypatch.setenv("JORYU_SEARCH_PROVIDER", "stub")
 
 

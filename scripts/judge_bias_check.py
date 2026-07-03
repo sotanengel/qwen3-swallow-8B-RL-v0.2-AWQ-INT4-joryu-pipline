@@ -11,10 +11,10 @@ import random
 import sys
 from pathlib import Path
 
+from joryu.core.logging_config import setup_logging
 from joryu.curate.judge_client import HEALTH_RUBRIC_KEYS, FakeJudgeClient
 from joryu.curate.prompt_loader import load_health_rubric
 from joryu.curate.signals.llm_judge import build_health_response_text
-from joryu.logging_config import setup_logging
 
 logger = logging.getLogger(__name__)
 

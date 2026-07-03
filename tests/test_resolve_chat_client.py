@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from joryu.config import Config, ModelConfig, VllmConfig
+from joryu.core.config import Config, ModelConfig, VllmConfig
 from joryu.vllm_client import (
     DEFAULT_LOCAL_VLLM_URL,
     VllmClient,

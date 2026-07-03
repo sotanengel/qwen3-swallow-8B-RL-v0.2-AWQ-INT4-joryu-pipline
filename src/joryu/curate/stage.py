@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
-from joryu.config import Config
+from joryu.core.config import Config
 from joryu.curate.cache import CacheIndex
 from joryu.curate.signals import SignalResult
 

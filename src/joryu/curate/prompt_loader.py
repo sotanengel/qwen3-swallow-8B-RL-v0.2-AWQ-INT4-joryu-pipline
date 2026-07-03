@@ -6,7 +6,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from joryu.paths import resolve_repo_root
+from joryu.core.paths import resolve_repo_root
 
 _EVAL_VERSION_RE = re.compile(r"^#\s*eval_version:\s*(\S+)", re.MULTILINE)
 _VERSION_RE = re.compile(r"^#\s*version:\s*(\S+)", re.MULTILINE)

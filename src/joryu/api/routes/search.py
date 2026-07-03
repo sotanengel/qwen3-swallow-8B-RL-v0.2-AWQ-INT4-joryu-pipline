@@ -10,7 +10,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from joryu.config import SearchConfig, load_config
+from joryu.core.config import SearchConfig, load_config
 from joryu.preflight import resolve_distill_jsonl
 from joryu.search.index import SearchIndex
 

@@ -6,8 +6,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from joryu.yaml_util import load_yaml_mapping
-
 
 @dataclass(frozen=True)
 class ToolDefinition:
@@ -29,6 +27,8 @@ class ToolDefinition:
 
 def load_tools(path: str | Path) -> dict[str, ToolDefinition]:
     """tools.yaml からツール辞書を読み込む。"""
+    from joryu.core.yaml_util import load_yaml_mapping
+
     p = Path(path)
     if not p.exists():
         raise FileNotFoundError(f"tools file not found: {p}")

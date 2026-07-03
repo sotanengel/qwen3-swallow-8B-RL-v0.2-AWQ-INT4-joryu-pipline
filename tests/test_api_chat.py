@@ -10,9 +10,9 @@ from fastapi.testclient import TestClient
 
 from joryu.api.app import create_app
 from joryu.chat.session import ChatSessionStore
+from joryu.core.styles import StylePreset
 from joryu.jobs.models import DistillJobSpec, JobRecord, JobStatus
 from joryu.jobs.runner import JobRunner
-from joryu.styles import StylePreset
 from tests.conftest import FakeVllmClient
 
 TOOLS_YAML = """
