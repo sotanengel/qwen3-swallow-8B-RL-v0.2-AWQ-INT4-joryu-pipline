@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from joryu.stats import compute_stats, length_bins
+from joryu.persistence.stats import compute_stats, length_bins
 
 
 def _write(path: Path, records: list[dict]) -> None:
@@ -243,7 +243,7 @@ def test_bare_json_and_suspected_metrics(tmp_path: Path) -> None:
 
 def test_empty_stats_contains_new_keys() -> None:
     """空 JSONL でも新キーが含まれる (dashboard 後方互換)。"""
-    from joryu.stats import _empty_stats
+    from joryu.persistence.stats import _empty_stats
 
     s = _empty_stats()
     assert s["bare_json_tool_call_records"] == 0

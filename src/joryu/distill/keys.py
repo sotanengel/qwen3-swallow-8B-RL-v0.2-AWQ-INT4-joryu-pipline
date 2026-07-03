@@ -6,7 +6,7 @@ import hashlib
 import json
 
 from joryu.core.variants import DistillVariant
-from joryu.progress import run_key_from_parts
+from joryu.persistence.progress import run_key_from_parts
 
 
 def variant_run_key(variant: DistillVariant) -> str:

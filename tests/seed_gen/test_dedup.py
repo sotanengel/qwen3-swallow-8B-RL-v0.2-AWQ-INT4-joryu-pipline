@@ -4,7 +4,7 @@ import hashlib
 
 import pytest
 
-from joryu.prompt_dedup import ExactDedup, normalize_prompt_exact
+from joryu.persistence.prompt_dedup import ExactDedup, normalize_prompt_exact
 from joryu.seed_gen.dedup import EmbeddingBackend, EmbeddingIndex, cosine_similarity
 
 

@@ -7,10 +7,10 @@ from typing import Any
 from joryu.chat.persistence import build_chat_record
 from joryu.chat.session import ChatSession
 from joryu.chat.thinking_guard import strip_think_blocks
-from joryu.prompt_dedup import PromptDedupGuard
-from joryu.responses_store import record_id
+from joryu.persistence.prompt_dedup import PromptDedupGuard
+from joryu.persistence.responses_store import record_id
+from joryu.persistence.writer import JsonlAppendWriter
 from joryu.vllm.protocol import ChatResult
-from joryu.writer import JsonlAppendWriter
 
 
 class TurnPersistence:

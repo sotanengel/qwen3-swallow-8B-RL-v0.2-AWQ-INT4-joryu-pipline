@@ -23,13 +23,13 @@ from joryu.distill.record import record_from_chat
 from joryu.distill.retry import generate_until_complete
 from joryu.distill.stages import LoopStage, make_build_with_turns, make_tool_loop_chat_fn
 from joryu.distill.stats import StatsRefreshThrottler, default_stats_refresher
-from joryu.progress import load_done_keys, load_truncated_run_keys
-from joryu.prompt_dedup import PromptDedupGuard
+from joryu.persistence.progress import load_done_keys, load_truncated_run_keys
+from joryu.persistence.prompt_dedup import PromptDedupGuard
+from joryu.persistence.writer import JsonlAppendWriter
 from joryu.tooling.executor import ToolExecutor, build_default_executor
 from joryu.tooling.registry import load_tools
 from joryu.vllm.common import is_prompt_context_overflow_error
 from joryu.vllm.protocol import SupportsChat, VllmError
-from joryu.writer import JsonlAppendWriter
 
 logger = logging.getLogger(__name__)
 

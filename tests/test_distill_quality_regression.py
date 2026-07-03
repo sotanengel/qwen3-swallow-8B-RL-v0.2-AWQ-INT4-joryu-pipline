@@ -13,7 +13,7 @@ from joryu.curate.signals.quality import (
     ToolLeak,
     VirtualData,
 )
-from joryu.prompt_dedup import PromptDedupGuard
+from joryu.persistence.prompt_dedup import PromptDedupGuard
 from joryu.vllm.normalize import normalize_chat_result, sanitize_thinking_trace
 from joryu.vllm.protocol import ChatResult
 from joryu.vllm.stream import _assemble_chat_result

@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from joryu.responses_store import (
+from joryu.persistence.responses_store import (
     delete_all_records,
     delete_record,
     load_records,

@@ -12,7 +12,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from joryu.migrate import csv_to_jsonl
+from joryu.persistence.migrate import csv_to_jsonl
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -1,6 +1,6 @@
 """verify_record_replay.py: tools フィールドから chat_template 入力を再構築。"""
 
-from joryu.record_replay import rebuild_chat_template_inputs
+from joryu.persistence.record_replay import rebuild_chat_template_inputs
 
 
 def test_rebuild_chat_template_inputs_from_record() -> None:

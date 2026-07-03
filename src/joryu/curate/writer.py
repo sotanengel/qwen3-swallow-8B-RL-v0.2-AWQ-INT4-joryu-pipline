@@ -11,7 +11,7 @@ from pathlib import Path
 from types import TracebackType
 from typing import Any
 
-from joryu.writer import JsonlAppendWriter
+from joryu.persistence.writer import JsonlAppendWriter
 
 
 class CurateWriter:

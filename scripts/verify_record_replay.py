@@ -7,7 +7,7 @@ import json
 import sys
 from pathlib import Path
 
-from joryu.record_replay import rebuild_chat_template_inputs
+from joryu.persistence.record_replay import rebuild_chat_template_inputs
 
 
 def main(argv: list[str] | None = None) -> int:
