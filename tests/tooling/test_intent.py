@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from joryu.tool_calls import ParsedToolCall
-from joryu.tool_intent import (
+from joryu.tooling.calls import ParsedToolCall
+from joryu.tooling.intent import (
     infer_planned_tool_name,
     needs_tool_call_recovery,
     thinking_plans_tool_use,

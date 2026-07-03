@@ -1,6 +1,6 @@
 """tool_calls.py: `<tool_call>` および ```json``` フェンスのパース。"""
 
-from joryu.tool_calls import (
+from joryu.tooling.calls import (
     ParsedToolCall,
     extract_tool_calls,
     extract_tool_calls_with_diagnostics,

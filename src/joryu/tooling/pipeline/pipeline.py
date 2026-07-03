@@ -5,13 +5,15 @@ from __future__ import annotations
 import json
 import uuid
 from dataclasses import asdict
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from joryu.tool_call_recovery import recover_tool_call
-from joryu.tool_calls import ParsedToolCall
-from joryu.tool_executor import ToolExecutor
-from joryu.tool_pipeline.decision import ToolLoopDecisionMaker
-from joryu.vllm.protocol import ChatResult, SupportsChat
+from joryu.tooling.call_recovery import recover_tool_call
+from joryu.tooling.calls import ParsedToolCall
+from joryu.tooling.executor import ToolExecutor
+from joryu.tooling.pipeline.decision import ToolLoopDecisionMaker
+
+if TYPE_CHECKING:
+    from joryu.vllm.protocol import ChatResult, SupportsChat
 
 DEFAULT_MAX_TURNS = 4
 
@@ -126,6 +128,8 @@ class ToolCallPipeline:
         no_think_fallback: bool = False,
     ) -> tuple[ChatResult, list[dict[str, Any]], dict[str, int] | None]:
         """tool_call が無くなるか max_turns に達するまで chat を回す。"""
+        from joryu.vllm.protocol import ChatResult
+
         turns: list[dict[str, Any]] = []
         working_messages = list(messages)
         final_chat: ChatResult | None = None

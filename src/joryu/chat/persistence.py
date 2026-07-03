@@ -6,7 +6,7 @@ from dataclasses import asdict
 from datetime import UTC, datetime
 from typing import Any
 
-from joryu.tool_pipeline.pipeline import aggregate_tool_calls_from_turns
+from joryu.tooling.pipeline.pipeline import aggregate_tool_calls_from_turns
 from joryu.vllm.protocol import ChatResult
 
 CHAT_CATEGORY = "人間との対話"

@@ -6,7 +6,7 @@ from dataclasses import asdict
 
 from joryu.chat.persistence import build_chat_record
 from joryu.core.styles import StylePreset, apply_style
-from joryu.tool_calls import ParsedToolCall
+from joryu.tooling.calls import ParsedToolCall
 from joryu.vllm.protocol import ChatResult
 
 

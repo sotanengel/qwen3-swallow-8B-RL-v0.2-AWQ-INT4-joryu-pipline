@@ -14,8 +14,8 @@ from joryu.chat.thinking_guard import strip_think_blocks
 from joryu.chat.tool_loop import ToolLoopRunner
 from joryu.chat.turn_persistence import TurnPersistence
 from joryu.core.styles import StylePreset
-from joryu.tool_calls import ParsedToolCall
-from joryu.tool_executor import ToolUpstreamError
+from joryu.tooling.calls import ParsedToolCall
+from joryu.tooling.executor import ToolUpstreamError
 from joryu.vllm.protocol import ChatResult
 from tests.conftest import FakeVllmClient
 

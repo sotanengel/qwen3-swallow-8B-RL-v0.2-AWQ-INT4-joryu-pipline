@@ -6,7 +6,7 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-from joryu.style_format import (
+from joryu.tooling.style_format import (
     has_dialog_think_leak,
     has_phrase_triple_repeat,
     has_prose_style_violation,

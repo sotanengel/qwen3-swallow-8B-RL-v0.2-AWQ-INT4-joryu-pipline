@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import copy
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from joryu.core.config import Config
 from joryu.core.prompt_bank import EffectiveSampling, PromptRow, merge_with_defaults
 from joryu.core.styles import StylePreset
 from joryu.core.system_prompt import build_system_prompt
-from joryu.tools import ToolDefinition, resolve_tool_ids
+
+if TYPE_CHECKING:
+    from joryu.tooling.registry import ToolDefinition
 
 
 @dataclass
@@ -66,6 +69,8 @@ def expand_variants(
     CLI 未指定の軸は merge 後の単一値を使用（style 未指定時は style_id=None）。
     mode 軸は #94 で削除済み (常に thinking 固定で運用)。
     """
+    from joryu.tooling.registry import resolve_tool_ids
+
     style_list: list[StylePreset | None] = list(style_presets) if style_presets else [None]
     variants: list[DistillVariant] = []
 

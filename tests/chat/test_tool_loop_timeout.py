@@ -8,7 +8,7 @@ import httpx
 import pytest
 
 from joryu.chat.tool_loop import ToolLoopRunner
-from joryu.tool_calls import ParsedToolCall
+from joryu.tooling.calls import ParsedToolCall
 from tests.conftest import FakeVllmClient
 
 _WEATHER_TOOLS = [

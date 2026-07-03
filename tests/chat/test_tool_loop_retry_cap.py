@@ -8,9 +8,9 @@ import time
 import pytest
 
 from joryu.chat.tool_loop import ToolLoopRunner
-from joryu.tool_calls import ParsedToolCall
-from joryu.tool_executor import ToolUpstreamError
-from joryu.tool_pipeline.pipeline import normalize_tool_arguments, tool_call_dedupe_key
+from joryu.tooling.calls import ParsedToolCall
+from joryu.tooling.executor import ToolUpstreamError
+from joryu.tooling.pipeline.pipeline import normalize_tool_arguments, tool_call_dedupe_key
 from tests.conftest import FakeVllmClient
 
 _WEATHER_TOOLS = [

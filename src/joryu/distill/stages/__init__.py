@@ -7,9 +7,9 @@ from typing import Any
 
 from joryu.distill.protocol import DistillContext
 from joryu.distill.record import record_from_chat
-from joryu.tool_call_recovery import recover_tool_call
-from joryu.tool_executor import ToolExecutor
-from joryu.tool_pipeline.pipeline import ToolCallPipeline, aggregate_tool_calls_from_turns
+from joryu.tooling.call_recovery import recover_tool_call
+from joryu.tooling.executor import ToolExecutor
+from joryu.tooling.pipeline.pipeline import ToolCallPipeline, aggregate_tool_calls_from_turns
 from joryu.vllm.protocol import ChatResult, SupportsChat
 
 

@@ -6,8 +6,8 @@ import httpx
 import pytest
 import respx
 
-from joryu.tool_calls import ParsedToolCall
-from joryu.tool_executor import McpToolExecutor
+from joryu.tooling.calls import ParsedToolCall
+from joryu.tooling.executor import McpToolExecutor
 
 
 def test_mcp_tool_executor_runs_weather_locally(monkeypatch) -> None:

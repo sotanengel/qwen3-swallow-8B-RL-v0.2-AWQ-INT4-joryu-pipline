@@ -6,7 +6,7 @@ import json
 import logging
 from typing import Any
 
-from joryu.tool_calls import ParsedToolCall
+from joryu.tooling.calls import ParsedToolCall
 from joryu.vllm.base import HttpVllmBase
 from joryu.vllm.common import (
     clamp_max_tokens_for_context,

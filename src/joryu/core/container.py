@@ -8,9 +8,9 @@ from typing import TYPE_CHECKING
 
 from joryu.core.config import Config, load_config
 from joryu.core.config_resolver import resolve_config_path
-from joryu.tool_executor import ToolExecutor, build_default_executor
 
 if TYPE_CHECKING:
+    from joryu.tooling.executor import ToolExecutor
     from joryu.vllm.protocol import SupportsChat
 
 
@@ -25,6 +25,7 @@ class DependencyContainer:
 
     @classmethod
     def build(cls, config_path: str | Path | None = None) -> DependencyContainer:
+        from joryu.tooling.executor import build_default_executor
         from joryu.vllm.factory import resolve_chat_client
 
         path = resolve_config_path(config_path)

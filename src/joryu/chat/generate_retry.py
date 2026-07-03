@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator, Callable
 from typing import Any
 
-from joryu.truncation import record_looks_truncated
+from joryu.tooling.truncation import record_looks_truncated
 from joryu.vllm.protocol import ChatResult
 
 DEFAULT_MAX_ATTEMPTS = 2

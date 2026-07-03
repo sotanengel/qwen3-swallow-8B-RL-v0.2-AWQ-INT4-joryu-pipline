@@ -16,7 +16,7 @@ from joryu.jobs.runner import JobRunner
 from joryu.jobs.store import JobStore
 from joryu.jobs.validate import validate_job_spec
 from joryu.orchestrator.profile import ModelProfile
-from joryu.tools import load_tools
+from joryu.tooling.registry import load_tools
 
 router = APIRouter()
 

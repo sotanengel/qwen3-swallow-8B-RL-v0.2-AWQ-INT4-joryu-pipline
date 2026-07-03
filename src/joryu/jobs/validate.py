@@ -10,7 +10,7 @@ from joryu.core.variants import parse_comma_list, parse_float_list
 from joryu.jobs.duration import parse_duration
 from joryu.jobs.models import CurateJobSpec, DistillJobSpec, SeedGenJobSpec
 from joryu.preflight import jsonl_has_content, resolve_distill_jsonl
-from joryu.tools import load_tools
+from joryu.tooling.registry import load_tools
 
 
 def validate_job_spec(spec: DistillJobSpec, *, repo_root: Path | None = None) -> None:
@@ -37,7 +37,7 @@ def validate_job_spec(spec: DistillJobSpec, *, repo_root: Path | None = None) ->
         if not tools_path.is_absolute():
             tools_path = cfg_path.parent / tools_path
         reg = load_tools(tools_path)
-        from joryu.tools import resolve_tool_ids
+        from joryu.tooling.registry import resolve_tool_ids
 
         resolve_tool_ids(spec.tool_ids, reg)
 

@@ -1,6 +1,6 @@
 """style_format.py: 出力形式メトリクスのヒューリスティック。"""
 
-from joryu.style_format import (
+from joryu.tooling.style_format import (
     aggregate_by_style,
     check_style_format_criteria,
     format_metrics,

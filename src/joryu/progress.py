@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from joryu.io.jsonl import iter_jsonl
-from joryu.truncation import record_looks_truncated
+from joryu.tooling.truncation import record_looks_truncated
 
 
 def _round_float(value: Any) -> Any:

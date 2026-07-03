@@ -17,7 +17,7 @@ from joryu.chat.session_models import (
     SessionListItem,
 )
 from joryu.core.styles import StylePreset
-from joryu.tool_executor import ToolExecutor
+from joryu.tooling.executor import ToolExecutor
 
 __all__ = [
     "TITLE_MAX_LEN",

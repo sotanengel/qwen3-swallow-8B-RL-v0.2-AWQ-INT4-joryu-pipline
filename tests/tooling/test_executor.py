@@ -2,8 +2,8 @@
 
 import pytest
 
-from joryu.tool_calls import ParsedToolCall
-from joryu.tool_executor import RegistryToolExecutor, StubToolExecutor, build_default_executor
+from joryu.tooling.calls import ParsedToolCall
+from joryu.tooling.executor import RegistryToolExecutor, StubToolExecutor, build_default_executor
 
 
 def test_stub_executor_returns_fixed() -> None:

@@ -10,7 +10,7 @@ from typing import Any
 
 from joryu.chat.session import ChatSession
 from joryu.chat.streamer import stream_column_turn
-from joryu.tool_executor import ToolExecutor
+from joryu.tooling.executor import ToolExecutor
 from joryu.vllm.protocol import SupportsChat, SupportsChatStream
 
 DEFAULT_SAMPLING = {"temperature": 0.7, "top_p": 0.9}

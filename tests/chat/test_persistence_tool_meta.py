@@ -10,8 +10,8 @@ import httpx
 import respx
 
 from joryu.chat.streamer import stream_column_turn
-from joryu.tool_calls import ParsedToolCall
-from joryu.tool_executor import McpToolExecutor, ToolUpstreamError
+from joryu.tooling.calls import ParsedToolCall
+from joryu.tooling.executor import McpToolExecutor, ToolUpstreamError
 from joryu.vllm.protocol import ChatResult
 from tests.chat.test_think_leak_persistence import _make_dialog_session
 from tests.conftest import FakeVllmClient

@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from joryu.tool_calls import ParsedToolCall, extract_tool_calls_with_diagnostics
+from joryu.tooling.calls import ParsedToolCall, extract_tool_calls_with_diagnostics
 from joryu.vllm.common import extract_known_tool_names
 from joryu.vllm.protocol import ChatResult
 

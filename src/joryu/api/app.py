@@ -23,9 +23,9 @@ from joryu.core.config import load_config
 from joryu.core.http_client import close_shared_async_client
 from joryu.jobs.runner import JobRunner, default_jobs_dir
 from joryu.jobs.store import JobStore
-from joryu.mcp_runtime import probe_mcp_health
+from joryu.mcp.runtime import probe_mcp_health
 from joryu.orchestrator.factory import build_orchestrator
-from joryu.tools_impl.weather import apply_weather_config
+from joryu.tooling.impl.weather import apply_weather_config
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +89,7 @@ def create_app(*, repo_root: Path | None = None) -> FastAPI:
             enabled=cfg.mcp.enabled,
         )
     else:
-        from joryu.mcp_runtime import McpRuntimeState
+        from joryu.mcp.runtime import McpRuntimeState
 
         app.state.mcp_runtime = McpRuntimeState(enabled=False, state="down")
 

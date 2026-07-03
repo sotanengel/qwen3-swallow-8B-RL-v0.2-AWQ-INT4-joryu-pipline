@@ -19,7 +19,7 @@ from joryu.core.config import load_config
 from joryu.core.datetime_context import format_date_context_ja, now_jst
 from joryu.core.styles import StylePreset, load_styles
 from joryu.core.system_prompt import build_system_prompt
-from joryu.tool_executor import ToolExecutor
+from joryu.tooling.executor import ToolExecutor
 from joryu.vllm.protocol import SupportsChat, SupportsChatStream
 
 
@@ -50,7 +50,7 @@ class ChatService:
         return load_styles(styles_path)
 
     def create_session(self, styles: dict[str, StylePreset]) -> ChatSession:
-        from joryu.tools import load_tools, merge_tools
+        from joryu.tooling.registry import load_tools, merge_tools
 
         tools_map = load_tools(self._repo_root / self._cfg.distill.tools_file)
         tool_ids = sorted(tools_map.keys())

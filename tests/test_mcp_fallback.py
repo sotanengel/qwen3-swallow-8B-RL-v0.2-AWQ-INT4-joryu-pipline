@@ -8,9 +8,9 @@ import httpx
 import respx
 
 from joryu.api.app import create_app
-from joryu.mcp_runtime import McpRuntimeState, probe_mcp_health
-from joryu.tool_calls import ParsedToolCall
-from joryu.tool_executor import McpToolExecutor
+from joryu.mcp.runtime import McpRuntimeState, probe_mcp_health
+from joryu.tooling.calls import ParsedToolCall
+from joryu.tooling.executor import McpToolExecutor
 
 
 @respx.mock

@@ -8,7 +8,7 @@ import pytest
 
 from joryu.chat.session import ChatSessionStore
 from joryu.core.styles import StylePreset
-from joryu.tool_executor import StubToolExecutor
+from joryu.tooling.executor import StubToolExecutor
 
 
 @pytest.fixture

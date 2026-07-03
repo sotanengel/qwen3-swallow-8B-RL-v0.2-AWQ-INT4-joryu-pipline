@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from joryu.tool_calls import (
+from joryu.tooling.calls import (
     ParsedToolCall,
     _collect_bare_json_spans,
     _collect_json_fence_spans,

@@ -5,13 +5,15 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from joryu.core.config import Config
 from joryu.io.jsonl import iter_jsonl
-from joryu.tools import ToolDefinition, merge_tools, resolve_tool_ids
+
+if TYPE_CHECKING:
+    from joryu.tooling.registry import ToolDefinition
 
 logger = logging.getLogger(__name__)
 
@@ -124,6 +126,8 @@ def merge_with_defaults(
     tools_registry: dict[str, ToolDefinition] | None = None,
 ) -> EffectiveSampling:
     """PromptRow の上書き値と Config 既定値を畳んで EffectiveSampling を返す。"""
+    from joryu.tooling.registry import merge_tools, resolve_tool_ids
+
     sampling: dict[str, Any] = {
         "temperature": cfg.model.temperature,
         "top_p": cfg.model.top_p,

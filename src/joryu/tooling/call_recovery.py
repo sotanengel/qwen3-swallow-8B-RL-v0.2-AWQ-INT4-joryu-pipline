@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from joryu.tool_intent import (
+from joryu.tooling.intent import (
     chat_has_tool_calls,
     infer_planned_tool_name,
     needs_tool_call_recovery,
 )
-from joryu.vllm.common import extract_known_tool_names
-from joryu.vllm.protocol import ChatResult, SupportsChat
+
+if TYPE_CHECKING:
+    from joryu.vllm.protocol import ChatResult, SupportsChat
 
 DEFAULT_MAX_RECOVERY_ATTEMPTS = 2
 
@@ -36,6 +37,8 @@ def recover_tool_call(
     Returns:
         (最終 ChatResult, tool_call_recovery メタデータ)
     """
+    from joryu.vllm.common import extract_known_tool_names
+
     metadata: dict[str, Any] = {
         "attempts": 0,
         "method": None,

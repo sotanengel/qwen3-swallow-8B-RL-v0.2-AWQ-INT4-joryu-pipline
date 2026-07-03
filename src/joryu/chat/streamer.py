@@ -12,8 +12,8 @@ from joryu.chat.tool_loop import ToolLoopRunner
 from joryu.chat.turn_persistence import TurnPersistence
 from joryu.core.styles import StylePreset
 from joryu.core.system_prompt import build_system_prompt
-from joryu.tool_executor import ToolExecutor
-from joryu.tools import ToolDefinition
+from joryu.tooling.executor import ToolExecutor
+from joryu.tooling.registry import ToolDefinition
 from joryu.vllm.protocol import SupportsChat, SupportsChatStream
 
 DEFAULT_MAX_TURNS = 4

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from joryu.tool_calls import ParsedToolCall
+from joryu.tooling.calls import ParsedToolCall
 
 
 @dataclass

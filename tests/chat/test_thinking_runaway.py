@@ -11,8 +11,8 @@ from joryu.chat.thinking_guard import (
     strip_empty_thinking_tags,
 )
 from joryu.chat.tool_loop import ToolLoopRunner
-from joryu.tool_calls import ParsedToolCall
-from joryu.tool_executor import ToolUpstreamError
+from joryu.tooling.calls import ParsedToolCall
+from joryu.tooling.executor import ToolUpstreamError
 from joryu.vllm.protocol import ChatResult
 from tests.conftest import FakeVllmClient
 
