@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from joryu.core.prompt_bank import load_prompt_bank
-from joryu.prompt_dedup import ExactDedup
+from joryu.persistence.prompt_dedup import ExactDedup
 from joryu.seed_gen.config import SEED_GEN_MODE_CHECK, SEED_GEN_MODE_CREATE, SeedGenConfig
 from joryu.seed_gen.counts import count_by_domain
 from joryu.seed_gen.dedup import EmbeddingIndex, load_sentence_transformer_backend

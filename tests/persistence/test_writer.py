@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 
-from joryu.writer import JsonlAppendWriter
+from joryu.persistence.writer import JsonlAppendWriter
 
 
 def test_write_one_then_reopen_appends(tmp_path: Path) -> None:
@@ -48,7 +48,7 @@ def test_flush_per_line(tmp_path: Path) -> None:
 
 
 def test_normalize_jsonl_line_strips_control_chars() -> None:
-    from joryu.writer import normalize_jsonl_line
+    from joryu.persistence.writer import normalize_jsonl_line
 
     assert normalize_jsonl_line("a\u0001b") == "ab"
     assert normalize_jsonl_line("a\r\nb") == "a\nb"

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from joryu.stats import resolve_repo_root, resolve_stats_output_path, write_stats_json
+from joryu.persistence.stats import resolve_repo_root, resolve_stats_output_path, write_stats_json
 
 
 def test_write_stats_json_writes_meta_and_counts(tmp_path: Path) -> None:
@@ -33,7 +33,7 @@ def test_write_stats_json_handles_missing_input(tmp_path: Path) -> None:
 
 def test_write_stats_json_atomic_replace(tmp_path: Path) -> None:
     """書き出し完了後のみ dst が valid JSON になる (tmp 経由の atomic replace)。"""
-    from joryu.dashboard_json import write_dashboard_json
+    from joryu.persistence.dashboard_json import write_dashboard_json
 
     src = tmp_path / "r.jsonl"
     src.write_text(

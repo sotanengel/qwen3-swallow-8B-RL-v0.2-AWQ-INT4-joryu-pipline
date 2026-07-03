@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from joryu.migrate import csv_to_jsonl
+from joryu.persistence.migrate import csv_to_jsonl
 from tests.helpers.jsonl import read_jsonl
 
 

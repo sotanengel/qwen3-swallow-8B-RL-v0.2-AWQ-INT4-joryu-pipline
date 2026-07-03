@@ -691,7 +691,7 @@ def make_refresh_stats(repo_root: Path) -> Callable[[DistillJobSpec], int]:
 
     def refresh_stats(spec: DistillJobSpec) -> int:
         from joryu.cli.stats import main as stats_main
-        from joryu.stats import resolve_stats_output_path
+        from joryu.persistence.stats import resolve_stats_output_path
 
         cfg = repo_root / spec.config
         out = resolve_stats_output_path(repo_root=repo_root)

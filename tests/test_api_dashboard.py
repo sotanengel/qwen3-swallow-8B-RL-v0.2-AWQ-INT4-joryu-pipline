@@ -76,7 +76,7 @@ def test_dashboard_responses_returns_jsonl_text(client: TestClient) -> None:
 
 
 def test_dashboard_delete_one_response(client: TestClient, repo_root: Path) -> None:
-    from joryu.responses_store import record_id
+    from joryu.persistence.responses_store import record_id
 
     rid = record_id({"prompt": "P1", "answer": "A1"})
     res = client.delete(f"/api/dashboard/responses/{rid}")

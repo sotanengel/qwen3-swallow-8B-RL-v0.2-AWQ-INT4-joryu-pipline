@@ -77,7 +77,7 @@ for line in text.splitlines():
 レコード内 `tools` フィールドだけで chat_template 入力を再構築できる:
 
 ```python
-from joryu.record_replay import rebuild_chat_template_inputs
+from joryu.persistence.record_replay import rebuild_chat_template_inputs
 
 inputs = rebuild_chat_template_inputs(record)
 # inputs["messages"], inputs["tools"] を apply_chat_template に渡す

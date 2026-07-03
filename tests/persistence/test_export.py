@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 import zstandard as zstd
 
-from joryu.export import ExportResult, export_jsonl
+from joryu.persistence.export import ExportResult, export_jsonl
 from tests.helpers.jsonl import write_jsonl
 
 

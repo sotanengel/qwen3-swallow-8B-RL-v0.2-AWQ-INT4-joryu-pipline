@@ -7,7 +7,7 @@ import platform
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from joryu.dashboard_json import write_dashboard_json
+from joryu.persistence.dashboard_json import write_dashboard_json
 
 
 def test_write_dashboard_json_creates_file(tmp_path: Path) -> None:

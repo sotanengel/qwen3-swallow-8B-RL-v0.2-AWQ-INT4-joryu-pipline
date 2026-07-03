@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 from joryu.cli.common import add_config_argument, resolve_cli_config, resolve_cli_distill_input
-from joryu.export import DEFAULT_LEVEL, export_jsonl
+from joryu.persistence.export import DEFAULT_LEVEL, export_jsonl
 
 logger = logging.getLogger(__name__)
 

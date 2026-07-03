@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 from joryu.core.config import Config
-from joryu.progress import load_done_keys, run_key_from_parts, run_key_from_record
+from joryu.persistence.progress import load_done_keys, run_key_from_parts, run_key_from_record
 
 
 def test_returns_empty_when_missing(tmp_path: Path) -> None:

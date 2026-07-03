@@ -15,7 +15,7 @@ from joryu.jobs.runner import JobRunner
 from joryu.jobs.store import JobStore
 from joryu.jobs.validate import validate_seed_gen_job_spec
 from joryu.orchestrator.profile import ModelProfile
-from joryu.prompt_dedup import ExactDedup
+from joryu.persistence.prompt_dedup import ExactDedup
 from joryu.seed_gen.config import DEFAULT_DOMAINS_REL, SeedGenConfig, resolve_domains_config_path
 from joryu.seed_gen.counts import count_by_domain
 from joryu.seed_gen.pipeline import DEFAULT_BANK_REL

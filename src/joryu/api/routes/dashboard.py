@@ -10,8 +10,8 @@ from fastapi.responses import JSONResponse, PlainTextResponse, Response
 
 from joryu.core.paths import resolve_stats_output_path
 from joryu.infra.preflight import ensure_stats_json, resolve_distill_jsonl
-from joryu.responses_store import delete_all_records, delete_record
-from joryu.stats import compute_stats
+from joryu.persistence.responses_store import delete_all_records, delete_record
+from joryu.persistence.stats import compute_stats
 
 router = APIRouter()
 

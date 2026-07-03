@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from joryu.prompt_dedup import PromptDedupGuard, normalize_prompt
+from joryu.persistence.prompt_dedup import PromptDedupGuard, normalize_prompt
 
 
 def test_normalize_prompt_nfkc() -> None:

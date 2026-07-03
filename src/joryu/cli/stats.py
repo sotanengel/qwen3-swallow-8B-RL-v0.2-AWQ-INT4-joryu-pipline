@@ -14,7 +14,7 @@ from joryu.curate.stats import (
     write_curation_json,
     write_screening_json,
 )
-from joryu.stats import DEFAULT_STATS_OUTPUT, write_stats_json
+from joryu.persistence.stats import DEFAULT_STATS_OUTPUT, write_stats_json
 
 DEFAULT_OUTPUT = DEFAULT_STATS_OUTPUT
 

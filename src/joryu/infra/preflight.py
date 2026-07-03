@@ -534,7 +534,7 @@ def ensure_prompt_bank(
 ) -> None:
     """prompt bank JSONL が無ければ seed JSONL のコピーまたは CSV 変換で用意する。"""
     from joryu.core.paths import DEFAULT_CONFIG, resolve_optional_config
-    from joryu.migrate import csv_to_jsonl
+    from joryu.persistence.migrate import csv_to_jsonl
 
     cfg = resolve_optional_config(repo_root / DEFAULT_CONFIG)
     bank_path = (repo_root / cfg.distill.prompt_bank).resolve()
