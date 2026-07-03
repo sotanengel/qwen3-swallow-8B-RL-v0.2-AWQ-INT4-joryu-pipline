@@ -16,7 +16,6 @@ from joryu.chat.thinking_guard import (
 )
 from joryu.chat.token_stream import TokenStreamer
 from joryu.chat.tool_meta import ToolTurnMeta, read_executor_mcp_status
-from joryu.completion_normalize import normalize_chat_result
 from joryu.tool_call_recovery import recover_tool_call
 from joryu.tool_calls import ParsedToolCall
 from joryu.tool_executor import ToolExecutor, ToolUpstreamError
@@ -26,7 +25,8 @@ from joryu.tool_pipeline.pipeline import (
     normalize_tool_arguments,
     tool_call_dedupe_key,
 )
-from joryu.vllm_client import ChatResult, SupportsChat, SupportsChatStream
+from joryu.vllm.normalize import normalize_chat_result
+from joryu.vllm.protocol import ChatResult, SupportsChat, SupportsChatStream
 
 DEFAULT_MAX_TURNS = 4
 _MAX_REPEAT_TOOL_ERROR = 2

@@ -10,15 +10,14 @@ import re
 import pytest
 
 from joryu.core.config import Config
-from joryu.vllm_client import (
-    ChatResult,
-    SupportsChat,
-    VllmClient,
+from joryu.vllm.common import (
     build_chat_template_kwargs,
     build_offline_chat_kwargs,
     compute_effective_max_tokens,
     extract_thinking,
 )
+from joryu.vllm.inproc import VllmClient
+from joryu.vllm.protocol import ChatResult, SupportsChat
 
 
 def test_extract_thinking_handles_thinking_block() -> None:

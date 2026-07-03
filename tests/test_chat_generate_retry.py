@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 
 from joryu.chat.generate_retry import chat_needs_retry, run_tool_loop_with_retry
-from joryu.vllm_client import ChatResult
+from joryu.vllm.protocol import ChatResult
 
 
 def test_chat_needs_retry_empty_answer() -> None:

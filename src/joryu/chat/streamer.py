@@ -14,7 +14,7 @@ from joryu.core.styles import StylePreset
 from joryu.core.system_prompt import build_system_prompt
 from joryu.tool_executor import ToolExecutor
 from joryu.tools import ToolDefinition
-from joryu.vllm_client import SupportsChat, SupportsChatStream
+from joryu.vllm.protocol import SupportsChat, SupportsChatStream
 
 DEFAULT_MAX_TURNS = 4
 _FINISH_REASON_ERROR = "error"

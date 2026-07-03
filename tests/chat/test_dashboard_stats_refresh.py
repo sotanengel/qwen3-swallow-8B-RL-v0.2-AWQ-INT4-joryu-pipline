@@ -7,7 +7,7 @@ from pathlib import Path
 from joryu.chat.session import ChatColumn, ChatSession, ChatSessionConfig, ChatSessionState
 from joryu.chat.turn_persistence import TurnPersistence
 from joryu.core.styles import StylePreset
-from joryu.vllm_client import ChatResult
+from joryu.vllm.protocol import ChatResult
 
 
 def test_persist_turn_refreshes_stats_json(tmp_path: Path, monkeypatch) -> None:

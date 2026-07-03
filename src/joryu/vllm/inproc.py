@@ -6,7 +6,6 @@ import logging
 import threading
 from typing import Any
 
-from joryu.completion_normalize import normalize_chat_result
 from joryu.core.config import ModelConfig, VllmConfig
 from joryu.core.paths import resolve_limits_probe_path
 from joryu.vllm.common import (
@@ -14,9 +13,10 @@ from joryu.vllm.common import (
     clamp_max_tokens_for_context,
     extract_thinking,
 )
+from joryu.vllm.limits import clamp_model_limits, load_probe_limits
+from joryu.vllm.normalize import normalize_chat_result
 from joryu.vllm.prompt_tokens import estimate_chat_prompt_tokens
 from joryu.vllm.protocol import ChatResult, VllmError
-from joryu.vllm_limits import clamp_model_limits, load_probe_limits
 
 logger = logging.getLogger(__name__)
 

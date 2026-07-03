@@ -15,7 +15,7 @@ from typing import Any, Literal, Protocol
 
 import httpx
 
-from joryu.vllm_client import SupportsChat
+from joryu.vllm.protocol import SupportsChat
 
 logger = logging.getLogger(__name__)
 
@@ -574,7 +574,7 @@ def resolve_screening_judge(
         root = resolve_repo_root()
         cfg_path = (root / DEFAULT_CONFIG) if root else Path(DEFAULT_CONFIG)
         cfg = load_config(cfg_path) if cfg_path.exists() else Config()
-        from joryu.vllm_client import resolve_chat_client
+        from joryu.vllm.factory import resolve_chat_client
 
         chat = resolve_chat_client(cfg.model, cfg.vllm)
         return VllmJudgeClient(chat, rubric_prompt=DEFAULT_RUBRIC_PROMPT, judge_mode=judge_mode)

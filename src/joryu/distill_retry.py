@@ -8,7 +8,7 @@ from collections.abc import Callable
 from typing import Any
 
 from joryu.truncation import record_looks_truncated
-from joryu.vllm_client import ChatResult, SupportsChat
+from joryu.vllm.protocol import ChatResult, SupportsChat
 
 TRUNCATION_RETRY_ALERT_THRESHOLD = 3
 

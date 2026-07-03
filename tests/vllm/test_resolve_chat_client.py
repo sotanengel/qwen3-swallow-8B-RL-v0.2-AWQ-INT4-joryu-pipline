@@ -5,15 +5,12 @@ from __future__ import annotations
 import pytest
 
 from joryu.core.config import Config, ModelConfig, VllmConfig
-from joryu.vllm_client import (
-    DEFAULT_LOCAL_VLLM_URL,
-    VllmClient,
-    VllmError,
-    resolve_chat_client,
-    resolve_stream_chat_client,
-)
-from joryu.vllm_serve_client import VllmServeClient
-from joryu.vllm_stream_client import VllmServeStreamClient
+from joryu.vllm.common import DEFAULT_LOCAL_VLLM_URL
+from joryu.vllm.factory import resolve_chat_client, resolve_stream_chat_client
+from joryu.vllm.inproc import VllmClient
+from joryu.vllm.protocol import VllmError
+from joryu.vllm.serve import VllmServeClient
+from joryu.vllm.stream import VllmServeStreamClient
 
 
 def test_resolve_vllm_serve_backend_returns_serve_client(

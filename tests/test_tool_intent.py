@@ -8,7 +8,7 @@ from joryu.tool_intent import (
     needs_tool_call_recovery,
     thinking_plans_tool_use,
 )
-from joryu.vllm_client import ChatResult
+from joryu.vllm.protocol import ChatResult
 
 
 def test_thinking_plans_tool_use_detects_english_intent() -> None:

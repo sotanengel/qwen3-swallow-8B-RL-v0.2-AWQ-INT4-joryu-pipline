@@ -7,7 +7,7 @@ from dataclasses import asdict
 from joryu.chat.persistence import build_chat_record
 from joryu.core.styles import StylePreset, apply_style
 from joryu.tool_calls import ParsedToolCall
-from joryu.vllm_client import ChatResult
+from joryu.vllm.protocol import ChatResult
 
 
 def test_build_chat_record_category_and_session_fields() -> None:

@@ -8,7 +8,7 @@ import json
 import httpx
 import pytest
 
-from joryu.vllm_stream_client import (
+from joryu.vllm.stream import (
     StreamChunk,
     ToolCallStreamAccumulator,
     VllmServeStreamClient,

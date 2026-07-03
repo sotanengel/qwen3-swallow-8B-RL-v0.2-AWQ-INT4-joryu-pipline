@@ -13,7 +13,7 @@ from joryu.chat.thinking_guard import (
 from joryu.chat.tool_loop import ToolLoopRunner
 from joryu.tool_calls import ParsedToolCall
 from joryu.tool_executor import ToolUpstreamError
-from joryu.vllm_client import ChatResult
+from joryu.vllm.protocol import ChatResult
 from tests.conftest import FakeVllmClient
 
 _WEATHER_TOOLS = [
@@ -46,7 +46,7 @@ class _RunawayStreamClient:
         tool_choice: dict[str, Any] | str | None = None,
         **sampling_overrides: Any,
     ):
-        from joryu.vllm_stream_client import StreamChunk
+        from joryu.vllm.stream import StreamChunk
 
         self.calls.append({"messages": messages})
         for _ in range(self._repeats):

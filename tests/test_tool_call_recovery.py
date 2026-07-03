@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from joryu.tool_call_recovery import build_named_function_tool_choice, recover_tool_call
-from joryu.vllm_client import ChatResult
+from joryu.vllm.protocol import ChatResult
 
 
 class RecoveryFakeClient:

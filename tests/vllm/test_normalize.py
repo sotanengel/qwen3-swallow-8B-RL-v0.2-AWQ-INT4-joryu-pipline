@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from joryu.completion_normalize import normalize_chat_result, sanitize_thinking_trace
-from joryu.vllm_client import ChatResult
+from joryu.vllm.normalize import normalize_chat_result, sanitize_thinking_trace
+from joryu.vllm.protocol import ChatResult
 
 _WEATHER_TOOLS = [
     {

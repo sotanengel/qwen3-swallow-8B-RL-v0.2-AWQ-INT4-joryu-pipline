@@ -6,7 +6,6 @@ import json
 import logging
 from typing import Any
 
-from joryu.completion_normalize import normalize_chat_result
 from joryu.tool_calls import ParsedToolCall
 from joryu.vllm.base import HttpVllmBase
 from joryu.vllm.common import (
@@ -18,6 +17,7 @@ from joryu.vllm.common import (
     parse_context_overflow_input_tokens,
     resolve_serve_effective_max_tokens,
 )
+from joryu.vllm.normalize import normalize_chat_result
 from joryu.vllm.protocol import ChatResult, VllmError
 
 logger = logging.getLogger(__name__)

@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from joryu.tool_calls import ParsedToolCall, extract_tool_calls_with_diagnostics
-
-if TYPE_CHECKING:
-    from joryu.vllm_client import ChatResult
+from joryu.vllm.common import extract_known_tool_names
+from joryu.vllm.protocol import ChatResult
 
 _META_INSTRUCTION_RE = re.compile(
     r"(?i)"
@@ -66,8 +65,6 @@ def normalize_chat_result(
     OpenAI streaming 経路で bare JSON が answer に残るケース (#229) や、
     2 周目以降の JSON 再生成 (#233) を救済する。
     """
-    from joryu.vllm_client import ChatResult, extract_known_tool_names
-
     known = extract_known_tool_names(tools)
     known_set = known or None
 

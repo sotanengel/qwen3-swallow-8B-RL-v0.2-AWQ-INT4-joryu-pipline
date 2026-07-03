@@ -720,7 +720,7 @@ def vllm_limits_probe_needed(
     if "api" not in up_services and "joryu" not in up_services:
         return False
     from joryu.core.paths import DEFAULT_CONFIG, resolve_optional_config
-    from joryu.vllm_limits import limits_probe_stale, vllm_config_fingerprint
+    from joryu.vllm.limits import limits_probe_stale, vllm_config_fingerprint
 
     limits_path = resolve_vllm_limits_path(repo_root)
     if not limits_path.is_file():
@@ -756,7 +756,7 @@ def ensure_vllm_limits(
 
     from joryu.core.paths import DEFAULT_CONFIG
     from joryu.docker_delegate import stop_orphan_joryu_containers
-    from joryu.vllm_probe import run_vllm_probe
+    from joryu.vllm.probe import run_vllm_probe
 
     stop_orphan_joryu_containers()
 
