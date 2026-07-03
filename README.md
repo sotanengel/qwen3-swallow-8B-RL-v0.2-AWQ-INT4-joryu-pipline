@@ -189,11 +189,11 @@ Swallow モデルカードは tool use を **未学習・未検証** と明記�
 
 | 対策 | モジュール | 設定 |
 |---|---|---|
-| 生出力・parser ロスト検出 | `tool_calls.py`, `vllm_client.py` | 常時 |
-| intent 検出 → named function 強制リトライ | `tool_call_recovery.py` | 常時 |
+| 生出力・parser ロスト検出 | `tooling/calls.py`, `joryu.vllm/` | 常時 |
+| intent 検出 → named function 強制リトライ | `tooling/call_recovery.py` | 常時 |
 | `enable_thinking=False` フォールバック | 同上 | `distill.no_think_fallback: true` |
-| tools 付き `repetition_penalty` 低減 | `prompt_bank.py` | `distill.tools_repetition_penalty: 1.0` |
-| invocation_rule 付き system_prompt | `tools.yaml`, `prompt_bank.py` | `tools.yaml` |
+| tools 付き `repetition_penalty` 低減 | `core/prompt_bank.py` | `distill.tools_repetition_penalty: 1.0` |
+| invocation_rule 付き system_prompt | `tools.yaml`, `core/prompt_bank.py` | `tools.yaml` |
 | curate 自動除外 | `curate/signals/tool_use.py` | `TOOL-PLAN`, `TOOL-CLAIM` |
 
 ### 本パイプラインのスコープ外（段階3）
@@ -219,7 +219,7 @@ Swallow モデルカードは tool use を **未学習・未検証** と明記�
 ## ディレクトリ概要
 
 ```
-src/joryu/        Python パッケージ (config, prompt_bank, vllm_client, distill, export, stats, jobs, api)
+src/joryu/        Python パッケージ (core, vllm, tooling, infra, persistence, distill, curate, jobs, api)
 styles.yaml       文体プリセット定義
 tools.yaml        蒸留用ツール定義 (OpenAI / Qwen3 互換 JSON Schema)
 src/joryu/cli/    CLI エントリポイント (joryu-distill, joryu-api 等)
