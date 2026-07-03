@@ -18,12 +18,12 @@ SFT 教師データとして再利用可能な形で配布する。
 
 | ID | 要件 | 実装 |
 |---|---|---|
-| R-01 | プロンプト 1 行ごとに `mode` / `sampling` / `system_prompt` 上書きできる | [src/joryu/prompt_bank.py](../src/joryu/prompt_bank.py) |
-| R-02 | 推論モード / 非推論 / auto + ツール呼び出し記録 (`tools.yaml` + 行 ad-hoc) | [src/joryu/distill.py](../src/joryu/distill.py), [src/joryu/vllm_client.py](../src/joryu/vllm_client.py), [src/joryu/tools.py](../src/joryu/tools.py) |
-| R-03 | 中断・再開が安全 (既処理レコードはスキップ) | [src/joryu/progress.py](../src/joryu/progress.py), [src/joryu/writer.py](../src/joryu/writer.py) |
+| R-01 | プロンプト 1 行ごとに `mode` / `sampling` / `system_prompt` 上書きできる | [src/joryu/core/prompt_bank.py](../src/joryu/core/prompt_bank.py) |
+| R-02 | 推論モード / 非推論 / auto + ツール呼び出し記録 (`tools.yaml` + 行 ad-hoc) | [src/joryu/distill/pipeline.py](../src/joryu/distill/pipeline.py), [src/joryu/vllm/](../src/joryu/vllm/), [src/joryu/tooling/registry.py](../src/joryu/tooling/registry.py) |
+| R-03 | 中断・再開が安全 (既処理レコードはスキップ) | [src/joryu/persistence/progress.py](../src/joryu/persistence/progress.py), [src/joryu/persistence/writer.py](../src/joryu/persistence/writer.py) |
 | R-04 | 実行コマンドは簡略 (count / duration のみで起動可能) | [src/joryu/cli/distill.py](../src/joryu/cli/distill.py) |
-| R-05 | Windows でも実行できる (Docker 自動委譲) | [src/joryu/docker_delegate.py](../src/joryu/docker_delegate.py) |
-| R-06 | 出力データは圧縮 + ハッシュ付きで持ち運べる | [src/joryu/export.py](../src/joryu/export.py) |
+| R-05 | Windows でも実行できる (Docker 自動委譲) | [src/joryu/infra/docker/delegate.py](../src/joryu/infra/docker/delegate.py) |
+| R-06 | 出力データは圧縮 + ハッシュ付きで持ち運べる | [src/joryu/persistence/export.py](../src/joryu/persistence/export.py) |
 | R-07 | データ品質を可視化できる (検索 + 分布) | [dashboard/](../dashboard/) |
 | R-08 | TDD: ruff / pre-commit / pytest / CI で常時担保 | [.github/workflows/ci.yml](../.github/workflows/ci.yml) |
 | R-09 | 既存 JSONL (生 / `.zst`) をストリーミングで読み込みレコード単位評価 | [src/joryu/curate/loader.py](../src/joryu/curate/loader.py) |

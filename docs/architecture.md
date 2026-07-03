@@ -1,7 +1,5 @@
 # joryu アーキテクチャ
 
-> **注意**: パッケージ再編（#405）進行中のため、本ドキュメント内のモジュールパスは一時的に古い場合がある。再編完了時に全面更新する。
-
 ```
 ┌──────────────────────────────────────────────────────────────────┐
 │                        joryu pipeline                            │
@@ -11,39 +9,39 @@ config.yaml ──┐
 styles.yaml ──┤
 tools.yaml ───┤
               ▼
-   prompt_bank.py ◄── data/prompts/*.jsonl (1 行 1 prompt + row overrides + tool_ids)
+   core/prompt_bank.py ◄── data/prompts/*.jsonl (1 行 1 prompt + row overrides + tool_ids)
               │
               ▼
-   tools.py (tool_ids → OpenAI schema 解決)
+   tooling/registry.py (tool_ids → OpenAI schema 解決)
               │
               ▼
-   variants.py (style × temperature × top_p × mode の直積)
+   core/variants.py (style × temperature × top_p × mode の直積)
               │
               ▼
-   distill.py ─── chat_via_template ───▶ resolve_chat_client() ──┬──▶ VllmServeClient → vllm serve :8100/v1 (既定)
-              │         ▲                      │                 └──▶ VllmClient (in-process GPU)
-              │         └── tool_loop 時: tool_executor.py (Stub/Registry)
+   distill/pipeline.py ─ chat_via_template ───▶ resolve_chat_client() ──┬──▶ VllmServeClient → vllm serve :8100/v1 (既定)
+              │         ▲                      │                        └──▶ VllmClient (in-process GPU)
+              │         └── tool_loop 時: tooling/executor.py (Stub/Registry)
               │   ◄── enable_thinking で <think> 切替 ──┘
               │
               ▼
-   writer.py (resume-safe JSONL append, ensure_ascii=False)
+   persistence/writer.py (resume-safe JSONL append, ensure_ascii=False)
               │
               ▼
    data/distilled/responses.jsonl
               │
-       ┌──────┴──────────────────┬─────────────────┐
-       ▼                         ▼                 ▼
-   export.py                  stats.py        curate/loader.py
-   (zstd + SHA256             (category /         │
-    + meta.json + tar)         mode / length /    ▼
-       │                       sampling /     curate/signals/stat.py (R-10)
-       │                       timeline)          │
-       ▼                                          ▼ (第一段通過分のみ)
-   exports/<ts>/                              curate/signals/llm_judge.py (R-11)
-   responses.jsonl.zst                            │
-                                                  ▼
-                                              curate/scoring.py + writer.py
-                                                  │
+       ┌──────┴──────────────────────┬─────────────────┐
+       ▼                              ▼                 ▼
+   persistence/export.py    persistence/stats.py   curate/loader.py
+   (zstd + SHA256              (category /              │
+    + meta.json + tar)          mode / length /         ▼
+       │                        sampling /     curate/signals/stat.py (R-10)
+       │                        timeline)                │
+       ▼                                                 ▼ (第一段通過分のみ)
+   exports/<ts>/                                 curate/signals/llm_judge.py (R-11)
+   responses.jsonl.zst                                   │
+                                                          ▼
+                                          curate/scoring.py + curate/writer.py
+                                                          │
                                        ┌──────────┴──────────┐
                                        ▼                     ▼
                                    responses.high_quality   responses.rejected
@@ -73,24 +71,34 @@ tools.yaml ───┤
                           data/jobs/*.json (状態・ログ)
 ```
 
-## レイヤー再設計 (#249)
+## レイヤー再設計 (#249, パッケージ再編 #405 で最終形に到達)
 
 ```
-Entry (cli/*, api/routes/*)
-        │
-        ▼
-DependencyContainer (container.py + config_resolver.py)
-        │
-        ├── DistillPipeline (distill/ Stage 連結)
-        │        └── ToolCallPipeline (tool_pipeline/)
-        ├── CuratePipeline (curate/pipeline.py + CurateStage)
-        └── RunnerStrategyFactory (jobs/strategy.py)
+Entry           joryu.cli/ , joryu.api/
+                       │
+                       ▼
+core.container  DependencyContainer (DI)
+                       │
+                       ▼
+pipelines       joryu.distill/ , joryu.curate/ , joryu.jobs/ ,
+                joryu.chat/ , joryu.seed_gen/
+                       │
+                       ▼
+infrastructure  joryu.vllm/ , joryu.tooling/ , joryu.infra/ ,
+                joryu.persistence/ , joryu.streaming/ ,
+                joryu.schema/ , joryu.search/ , joryu.mcp/
+                       │
+                       ▼
+core (土台)     joryu.core/  (config, paths, container, prompt_bank,
+                variants, styles, system_prompt, http_client, ...)
+```
 
-Infrastructure
-  ├── joryu.vllm/     HttpVllmBase, ChatClient Protocol, ToolCallParser
-  ├── joryu.streaming/ SSEEncoder / SSEDecoder
-  └── joryu.schema/   Pydantic version 付き YAML 検証
+`tests/test_architecture_layering.py` が top-level import の循環依存と、下位層から
+Entry 層（`joryu.cli` / `joryu.api`）への逆流を CI で検出する（許可リストは
+`ALLOWED_MODULE_CYCLES` / `ALLOWED_COMPONENT_CYCLES` / `ALLOWED_ENTRY_IMPORTS` の
+いずれも空集合 — #409 で全許可リストを解消済み）。
 
+```
 Dashboard: npm run gen:types → dashboard/src/types/api.ts (OpenAPI 同期)
 ```
 
@@ -98,18 +106,18 @@ Dashboard: npm run gen:types → dashboard/src/types/api.ts (OpenAPI 同期)
 
 | レイヤー | 入力 | 出力 | 主モジュール |
 |---|---|---|---|
-| 設定 | config.yaml / styles.yaml | dataclass | config.py / styles.py |
-| プロンプト読込 | JSONL | `PromptRow[]` | prompt_bank.py |
-| バリアント展開 | row + 直積引数 | `DistillVariant[]` | variants.py |
-| 推論 | messages + sampling | `(thinking, answer)` | joryu.vllm/ (shim: vllm_client.py) |
+| 設定 | config.yaml / styles.yaml | dataclass | core/config.py / core/styles.py |
+| プロンプト読込 | JSONL | `PromptRow[]` | core/prompt_bank.py |
+| バリアント展開 | row + 直積引数 | `DistillVariant[]` | core/variants.py |
+| 推論 | messages + sampling | `(thinking, answer)` | joryu.vllm/ (base.py, factory.py, serve.py, inproc.py) |
 | ループ制御 | variants, deadline, count | 書き込んだ件数 | distill/pipeline.py (DistillPipeline) |
-| tool loop | messages + tools | ChatResult + turns | tool_pipeline/pipeline.py |
-| 進捗 | iteration ごと | stderr 表示 | progress_reporter.py |
-| 出力 | record dict | JSONL 1 行 | writer.py |
-| 再開 | 既存 JSONL | 処理済 run キー集合 | progress.py |
-| 配布 | JSONL | `.zst` / `meta.json` / `SHA256SUMS` / `.tar` | export.py |
-| 統計 | JSONL | dashboard 用 JSON | stats.py |
-| Docker 委譲 | Windows ネイティブ呼び出し | `docker run` 実行 | docker_delegate.py |
+| tool loop | messages + tools | ChatResult + turns | tooling/pipeline/pipeline.py |
+| 進捗 | iteration ごと | stderr 表示 | distill/progress_reporter.py |
+| 出力 | record dict | JSONL 1 行 | persistence/writer.py |
+| 再開 | 既存 JSONL | 処理済 run キー集合 | persistence/progress.py |
+| 配布 | JSONL | `.zst` / `meta.json` / `SHA256SUMS` / `.tar` | persistence/export.py |
+| 統計 | JSONL | dashboard 用 JSON | persistence/stats.py |
+| Docker 委譲 | Windows ネイティブ呼び出し | `docker run` 実行 | infra/docker/delegate.py |
 | ジョブ API | HTTP POST ジョブ spec | queued/running 状態 + ログ | jobs/ + api/ |
 | ジョブ実行 | spec | 蒸留 subprocess (daemon 経由 or GPU docker run) | jobs/runner.py + jobs/strategy.py |
 | vLLM 常駐 | config.yaml | HTTP `/health`, OpenAI `/v1/*` | docker-compose (`vllm serve`) |
@@ -146,11 +154,11 @@ compass 調査に基づき、蒸留〜curate で次の責務分担を取る。
 vLLM 生成
     │
     ▼
-tool_calls.py (+ raw_completion 診断)     ← parser ロスト検出
+tooling/calls.py (+ raw_completion 診断)             ← parser ロスト検出
     │
     ▼
-tool_intent.py → tool_call_recovery.py    ← intent あり & calls 空 → 強制リトライ
-    │                                         (optional: no_think_fallback)
+tooling/intent.py → tooling/call_recovery.py         ← intent あり & calls 空 → 強制リトライ
+    │                                                    (optional: no_think_fallback)
     ▼
 responses.jsonl (+ tool_call_recovery メタ)
     │
@@ -176,13 +184,13 @@ responses.high_quality.jsonl              ← SFT 教師データ
 
 | ID | 失敗パターン | 抑止レイヤ | 実装 |
 |---|---|---|---|
-| A | answer に raw JSON tool_call 漏出 | 出力パーサ | [`completion_normalize.py`](../src/joryu/completion_normalize.py), [`vllm_stream_client.py`](../src/joryu/vllm_stream_client.py) — [#229](https://github.com/sotanengel/qwen3-swallow-8B-RL-v0.2-AWQ-INT4-joryu-pipline/issues/229) |
-| B | ツール未呼び出しで温度等を捏造 | system プロンプト + R-10 | [`system_prompt.py`](../src/joryu/system_prompt.py), R-10 `FACT-HALL` — [#231](https://github.com/sotanengel/qwen3-swallow-8B-RL-v0.2-AWQ-INT4-joryu-pipline/issues/231) |
+| A | answer に raw JSON tool_call 漏出 | 出力パーサ | [`normalize.py`](../src/joryu/vllm/normalize.py), [`stream.py`](../src/joryu/vllm/stream.py) — [#229](https://github.com/sotanengel/qwen3-swallow-8B-RL-v0.2-AWQ-INT4-joryu-pipline/issues/229) |
+| B | ツール未呼び出しで温度等を捏造 | system プロンプト + R-10 | [`system_prompt.py`](../src/joryu/core/system_prompt.py), R-10 `FACT-HALL` — [#231](https://github.com/sotanengel/qwen3-swallow-8B-RL-v0.2-AWQ-INT4-joryu-pipline/issues/231) |
 | C | 「仮想データ」と明示しつつ表を捏造 | system プロンプト + R-10 | factual guard, R-10 `VIRT-DATA` — [#231](https://github.com/sotanengel/qwen3-swallow-8B-RL-v0.2-AWQ-INT4-joryu-pipline/issues/231) |
 | D | thinking に英語メタ命令断片 | 出力パーサ | `sanitize_thinking_trace()` — [#229](https://github.com/sotanengel/qwen3-swallow-8B-RL-v0.2-AWQ-INT4-joryu-pipline/issues/229) |
 | E | answer 空 / thinking 途中打切り | チャット再生成 | [`chat/generate_retry.py`](../src/joryu/chat/generate_retry.py) — [#232](https://github.com/sotanengel/qwen3-swallow-8B-RL-v0.2-AWQ-INT4-joryu-pipline/issues/232) |
 | F | 2 周目以降 JSON 再生成で tool ループ不入 | tool ループ + パーサ | [`tool_loop.py`](../src/joryu/chat/tool_loop.py) + `normalize_chat_result` — [#233](https://github.com/sotanengel/qwen3-swallow-8B-RL-v0.2-AWQ-INT4-joryu-pipline/issues/233) |
-| G | 同一プロンプトの過剰重複 | JSONL 追記前 | [`prompt_dedup.py`](../src/joryu/prompt_dedup.py) — [#235](https://github.com/sotanengel/qwen3-swallow-8B-RL-v0.2-AWQ-INT4-joryu-pipline/issues/235) |
+| G | 同一プロンプトの過剰重複 | JSONL 追記前 | [`prompt_dedup.py`](../src/joryu/persistence/prompt_dedup.py) — [#235](https://github.com/sotanengel/qwen3-swallow-8B-RL-v0.2-AWQ-INT4-joryu-pipline/issues/235) |
 | H | `suspected_unparsed_tool_calls` 常に空 | 診断 + R-10 | `normalize_chat_result`, R-10 `TOOL-LEAK` — [#230](https://github.com/sotanengel/qwen3-swallow-8B-RL-v0.2-AWQ-INT4-joryu-pipline/issues/230) |
 | I | prose 指示でも JSON / 箇条書き | system プロンプト順 + R-10 | style を最後に配置, R-10 `STYLE-FMT` — [#234](https://github.com/sotanengel/qwen3-swallow-8B-RL-v0.2-AWQ-INT4-joryu-pipline/issues/234) |
 
@@ -192,7 +200,7 @@ responses.high_quality.jsonl              ← SFT 教師データ
 |---|---|---|
 | system プロンプト合成 | — | factual guard, tool hint, style 末尾配置 |
 | chat_template / vLLM | — | （モデル出力形式はパーサ側で救済） |
-| 出力パーサ (`completion_normalize`) | suspected hints | bare JSON → tool_calls, thinking サニタイズ |
+| 出力パーサ (`vllm/normalize.py`) | suspected hints | bare JSON → tool_calls, thinking サニタイズ |
 | tool ループ | — | 各ターン normalize + recovery |
 | チャット retry | 空 answer 時 JSONL 非追記 | 最大 2 回再生成 |
 | R-10 stat | TOOL-LEAK, FACT-HALL, VIRT-DATA, STYLE-FMT | — |

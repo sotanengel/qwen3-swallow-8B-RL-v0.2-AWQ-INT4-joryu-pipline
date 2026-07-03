@@ -42,12 +42,21 @@ from joryu.infra.preflight import (
     ("path", "expected"),
     [
         ("src/joryu/cli/up.py", {"joryu-job"}),
-        ("src/joryu/distill.py", {"api", "joryu-job"}),
+        ("src/joryu/distill/pipeline.py", {"api", "joryu-job"}),
         ("src/joryu/infra/preflight.py", {"api", "joryu-job"}),
         ("src/joryu/jobs/runner.py", {"api", "mcp"}),
         ("src/joryu/infra/docker/delegate.py", {"api", "joryu-job"}),
         ("src/joryu/infra/docker/runtime.py", {"api", "joryu-job"}),
-        ("src/joryu/stats.py", {"api", "joryu-job"}),
+        ("src/joryu/persistence/stats.py", {"api", "joryu-job"}),
+        ("src/joryu/core/paths.py", {"api", "joryu-job"}),
+        ("src/joryu/vllm/base.py", {"api", "joryu-job"}),
+        ("src/joryu/vllm/common.py", {"api", "joryu-job"}),
+        ("src/joryu/vllm/factory.py", {"api", "joryu-job"}),
+        ("src/joryu/vllm/inproc.py", {"api", "joryu-job"}),
+        ("src/joryu/vllm/serve.py", {"api", "joryu-job"}),
+        ("src/joryu/vllm/protocol.py", {"api", "joryu-job"}),
+        ("src/joryu/vllm/limits.py", {"api", "joryu-job"}),
+        ("src/joryu/vllm/probe.py", {"api", "joryu-job"}),
         (
             "docker-compose.yml",
             {"api", "joryu", "joryu-seed", "joryu-job", "joryu-judge", "mcp"},
@@ -70,6 +79,18 @@ from joryu.infra.preflight import (
 )
 def test_path_affects_service(path: str, expected: set[str]) -> None:
     assert path_affects_service(path) == expected
+
+
+def test_joryu_job_runtime_paths_exist_on_disk() -> None:
+    """_JORYU_JOB_RUNTIME_PATHS の各エントリが再編後も実ファイルを指すこと。
+
+    rebuild トリガー対象のパスが削除・移動されたまま放置されるのを防ぐ回帰ガード。
+    """
+    from joryu.infra.preflight import _JORYU_JOB_RUNTIME_PATHS
+
+    repo_root = Path(__file__).resolve().parent.parent.parent
+    missing = sorted(path for path in _JORYU_JOB_RUNTIME_PATHS if not (repo_root / path).is_file())
+    assert missing == []
 
 
 def test_changed_services_from_git_merges_sources() -> None:
