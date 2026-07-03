@@ -17,7 +17,7 @@
 新たな循環・違反を許可リストへ追加することは意図的な設計判断としてあり得るが、
 許可リスト（`ALLOWED_MODULE_CYCLES` / `ALLOWED_COMPONENT_CYCLES` /
 `ALLOWED_ENTRY_IMPORTS`）は縮小方向にのみ更新すること
-（既存の許可は #409 で解消予定）。
+（#409 で全許可リストを解消済み。すべて空）。
 """
 
 from __future__ import annotations
@@ -37,25 +37,17 @@ _PACKAGE_NAME = "joryu"
 #: モジュール単位の循環依存の許可リスト。現状は空（循環なし）。
 ALLOWED_MODULE_CYCLES: set[frozenset[str]] = set()
 
-#: コンポーネント単位（先頭2セグメント）の循環依存の許可リスト。
-#: 中心となるのは joryu.cli.distill -> joryu.jobs.models と
-#: joryu.jobs.validate -> joryu.cli.distill の相互依存（joryu.cli <-> joryu.jobs）。
-#: さらに joryu.cli.down / joryu.cli.up -> joryu.orchestrator.profile、
-#: joryu.orchestrator.required -> joryu.jobs.models の依存が連鎖し、
-#: joryu.cli / joryu.jobs / joryu.orchestrator の3コンポーネントが
-#: 強連結成分を形成している。
-#: #409 (PR3) で joryu.jobs.validate -> joryu.cli.distill を解消し、
-#: このエントリを削除する予定。
-ALLOWED_COMPONENT_CYCLES: set[frozenset[str]] = {
-    frozenset({"joryu.cli", "joryu.jobs", "joryu.orchestrator"}),
-}
+#: コンポーネント単位（先頭2セグメント）の循環依存の許可リスト。現状は空（循環なし）。
+#: #409 で joryu.cli / joryu.jobs / joryu.orchestrator の3コンポーネント循環
+#: （joryu.jobs.validate -> joryu.cli.distill、joryu.orchestrator.required ->
+#: joryu.jobs.models）を解消済み: parse_duration を joryu.jobs.duration へ、
+#: required_profile を joryu.jobs.profile へ移設した。
+ALLOWED_COMPONENT_CYCLES: set[frozenset[str]] = set()
 
 #: エントリ層（joryu.cli / joryu.api）を下位層から import している箇所の許可リスト。
-#: #409 (PR3) で joryu.jobs.validate から joryu.cli.distill への依存を解消し、
-#: このエントリを削除する予定。
-ALLOWED_ENTRY_IMPORTS: set[tuple[str, str]] = {
-    ("joryu.jobs.validate", "joryu.cli.distill"),
-}
+#: 現状は空。#409 で joryu.jobs.validate -> joryu.cli.distill (parse_duration) への
+#: 依存を joryu.jobs.duration への依存に置き換えて解消済み。
+ALLOWED_ENTRY_IMPORTS: set[tuple[str, str]] = set()
 
 # ---------------------------------------------------------------------------
 # モジュール一覧・import グラフの構築

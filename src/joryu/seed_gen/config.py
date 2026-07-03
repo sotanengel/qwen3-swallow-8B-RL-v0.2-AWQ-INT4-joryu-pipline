@@ -10,6 +10,10 @@ import yaml
 DEFAULT_DOMAINS_REL = "src/joryu/seed_gen/domains.yaml"
 DEFAULT_TARGET_TOTAL = 230000
 
+SEED_GEN_MODE_CREATE = "create"
+SEED_GEN_MODE_CHECK = "check"
+SEED_GEN_MODES = (SEED_GEN_MODE_CREATE, SEED_GEN_MODE_CHECK)
+
 
 @dataclass(frozen=True)
 class DomainSpec:
@@ -115,6 +119,9 @@ def resolve_domains_config_path(repo_root: Path, rel: str) -> Path:
 __all__ = [
     "DEFAULT_DOMAINS_REL",
     "DEFAULT_TARGET_TOTAL",
+    "SEED_GEN_MODE_CHECK",
+    "SEED_GEN_MODE_CREATE",
+    "SEED_GEN_MODES",
     "DomainSpec",
     "SeedGenConfig",
     "resolve_domains_config_path",

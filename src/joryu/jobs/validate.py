@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from joryu.cli.distill import parse_duration
 from joryu.core.config import load_config
 from joryu.core.styles import load_styles, resolve_style_ids
 from joryu.core.variants import parse_comma_list, parse_float_list
+from joryu.jobs.duration import parse_duration
 from joryu.jobs.models import CurateJobSpec, DistillJobSpec, SeedGenJobSpec
 from joryu.preflight import jsonl_has_content, resolve_distill_jsonl
 from joryu.tools import load_tools

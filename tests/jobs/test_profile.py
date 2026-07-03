@@ -1,4 +1,4 @@
-"""required_profile mapping tests."""
+"""required_profile mapping tests（#409 で orchestrator/required.py から移設）。"""
 
 from __future__ import annotations
 
@@ -11,8 +11,8 @@ from joryu.jobs.models import (
     JobStatus,
     SeedGenJobSpec,
 )
+from joryu.jobs.profile import required_profile, required_profile_from_spec
 from joryu.orchestrator.profile import ModelProfile
-from joryu.orchestrator.required import required_profile, required_profile_from_spec
 
 
 def _seed_record(mode: str) -> JobRecord:

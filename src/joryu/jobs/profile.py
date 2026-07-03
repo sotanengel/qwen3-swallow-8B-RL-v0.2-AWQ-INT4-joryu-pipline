@@ -1,4 +1,4 @@
-"""JobKind から ModelProfile を導出。"""
+"""JobKind から ModelProfile を導出 (#409 で orchestrator/required.py から移設)。"""
 
 from __future__ import annotations
 
@@ -41,3 +41,9 @@ def required_profile_from_spec(kind: JobKind, spec: object) -> ModelProfile:
             return ModelProfile.SCREENING
         return ModelProfile.DISTILL
     return ModelProfile.DISTILL
+
+
+__all__ = [
+    "required_profile",
+    "required_profile_from_spec",
+]

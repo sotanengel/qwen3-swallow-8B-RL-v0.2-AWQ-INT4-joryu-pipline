@@ -173,11 +173,18 @@ def llama_server_health_ready(body: bytes) -> bool:
     return data.get("status") == "ok"
 
 
+def _is_profile_spec_like(spec: Any) -> bool:
+    """ProfileSpec 相当か構造的に判定する（orchestrator への import を避けるため）。
+
+    `joryu.orchestrator.profile.ProfileSpec` は `health_url()` メソッドと
+    `kind` 属性を持つ frozen dataclass。isinstance の代わりにダックタイピングで判定する。
+    """
+    return callable(getattr(spec, "health_url", None)) and hasattr(spec, "kind")
+
+
 def is_profile_healthy(spec: Any, *, urlopen_fn: _UrlOpen | None = None) -> bool:
     """ProfileSpec の kind に応じて 1 回 health チェック。"""
-    from joryu.orchestrator.profile import ProfileSpec
-
-    if not isinstance(spec, ProfileSpec):
+    if not _is_profile_spec_like(spec):
         return False
     url = spec.health_url()
     opener = urlopen_fn or urllib.request.urlopen
@@ -195,13 +202,11 @@ def is_profile_healthy(spec: Any, *, urlopen_fn: _UrlOpen | None = None) -> bool
 
 def is_profile_ready(profile_name: str, profiles: dict[Any, Any], **kwargs: Any) -> bool:
     """名前指定で profile ready を判定。"""
-    from joryu.orchestrator.profile import ModelProfile
-
-    try:
-        mp = ModelProfile(profile_name)
-    except ValueError:
-        return False
-    spec = profiles.get(mp)
+    spec = None
+    for key, value in profiles.items():
+        if str(key) == str(profile_name) or getattr(key, "value", None) == profile_name:
+            spec = value
+            break
     if spec is None:
         return False
     return is_profile_healthy(spec, urlopen_fn=kwargs.get("urlopen_fn"))

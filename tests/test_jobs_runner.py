@@ -15,7 +15,6 @@ from joryu.jobs.runner import (
     _inject_container_name,
     _stats_refresh_loop,
     build_curate_command,
-    build_job_command,
     curate_job_dst_rel,
     make_refresh_stats,
     resolve_docker_bin,
@@ -23,6 +22,9 @@ from joryu.jobs.runner import (
     should_use_compose_run,
 )
 from joryu.jobs.store import JobStore
+from joryu.jobs.strategy import RunnerStrategyFactory
+
+build_job_command = RunnerStrategyFactory.build_job_command
 
 
 @pytest.fixture(autouse=True)
