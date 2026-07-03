@@ -6,7 +6,7 @@ from collections.abc import AsyncIterator, Callable
 from typing import Any
 
 from joryu.truncation import record_looks_truncated
-from joryu.vllm_client import ChatResult
+from joryu.vllm.protocol import ChatResult
 
 DEFAULT_MAX_ATTEMPTS = 2
 

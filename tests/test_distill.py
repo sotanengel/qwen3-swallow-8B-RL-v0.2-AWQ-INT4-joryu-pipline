@@ -179,7 +179,7 @@ def test_client_exception_skips_row_continues(tmp_path: Path) -> None:
 
     class _RaisesOnSecond(FakeVllmClient):
         def chat_via_template(self, messages, **kw):  # type: ignore[override]
-            from joryu.vllm_client import ChatResult
+            from joryu.vllm.protocol import ChatResult
 
             self.calls.append({"messages": messages})
             if len(self.calls) == 2:
@@ -200,7 +200,7 @@ def test_client_exception_skips_row_continues(tmp_path: Path) -> None:
 
 
 def test_vllm_load_failure_aborts_job(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    from joryu.vllm_client import VllmError
+    from joryu.vllm.protocol import VllmError
 
     bank = tmp_path / "bank.jsonl"
     _write_bank(bank, [{"prompt": "P1"}, {"prompt": "P2"}])
@@ -639,7 +639,7 @@ def test_run_distill_applies_tool_call_recovery(tmp_path: Path) -> None:
     """#110: intent あり & tool_calls 空 → named function 強制リトライ。"""
     from joryu.core.config import load_config
     from joryu.tool_calls import ParsedToolCall
-    from joryu.vllm_client import ChatResult
+    from joryu.vllm.protocol import ChatResult
 
     bank = tmp_path / "bank.jsonl"
     tools_yaml = tmp_path / "tools.yaml"

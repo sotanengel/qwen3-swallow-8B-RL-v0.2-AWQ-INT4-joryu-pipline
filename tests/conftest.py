@@ -7,7 +7,8 @@ from typing import Any
 import pytest
 
 from joryu.tool_calls import extract_tool_calls_with_diagnostics
-from joryu.vllm_client import ChatResult, extract_known_tool_names
+from joryu.vllm.common import extract_known_tool_names
+from joryu.vllm.protocol import ChatResult
 
 
 class FakeVllmClient:
@@ -113,7 +114,7 @@ class FakeStreamClient:
         tool_choice: dict[str, Any] | str | None = None,
         **sampling_overrides: Any,
     ):
-        from joryu.vllm_stream_client import StreamChunk
+        from joryu.vllm.stream import StreamChunk
 
         self.calls.append(
             {

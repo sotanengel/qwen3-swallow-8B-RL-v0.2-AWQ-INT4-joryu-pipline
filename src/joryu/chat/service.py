@@ -20,7 +20,7 @@ from joryu.core.datetime_context import format_date_context_ja, now_jst
 from joryu.core.styles import StylePreset, load_styles
 from joryu.core.system_prompt import build_system_prompt
 from joryu.tool_executor import ToolExecutor
-from joryu.vllm_client import SupportsChat, SupportsChatStream
+from joryu.vllm.protocol import SupportsChat, SupportsChatStream
 
 
 class ChatService:

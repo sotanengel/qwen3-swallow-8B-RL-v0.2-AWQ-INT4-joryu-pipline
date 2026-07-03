@@ -8,7 +8,7 @@ from pathlib import Path
 
 from joryu.core.config import load_config
 from joryu.core.paths import DEFAULT_CONFIG, resolve_limits_probe_path, resolve_repo_root
-from joryu.vllm_limits import (
+from joryu.vllm.limits import (
     PROBE_CANDIDATES,
     VllmLimits,
     is_vram_limit_error,

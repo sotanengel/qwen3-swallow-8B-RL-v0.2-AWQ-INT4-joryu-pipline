@@ -84,7 +84,7 @@ def test_llm_rubric_signal_neutral_when_judge_fails():
 
 
 def test_vllm_judge_client_calls_chat_with_no_thinking():
-    from joryu.vllm_client import ChatResult
+    from joryu.vllm.protocol import ChatResult
 
     class StubChat:
         def __init__(self):
@@ -216,7 +216,7 @@ def test_llm_self_signal_hard_reject_below_min():
 
 
 def test_vllm_judge_client_pair_calls_chat():
-    from joryu.vllm_client import ChatResult
+    from joryu.vllm.protocol import ChatResult
 
     class StubChat:
         def __init__(self):
@@ -240,7 +240,7 @@ def test_vllm_judge_client_pair_calls_chat():
 
 
 def test_vllm_judge_client_self_uses_thinking():
-    from joryu.vllm_client import ChatResult
+    from joryu.vllm.protocol import ChatResult
 
     class StubChat:
         def __init__(self):

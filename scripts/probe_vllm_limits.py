@@ -9,7 +9,7 @@ from __future__ import annotations
 import argparse
 
 from joryu.core.paths import DEFAULT_CONFIG
-from joryu.vllm_probe import run_probe
+from joryu.vllm.probe import run_probe
 
 
 def main(argv: list[str] | None = None) -> int:

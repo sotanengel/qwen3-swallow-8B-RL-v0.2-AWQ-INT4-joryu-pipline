@@ -8,7 +8,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import pytest
 
-from joryu.vllm_serve_client import VllmServeClient, openai_response_to_chat_result
+from joryu.vllm.serve import VllmServeClient, openai_response_to_chat_result
 
 
 class _OpenAIHandler(BaseHTTPRequestHandler):

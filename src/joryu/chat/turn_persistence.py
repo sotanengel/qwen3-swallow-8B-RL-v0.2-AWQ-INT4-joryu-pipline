@@ -9,7 +9,7 @@ from joryu.chat.session import ChatSession
 from joryu.chat.thinking_guard import strip_think_blocks
 from joryu.prompt_dedup import PromptDedupGuard
 from joryu.responses_store import record_id
-from joryu.vllm_client import ChatResult
+from joryu.vllm.protocol import ChatResult
 from joryu.writer import JsonlAppendWriter
 
 

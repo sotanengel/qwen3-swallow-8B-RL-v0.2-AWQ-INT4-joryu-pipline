@@ -16,7 +16,7 @@ from joryu.chat.turn_persistence import TurnPersistence
 from joryu.core.styles import StylePreset
 from joryu.tool_calls import ParsedToolCall
 from joryu.tool_executor import ToolUpstreamError
-from joryu.vllm_client import ChatResult
+from joryu.vllm.protocol import ChatResult
 from tests.conftest import FakeVllmClient
 
 REPO_ROOT = Path(__file__).resolve().parents[2]

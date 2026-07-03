@@ -16,12 +16,8 @@ from joryu.orchestrator.service import ModelOrchestrator
 from joryu.orchestrator.state import OrchestratorStatus
 from joryu.tool_executor import McpToolExecutor, ToolExecutor, build_default_executor
 from joryu.tools import load_tools, merge_tools
-from joryu.vllm_client import (
-    SupportsChat,
-    SupportsChatStream,
-    resolve_chat_client,
-    resolve_stream_chat_client,
-)
+from joryu.vllm.factory import resolve_chat_client, resolve_stream_chat_client
+from joryu.vllm.protocol import SupportsChat, SupportsChatStream
 
 
 def get_job_store(request: Request) -> JobStore:

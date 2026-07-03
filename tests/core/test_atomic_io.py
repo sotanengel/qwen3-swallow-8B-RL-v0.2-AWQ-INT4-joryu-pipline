@@ -9,7 +9,7 @@ from pathlib import Path
 
 from joryu.chat.session_db import SessionDatabase
 from joryu.core.atomic_io import atomic_write_text
-from joryu.vllm_limits import VllmLimits, write_probe_limits
+from joryu.vllm.limits import VllmLimits, write_probe_limits
 
 
 def test_concurrency_write_probe_limits_parallel_writes(tmp_path: Path) -> None:

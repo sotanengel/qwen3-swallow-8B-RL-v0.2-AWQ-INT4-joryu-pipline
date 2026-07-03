@@ -6,7 +6,7 @@ import time
 from typing import Any
 
 from joryu.distill_retry import TRUNCATION_RETRY_ALERT_THRESHOLD, generate_until_complete
-from joryu.vllm_client import ChatResult
+from joryu.vllm.protocol import ChatResult
 
 
 class _SequenceClient:

@@ -12,8 +12,8 @@ from joryu.core.http_client import (
     get_shared_async_client,
     reset_shared_async_client_for_tests,
 )
-from joryu.vllm_client import VllmError
-from joryu.vllm_stream_client import VllmServeStreamClient
+from joryu.vllm.protocol import VllmError
+from joryu.vllm.stream import VllmServeStreamClient
 
 
 def test_build_httpx_timeout_sets_connect_and_read() -> None:

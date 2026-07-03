@@ -9,7 +9,8 @@ from joryu.tool_intent import (
     infer_planned_tool_name,
     needs_tool_call_recovery,
 )
-from joryu.vllm_client import ChatResult, SupportsChat, extract_known_tool_names
+from joryu.vllm.common import extract_known_tool_names
+from joryu.vllm.protocol import ChatResult, SupportsChat
 
 DEFAULT_MAX_RECOVERY_ATTEMPTS = 2
 

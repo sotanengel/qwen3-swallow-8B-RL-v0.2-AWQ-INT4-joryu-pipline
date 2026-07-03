@@ -8,10 +8,10 @@ from joryu.core.config import ModelConfig, VllmConfig
 from joryu.core.paths import resolve_limits_probe_path
 from joryu.vllm.common import DEFAULT_LOCAL_VLLM_URL
 from joryu.vllm.inproc import VllmClient
+from joryu.vllm.limits import clamp_model_limits, load_probe_limits
 from joryu.vllm.protocol import SupportsChat, SupportsChatStream, VllmError
 from joryu.vllm.serve import VllmServeClient
 from joryu.vllm.stream import VllmServeStreamClient
-from joryu.vllm_limits import clamp_model_limits, load_probe_limits
 
 
 def resolve_max_model_len(model_cfg: ModelConfig) -> int:

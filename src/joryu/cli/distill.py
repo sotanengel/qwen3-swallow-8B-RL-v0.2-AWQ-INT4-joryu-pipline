@@ -20,7 +20,7 @@ from joryu.docker_delegate import (
     should_use_docker,
 )
 from joryu.jobs.models import DistillJobSpec
-from joryu.vllm_client import SupportsChat
+from joryu.vllm.protocol import SupportsChat
 
 logger = logging.getLogger(__name__)
 
