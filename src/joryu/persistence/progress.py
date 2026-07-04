@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 from typing import Any
@@ -14,6 +15,22 @@ def _round_float(value: Any) -> Any:
     if isinstance(value, float):
         return round(value, 6)
     return value
+
+
+def tools_hash_from_tools(tools: Any) -> str | None:
+    """ツール定義リストから variant_run_key 用の短いハッシュを返す。"""
+    if not isinstance(tools, list) or not tools:
+        return None
+    tool_names = sorted(
+        t["function"]["name"]
+        for t in tools
+        if isinstance(t, dict)
+        and isinstance(t.get("function"), dict)
+        and isinstance(t["function"].get("name"), str)
+    )
+    if not tool_names:
+        return None
+    return hashlib.sha1(json.dumps(tool_names, ensure_ascii=False).encode()).hexdigest()[:8]
 
 
 def run_key_from_parts(
@@ -57,6 +74,7 @@ def run_key_from_record(record: dict[str, Any]) -> str | None:
         style_id=style_id,
         temperature=sampling.get("temperature"),
         top_p=sampling.get("top_p"),
+        tools_hash=tools_hash_from_tools(record.get("tools")),
     )
 
 
