@@ -31,6 +31,15 @@ export function curationFetchUrls(): string[] {
   return ["/api/live/curation", "/curation.json"];
 }
 
+export function screeningFetchUrls(): string[] {
+  return [
+    "/api/live/screening",
+    "/joryu-api/api/live/screening",
+    `${API_BASE}/api/live/screening`,
+    "/screening.json",
+  ];
+}
+
 export async function fetchAllLiveJson(urls: readonly string[]): Promise<unknown[]> {
   const settled = await Promise.all(
     urls.map(async (url) => {

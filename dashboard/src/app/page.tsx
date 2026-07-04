@@ -9,6 +9,7 @@ import { CheckStagePanel } from "@/components/pipeline/CheckStagePanel";
 import { CurateStagePanel } from "@/components/pipeline/CurateStagePanel";
 import { DistillStagePanel } from "@/components/pipeline/DistillStagePanel";
 import { PromptsStagePanel } from "@/components/pipeline/PromptsStagePanel";
+import { ScreeningPanel } from "@/components/stats/ScreeningPanel";
 import type { CurateJobRecord } from "@/lib/curate-jobs";
 import type { JobRecord } from "@/lib/jobs";
 import { EMPTY_STATS, loadStats, statsDataChanged } from "@/lib/stats";
@@ -169,7 +170,6 @@ function HubContent() {
             metric={screeningMetric}
             active={active === "screening"}
             onSelect={setActive}
-            actionLabel="/stats を開く"
           />
         </div>
       </section>
@@ -192,15 +192,12 @@ function HubContent() {
         )}
         {active === "curate" && <CurateStagePanel onLastJob={handleCurateLastJob} />}
         {active === "screening" && (
-          <div className="card">
-            <h3>健全性ステージ</h3>
-            <p>
-              健全性スクリーニングの詳細は{" "}
-              <Link href="/stats?tab=screening">/stats?tab=screening</Link> をご覧ください。
-            </p>
-            <p className="muted">
+          <div data-testid="panel-screening">
+            <p className="muted" style={{ marginBottom: "1rem" }}>
               スクリーニングは「プロンプトチェック」ステージから curate と一緒に自動起動されます。
+              詳細履歴は <Link href="/stats?tab=screening">/stats?tab=screening</Link> でも確認できます。
             </p>
+            <ScreeningPanel />
           </div>
         )}
       </section>

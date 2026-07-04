@@ -31,6 +31,9 @@ vi.mock("@/components/pipeline/DistillStagePanel", () => ({
 vi.mock("@/components/pipeline/CurateStagePanel", () => ({
   CurateStagePanel: () => <div data-testid="panel-curate">CURATE</div>,
 }));
+vi.mock("@/components/stats/ScreeningPanel", () => ({
+  ScreeningPanel: () => <div data-testid="screening-panel">SCREENING</div>,
+}));
 
 vi.mock("@/lib/stats", () => ({
   EMPTY_STATS: { total: 0 },
@@ -109,5 +112,12 @@ describe("HomePage (Pipeline Hub)", () => {
     render(<HomePage />);
     await waitFor(() => expect(screen.getByTestId("panel-distill")).toBeTruthy());
     expect(screen.getByTestId("panel-distill").getAttribute("data-check")).toBe("false");
+  });
+
+  it("opens the screening panel when ?stage=screening", async () => {
+    mockSearchParamsGet.mockImplementation((k) => (k === "stage" ? "screening" : null));
+    render(<HomePage />);
+    await waitFor(() => expect(screen.getByTestId("panel-screening")).toBeTruthy());
+    expect(screen.getByTestId("screening-panel")).toBeTruthy();
   });
 });

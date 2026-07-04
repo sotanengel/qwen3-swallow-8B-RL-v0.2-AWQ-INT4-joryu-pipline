@@ -69,7 +69,7 @@ export function CheckStagePanel({
         offset,
         limit: PAGE_SIZE,
         domain: listDomain,
-        checked: "all",
+        checked: "unchecked",
       });
       setPromptList(data.items);
       setPromptTotal(data.total);
@@ -187,7 +187,7 @@ export function CheckStagePanel({
           </button>
           <p className="hint">
             Stage2 類似 dedup + LLM 品質審査（未チェック分のみ）。
-            既に審査済みのプロンプトは下の一覧から選択してチェック済み登録できます。
+            品質確認済みのプロンプトは下の一覧から選択してチェック済み登録できます。
           </p>
         </div>
       </section>
@@ -211,7 +211,7 @@ export function CheckStagePanel({
           </label>
           <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
             <button type="button" onClick={selectPageUnchecked}>
-              ページ内未チェックを全選択
+              ページ内を全選択
             </button>
             <button type="button" onClick={clearSelection}>
               選択解除
@@ -239,7 +239,6 @@ export function CheckStagePanel({
               <th></th>
               <th>分野</th>
               <th>プロンプト</th>
-              <th>状態</th>
             </tr>
           </thead>
           <tbody>
@@ -249,14 +248,12 @@ export function CheckStagePanel({
                   <input
                     type="checkbox"
                     checked={selectedKeys.has(item.key)}
-                    disabled={item.checked}
                     onChange={() => toggleKey(item.key)}
                     aria-label={`select ${item.key}`}
                   />
                 </td>
                 <td>{item.domain ?? "—"}</td>
                 <td>{item.prompt_preview}</td>
-                <td>{item.checked ? "済" : "未"}</td>
               </tr>
             ))}
           </tbody>

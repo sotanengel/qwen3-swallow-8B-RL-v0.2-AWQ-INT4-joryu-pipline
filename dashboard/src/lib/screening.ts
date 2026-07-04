@@ -36,11 +36,35 @@ export function screeningDataChanged(
   return JSON.stringify(prev) !== JSON.stringify(next);
 }
 
+export function mergeScreening(data: Partial<ScreeningStats>): ScreeningStats {
+  return {
+    ...EMPTY_SCREENING,
+    ...data,
+    label_distribution: data.label_distribution ?? EMPTY_SCREENING.label_distribution,
+    rule_violation_rates: data.rule_violation_rates ?? EMPTY_SCREENING.rule_violation_rates,
+    llm_health_averages: data.llm_health_averages ?? EMPTY_SCREENING.llm_health_averages,
+    evaluator_models: data.evaluator_models ?? EMPTY_SCREENING.evaluator_models,
+  };
+}
+
+export function pickBestScreening(candidates: Partial<ScreeningStats>[]): ScreeningStats {
+  return candidates.reduce<ScreeningStats>((best, raw) => {
+    const cur = mergeScreening(raw);
+    if (cur.total > best.total) return cur;
+    if (cur.total < best.total) return best;
+    const curTs = cur._meta?.generated_at ?? "";
+    const bestTs = best._meta?.generated_at ?? "";
+    return curTs > bestTs ? cur : best;
+  }, EMPTY_SCREENING);
+}
+
 export async function loadScreening(): Promise<ScreeningStats> {
-  const res = await fetch("/api/live/screening", { cache: "no-store" });
-  if (!res.ok) {
+  try {
+    const { fetchAllLiveJson, screeningFetchUrls } = await import("./live-data");
+    const payloads = await fetchAllLiveJson(screeningFetchUrls());
+    if (payloads.length === 0) return EMPTY_SCREENING;
+    return pickBestScreening(payloads as Partial<ScreeningStats>[]);
+  } catch {
     return EMPTY_SCREENING;
   }
-  const data = (await res.json()) as ScreeningStats;
-  return { ...EMPTY_SCREENING, ...data };
 }

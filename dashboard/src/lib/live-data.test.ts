@@ -5,6 +5,7 @@ import {
   fetchAllLiveJson,
   fetchBestLiveText,
   responsesFetchUrls,
+  screeningFetchUrls,
   statsFetchUrls,
 } from "./live-data";
 
@@ -74,5 +75,15 @@ describe("responsesFetchUrls", () => {
 describe("curationFetchUrls", () => {
   it("includes live route before static file", () => {
     expect(curationFetchUrls()).toEqual(["/api/live/curation", "/curation.json"]);
+  });
+});
+
+describe("screeningFetchUrls", () => {
+  it("includes live route, proxy, direct API, and static file", () => {
+    const urls = screeningFetchUrls();
+    expect(urls[0]).toBe("/api/live/screening");
+    expect(urls[1]).toBe("/joryu-api/api/live/screening");
+    expect(urls[2]).toContain("/api/live/screening");
+    expect(urls[3]).toBe("/screening.json");
   });
 });
