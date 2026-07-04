@@ -17,6 +17,7 @@ from typing import Any
 
 from joryu.core.prompt_bank import load_prompt_bank
 from joryu.persistence.prompt_dedup import ExactDedup
+from joryu.seed_gen.check_state import mark_checked, partition_by_checked, prompt_check_key
 from joryu.seed_gen.config import SEED_GEN_MODE_CHECK, SEED_GEN_MODE_CREATE, SeedGenConfig
 from joryu.seed_gen.counts import count_by_domain
 from joryu.seed_gen.dedup import EmbeddingIndex, load_sentence_transformer_backend
@@ -224,19 +225,35 @@ def _rewrite_bank_without(bank_path: Path, remove_ids: set[str]) -> None:
 
 
 def run_check_pipeline(opts: PipelineOptions) -> int:
-    """既存 bank に対して Stage2 埋め込み類似 dedup を実行し、類似行を隔離する。"""
+    """既存 bank の未チェック行に Stage2 埋め込み類似 dedup を適用する。"""
     bank_path = opts.bank_path
     if not bank_path.is_file():
         opts.log("[seed_gen check] bank not found; nothing to check")
         return 0
     rows = load_prompt_bank(bank_path)
-    if len(rows) < 2:
+    if len(rows) < 1:
+        opts.log("[seed_gen check] bank is empty; nothing to check")
+        return 0
+
+    state = load_state(opts.state_path)
+    checked_rows, unchecked_rows = partition_by_checked(rows, state.prompt_check.checked_keys)
+    if not unchecked_rows:
+        opts.log("[seed_gen check] all prompts already checked; nothing to do")
+        return 0
+
+    if len(rows) < 2 and not checked_rows:
         opts.log("[seed_gen check] bank has < 2 rows; nothing to compare")
         return 0
 
+    opts.log(
+        f"[seed_gen check] unchecked={len(unchecked_rows)} checked={len(checked_rows)}"
+        f" total={len(rows)}"
+    )
     opts.log(f"[seed_gen check] loading embedding backend: {opts.embed_model}")
     backend = load_sentence_transformer_backend(opts.embed_model)
     index = EmbeddingIndex(backend, threshold=opts.sim_threshold)
+    if checked_rows:
+        index.seed_from_existing([r.prompt for r in checked_rows])
 
     rejected_path = opts.rejected_path or bank_path.parent / "rejected" / "similar.jsonl"
     rejected_path.parent.mkdir(parents=True, exist_ok=True)
@@ -244,19 +261,19 @@ def run_check_pipeline(opts: PipelineOptions) -> int:
     kept_prompts: list[str] = []
     remove_ids: set[str] = set()
     rejected_rows: list[dict[str, Any]] = []
+    passed_keys: set[str] = set()
 
     interrupt = _InterruptFlag()
     signal.signal(signal.SIGINT, interrupt.mark)
 
-    for i, row in enumerate(rows):
+    for i, row in enumerate(unchecked_rows):
         if interrupt.triggered:
-            opts.log(f"[seed_gen check] interrupted at row {i}")
+            opts.log(f"[seed_gen check] interrupted at unchecked row {i}")
             break
         prompt = row.prompt
         if index.is_similar(prompt):
             row_id = getattr(row, "id", "") or ""
             if not row_id:
-                # id が無い行はスキップ (削除できない)
                 continue
             remove_ids.add(str(row_id))
             rejected_rows.append(
@@ -270,29 +287,32 @@ def run_check_pipeline(opts: PipelineOptions) -> int:
         else:
             index.add(prompt)
             kept_prompts.append(prompt)
+            passed_keys.add(prompt_check_key(row))
         if (i + 1) % 100 == 0:
             opts.log(
-                f"[seed_gen check] scanned {i + 1}/{len(rows)}"
+                f"[seed_gen check] scanned {i + 1}/{len(unchecked_rows)} unchecked"
                 f" kept={len(kept_prompts)} rejected={len(rejected_rows)}"
             )
 
     if rejected_rows:
         atomic_append_jsonl(rejected_path, rejected_rows)
         _rewrite_bank_without(bank_path, remove_ids)
+        for row in unchecked_rows:
+            if row.id and str(row.id) in remove_ids:
+                passed_keys.discard(prompt_check_key(row))
 
-    # state.json の rejected_similar のみ更新
-    state = load_state(opts.state_path)
     _seed_domain_states(opts.config, state)
     for row_meta in rejected_rows:
-        # 元の PromptRow から domain を得る手段が無いので "unknown" 集計
         dom = state.domains.setdefault("_check", DomainState())
         dom.rejected_similar += 1
         _ = row_meta
+    if passed_keys and not interrupt.triggered:
+        mark_checked(state, passed_keys)
     save_state(opts.state_path, state)
 
     opts.log(
         f"[seed_gen check] done: kept={len(kept_prompts)} rejected={len(rejected_rows)}"
-        f" out={rejected_path}"
+        f" marked_checked={len(passed_keys)} out={rejected_path}"
     )
     if interrupt.triggered:
         return 130

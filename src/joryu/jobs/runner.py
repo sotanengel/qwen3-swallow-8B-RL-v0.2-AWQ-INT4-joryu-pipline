@@ -36,6 +36,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 CURATE_JOBS_REL = "data/curated/jobs"
+PROMPT_SCREENING_REL = "data/curated/prompt_screening"
 
 
 def default_jobs_dir(repo_root: Path) -> Path:
@@ -195,7 +196,12 @@ def curate_job_dst_rel(job_id: str) -> str:
 
 
 def _curate_argv_with_dst(spec: CurateJobSpec, job_id: str) -> list[str]:
-    return [*spec.to_curate_argv(), "--dst", curate_job_dst_rel(job_id)]
+    argv = spec.to_curate_argv()
+    if spec.screening and spec.prompt_bank:
+        argv.extend(["--dst", PROMPT_SCREENING_REL])
+    else:
+        argv.extend(["--dst", curate_job_dst_rel(job_id)])
+    return argv
 
 
 def build_distill_command(repo_root: Path, spec: DistillJobSpec) -> list[str]:

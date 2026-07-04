@@ -14,6 +14,7 @@ from typing import Any
 
 from joryu.core.prompt_bank import load_prompt_bank
 from joryu.io.jsonl import iter_jsonl
+from joryu.seed_gen.check_state import PromptCheckState
 
 logger = logging.getLogger(__name__)
 
@@ -33,12 +34,14 @@ class SeedGenState:
     updated_at: str = ""
     domains: dict[str, DomainState] = field(default_factory=dict)
     checkpoint: dict[str, Any] = field(default_factory=dict)
+    prompt_check: PromptCheckState = field(default_factory=PromptCheckState)
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "updated_at": self.updated_at,
             "domains": {k: asdict(v) for k, v in self.domains.items()},
             "checkpoint": dict(self.checkpoint),
+            "prompt_check": self.prompt_check.to_dict(),
         }
 
     @classmethod
@@ -58,6 +61,7 @@ class SeedGenState:
             updated_at=str(data.get("updated_at") or ""),
             domains=domains,
             checkpoint=dict(data.get("checkpoint") or {}),
+            prompt_check=PromptCheckState.from_dict(data.get("prompt_check")),
         )
 
 

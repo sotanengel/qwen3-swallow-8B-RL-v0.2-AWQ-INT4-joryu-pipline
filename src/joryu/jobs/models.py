@@ -122,6 +122,7 @@ class CurateJobSpec:
     prompt_bank: bool = False
     src: str = ""
     judge_base_url: str = ""
+    resume: bool = True
 
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)
@@ -138,6 +139,7 @@ class CurateJobSpec:
             prompt_bank=bool(data.get("prompt_bank", False)),
             src=str(data.get("src") or ""),
             judge_base_url=str(data.get("judge_base_url") or ""),
+            resume=bool(data.get("resume", True)),
         )
 
     def to_curate_argv(self) -> list[str]:
@@ -155,6 +157,8 @@ class CurateJobSpec:
             argv.extend(["--src", self.src])
         if self.judge_base_url:
             argv.extend(["--judge-base-url", self.judge_base_url])
+        if not self.resume:
+            argv.append("--no-resume")
         return argv
 
 

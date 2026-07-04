@@ -96,3 +96,46 @@ def test_manual_append_prompt(client: TestClient) -> None:
     )
     assert resp.status_code == 200
     assert resp.json()["domain"] == "math"
+
+
+def test_check_status_initially_unchecked(client: TestClient) -> None:
+    resp = client.get("/api/seed-gen/check/status")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["bank_total"] == 1
+    assert body["unchecked_count"] == 1
+    assert body["check_completed"] is False
+
+
+def test_list_prompts_with_checked_filter(client: TestClient) -> None:
+    resp = client.get("/api/seed-gen/prompts?limit=10&checked=unchecked")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["total"] == 1
+    assert len(body["items"]) == 1
+    assert body["items"][0]["checked"] is False
+    assert "key" in body["items"][0]
+
+
+def test_mark_checked_by_keys(client: TestClient) -> None:
+    listed = client.get("/api/seed-gen/prompts?limit=1").json()
+    key = listed["items"][0]["key"]
+    resp = client.post("/api/seed-gen/check/mark", json={"keys": [key]})
+    assert resp.status_code == 200
+    assert resp.json()["marked_count"] == 1
+
+    status = client.get("/api/seed-gen/check/status").json()
+    assert status["check_completed"] is True
+    assert status["unchecked_count"] == 0
+
+
+def test_mark_all_unchecked(client: TestClient) -> None:
+    client.post(
+        "/api/seed-gen/prompts",
+        json={"prompt": "second prompt", "domain": "math"},
+    )
+    resp = client.post("/api/seed-gen/check/mark", json={"all_unchecked": True})
+    assert resp.status_code == 200
+    assert resp.json()["marked_count"] >= 1
+    status = client.get("/api/seed-gen/check/status").json()
+    assert status["check_completed"] is True

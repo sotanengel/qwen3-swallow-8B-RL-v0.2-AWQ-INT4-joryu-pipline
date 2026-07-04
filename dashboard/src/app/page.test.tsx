@@ -44,6 +44,14 @@ vi.mock("@/lib/seed-gen-jobs", async () => {
   return {
     ...actual,
     loadSeedGenStatus: vi.fn(() => Promise.resolve(null)),
+    loadPromptCheckStatus: vi.fn(() =>
+      Promise.resolve({
+        bank_total: 1,
+        checked_count: 0,
+        unchecked_count: 1,
+        check_completed: false,
+      }),
+    ),
   };
 });
 vi.mock("@/lib/screening", () => ({

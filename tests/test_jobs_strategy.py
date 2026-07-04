@@ -65,3 +65,14 @@ def test_curate_spec_screening_argv() -> None:
     assert "--screening" in argv
     assert "--prompt-bank" in argv
     assert "--src" in argv
+
+
+def test_curate_prompt_bank_job_uses_stable_screening_dst() -> None:
+    from joryu.jobs.runner import PROMPT_SCREENING_REL, _curate_argv_with_dst, curate_job_dst_rel
+
+    argv = _curate_argv_with_dst(
+        CurateJobSpec(screening=True, prompt_bank=True),
+        "job-pb",
+    )
+    assert PROMPT_SCREENING_REL in argv
+    assert curate_job_dst_rel("job-pb") not in argv
