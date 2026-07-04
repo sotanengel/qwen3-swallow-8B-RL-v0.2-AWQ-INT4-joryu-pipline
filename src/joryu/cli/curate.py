@@ -60,6 +60,8 @@ from joryu.curate.stats import (
 from joryu.curate.style_presets import load_style_rules
 from joryu.curate.writer import CurateWriter, ScreeningWriter
 from joryu.infra.git import git_head_at
+from joryu.seed_gen.check_state import mark_checked, partition_by_checked, prompt_check_key
+from joryu.seed_gen.writer import DEFAULT_STATE_REL, load_state, save_state
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -651,22 +653,33 @@ def _run_screening_prompt_bank(
     if not args.resume and dst.exists():
         clear_existing_outputs(dst)
     resume_state = load_resume_state(scores_path) if args.resume else None
-
-    composites: list[Any] = []
-    records: list[dict[str, Any]] = []
-    record_hashes: list[str] = []
-    llm_calls = 0
-    input_records = 0
     resume_hashes = resume_state.evaluated_hashes if resume_state else set()
 
     log(f"[joryu-curate] prompt-bank screening 入力: {src}", file=sys.stderr)
     log(f"[joryu-curate] prompt-bank screening 出力: {dst}", file=sys.stderr)
 
+    repo_root = resolve_repo_root(out_path=Path(cfg.distill.out_dir) / cfg.distill.out_file)
+    state_path = (repo_root / DEFAULT_STATE_REL) if repo_root is not None else None
+
     bank_rows = load_prompt_bank(src)
+    if state_path is not None and state_path.is_file():
+        state_for_filter = load_state(state_path)
+        _, bank_rows = partition_by_checked(bank_rows, state_for_filter.prompt_check.checked_keys)
+        log(
+            f"[joryu-curate] prompt-bank screening unchecked={len(bank_rows)}",
+            file=sys.stderr,
+        )
+
+    composites: list[Any] = []
+    records: list[dict[str, Any]] = []
+    record_hashes: list[str] = []
+    screened_rows: list[Any] = []
+    llm_calls = 0
+    input_records = len(bank_rows)
+
     for i, row in enumerate(bank_rows, 1):
         if args.count and i > args.count:
             break
-        input_records += 1
         rec = {"prompt": row.prompt, "answer": "", "domain": row.domain, "category": row.category}
         rh = compute_record_hash(rec)
         if rh in resume_hashes:
@@ -685,6 +698,7 @@ def _run_screening_prompt_bank(
         )
         records.append(rec)
         record_hashes.append(rh)
+        screened_rows.append(row)
 
     labels = label_screening_batch(
         composites,
@@ -707,6 +721,17 @@ def _run_screening_prompt_bank(
                 eval_version=eval_version,
                 evaluator_model=evaluator_model,
             )
+
+    if state_path is not None and screened_rows:
+        state = load_state(state_path)
+        keys_to_mark = [
+            prompt_check_key(row)
+            for row, lbl in zip(screened_rows, labels, strict=True)
+            if lbl in ("OK", "REVIEW")
+        ]
+        if keys_to_mark:
+            mark_checked(state, keys_to_mark)
+            save_state(state_path, state)
 
     signal_versions: dict[str, str] = {}
     if llm_signal is not None:
@@ -733,7 +758,6 @@ def _run_screening_prompt_bank(
         },
     )
 
-    repo_root = resolve_repo_root(out_path=Path(cfg.distill.out_dir) / cfg.distill.out_file)
     scores_file = dst / "scores.jsonl"
     if repo_root is not None:
         write_curation_json(scores_file, repo_root / DEFAULT_CURATION_OUTPUT)

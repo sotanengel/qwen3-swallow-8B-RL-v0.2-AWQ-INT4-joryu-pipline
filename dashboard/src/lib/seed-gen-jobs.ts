@@ -49,6 +49,43 @@ export type SeedGenStatus = {
   running_job_ids: string[];
 };
 
+export type PromptCheckStatus = {
+  bank_total: number;
+  checked_count: number;
+  unchecked_count: number;
+  check_completed: boolean;
+};
+
+export type PromptBankItem = {
+  key: string;
+  id: string | null;
+  prompt: string;
+  prompt_preview: string;
+  domain: string | null;
+  category: string | null;
+  checked: boolean;
+};
+
+export type PromptBankList = {
+  total: number;
+  checked_total: number;
+  unchecked_total: number;
+  offset: number;
+  limit: number;
+  items: PromptBankItem[];
+};
+
+export type MarkCheckedRequest = {
+  keys?: string[];
+  all_unchecked?: boolean;
+  domain?: string;
+};
+
+export type MarkCheckedResponse = {
+  marked_count: number;
+  check_completed: boolean;
+};
+
 export function parseSeedGenJobRecord(data: unknown): SeedGenJobRecord {
   const row = data as SeedGenJobRecord;
   return {
@@ -85,6 +122,32 @@ const seedGenClient = createJobClient<
 
 export async function loadSeedGenStatus(): Promise<SeedGenStatus> {
   return apiFetch<SeedGenStatus>("/api/seed-gen/status");
+}
+
+export async function loadPromptCheckStatus(): Promise<PromptCheckStatus> {
+  return apiFetch<PromptCheckStatus>("/api/seed-gen/check/status");
+}
+
+export async function listPromptBank(params?: {
+  offset?: number;
+  limit?: number;
+  domain?: string;
+  checked?: "all" | "checked" | "unchecked";
+}): Promise<PromptBankList> {
+  const qs = new URLSearchParams();
+  if (params?.offset != null) qs.set("offset", String(params.offset));
+  if (params?.limit != null) qs.set("limit", String(params.limit));
+  if (params?.domain) qs.set("domain", params.domain);
+  if (params?.checked) qs.set("checked", params.checked);
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  return apiFetch<PromptBankList>(`/api/seed-gen/prompts${suffix}`);
+}
+
+export async function markPromptsChecked(body: MarkCheckedRequest): Promise<MarkCheckedResponse> {
+  return apiFetch<MarkCheckedResponse>("/api/seed-gen/check/mark", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
 }
 
 export const listSeedGenJobs = () => seedGenClient.list();

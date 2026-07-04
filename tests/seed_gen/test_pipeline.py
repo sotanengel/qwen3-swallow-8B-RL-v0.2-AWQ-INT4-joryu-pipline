@@ -250,3 +250,54 @@ def test_run_check_pipeline_small_bank_no_op(tmp_path: Path) -> None:
         mode=SEED_GEN_MODE_CHECK,
     )
     assert run_check_pipeline(opts) == 0
+
+
+def test_run_check_pipeline_skips_already_checked_rows(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """checked 行は Stage2 走査対象外。index seed には使われる。"""
+    from joryu.core.prompt_bank import PromptRow
+    from joryu.seed_gen.check_state import mark_checked, prompt_check_key
+    from joryu.seed_gen.writer import load_state, save_state
+
+    bank = tmp_path / "bank.jsonl"
+    duplicate = "同じテーマの質問A"
+    rows = [
+        {"id": "row-1", "prompt": duplicate, "domain": "general_qa"},
+        {"id": "row-2", "prompt": duplicate, "domain": "general_qa"},
+        {"id": "row-3", "prompt": "全く別の内容XYZ12345", "domain": "general_qa"},
+    ]
+    bank.write_text(
+        "\n".join(json.dumps(r, ensure_ascii=False) for r in rows) + "\n",
+        encoding="utf-8",
+    )
+    state_path = tmp_path / "state.json"
+
+    state = load_state(state_path)
+    mark_checked(state, [prompt_check_key(PromptRow.model_validate(rows[0]))])
+    save_state(state_path, state)
+
+    monkeypatch.setattr(
+        "joryu.seed_gen.pipeline.load_sentence_transformer_backend",
+        lambda _model: _StubBackend(),
+    )
+
+    opts = PipelineOptions(
+        bank_path=bank,
+        state_path=state_path,
+        config=_make_config(),
+        mode=SEED_GEN_MODE_CHECK,
+        sim_threshold=0.99,
+        rejected_path=tmp_path / "rejected" / "similar.jsonl",
+    )
+    rc = run_check_pipeline(opts)
+    assert rc == 0
+
+    remaining = bank.read_text(encoding="utf-8").strip().splitlines()
+    ids = [json.loads(line)["id"] for line in remaining]
+    assert "row-1" in ids
+    assert "row-2" not in ids
+    assert "row-3" in ids
+
+    reloaded = load_state(state_path)
+    assert prompt_check_key(PromptRow.model_validate(rows[2])) in reloaded.prompt_check.checked_keys

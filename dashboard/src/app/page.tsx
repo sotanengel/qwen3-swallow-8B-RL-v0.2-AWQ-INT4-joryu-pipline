@@ -12,8 +12,8 @@ import { PromptsStagePanel } from "@/components/pipeline/PromptsStagePanel";
 import type { CurateJobRecord } from "@/lib/curate-jobs";
 import type { JobRecord } from "@/lib/jobs";
 import { EMPTY_STATS, loadStats, statsDataChanged } from "@/lib/stats";
-import type { SeedGenJobRecord } from "@/lib/seed-gen-jobs";
-import { loadSeedGenStatus } from "@/lib/seed-gen-jobs";
+import type { PromptCheckStatus, SeedGenJobRecord } from "@/lib/seed-gen-jobs";
+import { loadPromptCheckStatus, loadSeedGenStatus } from "@/lib/seed-gen-jobs";
 import { EMPTY_SCREENING, loadScreening, screeningDataChanged } from "@/lib/screening";
 import { useIntervalPoll } from "@/lib/useIntervalPoll";
 
@@ -41,20 +41,28 @@ function HubContent() {
   const [lastCheckJob, setLastCheckJob] = useState<SeedGenJobRecord | null>(null);
   const [lastDistillJob, setLastDistillJob] = useState<JobRecord | null>(null);
   const [lastCurateJob, setLastCurateJob] = useState<CurateJobRecord | null>(null);
+  const [checkStatus, setCheckStatus] = useState<PromptCheckStatus | null>(null);
 
   const stats = useIntervalPoll(loadStats, EMPTY_STATS, {
     shouldUpdate: statsDataChanged,
     intervalMs: 3000,
   });
   const seedStatus = useIntervalPoll(loadSeedGenStatus, null, { intervalMs: 3000 });
+  const polledCheckStatus = useIntervalPoll(
+    loadPromptCheckStatus,
+    null as PromptCheckStatus | null,
+    { intervalMs: 3000 },
+  );
   const screening = useIntervalPoll(loadScreening, EMPTY_SCREENING, {
     shouldUpdate: screeningDataChanged,
     intervalMs: 3000,
   });
 
   const checkCompleted = useMemo(
-    () => lastCheckJob !== null && lastCheckJob.status === "succeeded",
-    [lastCheckJob],
+    () =>
+      (checkStatus ?? polledCheckStatus)?.check_completed ??
+      false,
+    [checkStatus, polledCheckStatus],
   );
 
   const promptsMetric = seedStatus
@@ -113,9 +121,11 @@ function HubContent() {
             title="プロンプトチェック (LLM)"
             description="seed_gen check + LLM 品質スクリーニング (連動起動)。作成したプロンプトは必ずここを通します。"
             metric={
-              lastCheckJob
-                ? `最新チェック: ${lastCheckJob.status}`
-                : "未実施"
+              checkStatus ?? polledCheckStatus
+                ? `未チェック: ${(checkStatus ?? polledCheckStatus)!.unchecked_count.toLocaleString()}`
+                : lastCheckJob
+                  ? `最新チェック: ${lastCheckJob.status}`
+                  : "未実施"
             }
             lastStatus={lastCheckJob?.status}
             active={active === "check"}
@@ -168,7 +178,12 @@ function HubContent() {
         {active === "prompts" && (
           <PromptsStagePanel onLastJob={handlePromptsLastJob} />
         )}
-        {active === "check" && <CheckStagePanel onLastJob={handleCheckLastJob} />}
+        {active === "check" && (
+          <CheckStagePanel
+            onLastJob={handleCheckLastJob}
+            onCheckStatusChange={setCheckStatus}
+          />
+        )}
         {active === "distill" && (
           <DistillStagePanel
             checkCompleted={checkCompleted}

@@ -36,8 +36,26 @@ JORYU_CURATE_FAKE_JUDGE=1 uv run joryu-curate \
 
 ## チェックポイント
 
-- `data/seed_gen/state.json` — 分野別カウント・棄却率
+- `data/seed_gen/state.json` — 分野別カウント・棄却率・**`prompt_check.checked_keys`**（チェック済みプロンプト）
 - `--resume` で中断再開
+
+## 増分プロンプトチェック
+
+チェック済み状態は `state.json` の `prompt_check.checked_keys` に永続化される。
+
+- **手動登録**: ダッシュボード `/?stage=check` または API `POST /api/seed-gen/check/mark`
+- **増分実行**: seed_gen check / prompt-bank screening は未チェック行のみ処理
+- **蒸留可否**: 未チェック 0 件 (`GET /api/seed-gen/check/status` の `check_completed`)
+
+CLI 例:
+
+```bash
+# 未チェック全件をチェック済み登録 (実際に審査済みのプロンプトのみ)
+uv run joryu-seed-gen --mark-checked --all-unchecked
+
+# 特定キーを登録
+uv run joryu-seed-gen --mark-checked --mark-keys id:uuid-1,hash:abc...
+```
 
 ## VRAM / モデル
 

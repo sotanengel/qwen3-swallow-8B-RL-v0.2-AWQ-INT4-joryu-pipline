@@ -16,10 +16,22 @@ from joryu.jobs.store import JobStore
 from joryu.jobs.validate import validate_seed_gen_job_spec
 from joryu.orchestrator.profile import ModelProfile
 from joryu.persistence.prompt_dedup import ExactDedup
+from joryu.seed_gen.check_state import (
+    compute_check_status,
+    mark_all_unchecked,
+    mark_checked,
+    prompt_check_key,
+)
 from joryu.seed_gen.config import DEFAULT_DOMAINS_REL, SeedGenConfig, resolve_domains_config_path
 from joryu.seed_gen.counts import count_by_domain
 from joryu.seed_gen.pipeline import DEFAULT_BANK_REL
-from joryu.seed_gen.writer import DEFAULT_STATE_REL, atomic_append_jsonl, load_state, make_seed_row
+from joryu.seed_gen.writer import (
+    DEFAULT_STATE_REL,
+    atomic_append_jsonl,
+    load_state,
+    make_seed_row,
+    save_state,
+)
 
 router = APIRouter()
 SeedGenRequestBody = Annotated[dict[str, Any], Body()]
@@ -72,6 +84,43 @@ class SeedGenStatusResponse(BaseModel):
     running_job_ids: list[str] = Field(default_factory=list)
 
 
+class PromptCheckStatusResponse(BaseModel):
+    bank_total: int
+    checked_count: int
+    unchecked_count: int
+    check_completed: bool
+
+
+class PromptBankItem(BaseModel):
+    key: str
+    id: str | None = None
+    prompt: str
+    prompt_preview: str
+    domain: str | None = None
+    category: str | None = None
+    checked: bool
+
+
+class PromptBankListResponse(BaseModel):
+    total: int
+    checked_total: int
+    unchecked_total: int
+    offset: int
+    limit: int
+    items: list[PromptBankItem]
+
+
+class MarkCheckedRequest(BaseModel):
+    keys: list[str] = Field(default_factory=list)
+    all_unchecked: bool = False
+    domain: str = ""
+
+
+class MarkCheckedResponse(BaseModel):
+    marked_count: int
+    check_completed: bool
+
+
 def _store(request: Request) -> JobStore:
     return request.app.state.job_store
 
@@ -88,6 +137,24 @@ def _resolve_bank(repo_root: Any) -> Any:
     from pathlib import Path
 
     return Path(repo_root) / DEFAULT_BANK_REL
+
+
+def _resolve_state(repo_root: Any) -> Any:
+    from pathlib import Path
+
+    return Path(repo_root) / DEFAULT_STATE_REL
+
+
+def _load_bank_rows(repo_root: Any) -> list[Any]:
+    bank = _resolve_bank(repo_root)
+    return load_prompt_bank(bank) if bank.is_file() else []
+
+
+def _prompt_preview(text: str, *, max_len: int = 120) -> str:
+    stripped = text.strip()
+    if len(stripped) <= max_len:
+        return stripped
+    return stripped[: max_len - 1] + "…"
 
 
 def _resolve_domains(repo_root: Any) -> SeedGenConfig:
@@ -233,3 +300,99 @@ def append_manual_prompt(request: Request, body: ManualPromptBody) -> dict[str, 
 @status_router.get("/status", response_model=SeedGenStatusResponse)
 def seed_gen_status(request: Request) -> SeedGenStatusResponse:
     return _build_status(request)
+
+
+@status_router.get("/check/status", response_model=PromptCheckStatusResponse)
+def prompt_check_status(request: Request) -> PromptCheckStatusResponse:
+    repo_root = request.app.state.repo_root
+    rows = _load_bank_rows(repo_root)
+    state = load_state(_resolve_state(repo_root))
+    status = compute_check_status(rows, state.prompt_check.checked_keys)
+    return PromptCheckStatusResponse(
+        bank_total=status.bank_total,
+        checked_count=status.checked_count,
+        unchecked_count=status.unchecked_count,
+        check_completed=status.check_completed,
+    )
+
+
+@status_router.get("/prompts", response_model=PromptBankListResponse)
+def list_prompt_bank(
+    request: Request,
+    offset: int = 0,
+    limit: int = 50,
+    domain: str = "",
+    checked: str = "all",
+) -> PromptBankListResponse:
+    if offset < 0:
+        raise HTTPException(status_code=400, detail="offset must be >= 0")
+    if limit < 1 or limit > 200:
+        raise HTTPException(status_code=400, detail="limit must be 1..200")
+    if checked not in ("all", "checked", "unchecked"):
+        raise HTTPException(status_code=400, detail="checked must be all|checked|unchecked")
+
+    repo_root = request.app.state.repo_root
+    rows = _load_bank_rows(repo_root)
+    state = load_state(_resolve_state(repo_root))
+    checked_keys = state.prompt_check.checked_keys
+    dom = domain.strip()
+
+    filtered: list[Any] = []
+    for row in rows:
+        if dom and (row.domain or "") != dom:
+            continue
+        is_checked = prompt_check_key(row) in checked_keys
+        if checked == "checked" and not is_checked:
+            continue
+        if checked == "unchecked" and is_checked:
+            continue
+        filtered.append(row)
+
+    checked_total = sum(1 for row in rows if prompt_check_key(row) in checked_keys)
+    page = filtered[offset : offset + limit]
+    items = [
+        PromptBankItem(
+            key=prompt_check_key(row),
+            id=row.id,
+            prompt=row.prompt,
+            prompt_preview=_prompt_preview(row.prompt),
+            domain=row.domain,
+            category=row.category,
+            checked=prompt_check_key(row) in checked_keys,
+        )
+        for row in page
+    ]
+    return PromptBankListResponse(
+        total=len(filtered),
+        checked_total=checked_total,
+        unchecked_total=len(rows) - checked_total,
+        offset=offset,
+        limit=limit,
+        items=items,
+    )
+
+
+@status_router.post("/check/mark", response_model=MarkCheckedResponse)
+def mark_prompts_checked(request: Request, body: MarkCheckedRequest) -> MarkCheckedResponse:
+    if body.all_unchecked and body.keys:
+        raise HTTPException(status_code=400, detail="keys and all_unchecked are mutually exclusive")
+
+    repo_root = request.app.state.repo_root
+    rows = _load_bank_rows(repo_root)
+    state_path = _resolve_state(repo_root)
+    state = load_state(state_path)
+
+    if body.all_unchecked:
+        marked = mark_all_unchecked(rows, state, domain=body.domain)
+    else:
+        keys = {k.strip() for k in body.keys if k.strip()}
+        before = len(state.prompt_check.checked_keys)
+        mark_checked(state, keys)
+        marked = len(state.prompt_check.checked_keys) - before
+
+    save_state(state_path, state)
+    status = compute_check_status(rows, state.prompt_check.checked_keys)
+    return MarkCheckedResponse(
+        marked_count=marked,
+        check_completed=status.check_completed,
+    )

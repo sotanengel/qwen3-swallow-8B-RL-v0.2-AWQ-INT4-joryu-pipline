@@ -8,6 +8,8 @@ import os
 from pathlib import Path
 
 from joryu.core.logging_config import setup_logging
+from joryu.core.prompt_bank import load_prompt_bank
+from joryu.seed_gen.check_state import mark_all_unchecked, mark_checked, prompt_check_key
 from joryu.seed_gen.config import (
     DEFAULT_DOMAINS_REL,
     DEFAULT_TARGET_TOTAL,
@@ -18,7 +20,7 @@ from joryu.seed_gen.config import (
 )
 from joryu.seed_gen.generator import DEFAULT_MODEL
 from joryu.seed_gen.pipeline import DEFAULT_BANK_REL, PipelineOptions, run_pipeline
-from joryu.seed_gen.writer import DEFAULT_STATE_REL
+from joryu.seed_gen.writer import DEFAULT_STATE_REL, load_state, save_state
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +54,21 @@ def build_parser() -> argparse.ArgumentParser:
         "--judge-base-url", default="", help="judge (screening) LLM URL (check モードで使用)"
     )
     p.add_argument("--state", default=DEFAULT_STATE_REL, help="state.json パス")
+    p.add_argument(
+        "--mark-checked",
+        action="store_true",
+        help="指定キーまたは未チェック全件をチェック済みとして登録 (check 実行はしない)",
+    )
+    p.add_argument(
+        "--mark-keys",
+        default="",
+        help="チェック済み登録するキー (カンマ区切り, --mark-checked と併用)",
+    )
+    p.add_argument(
+        "--all-unchecked",
+        action="store_true",
+        help="未チェック全件をチェック済み登録 (--mark-checked と併用)",
+    )
     return p
 
 
@@ -73,6 +90,25 @@ def main(argv: list[str] | None = None) -> int:
         if not Path(args.state).is_absolute()
         else Path(args.state)
     )
+
+    if args.mark_checked:
+        if args.mark_keys and args.all_unchecked:
+            logger.error("--mark-keys と --all-unchecked は同時指定不可")
+            return 2
+        rows = load_prompt_bank(bank_path) if bank_path.is_file() else []
+        state = load_state(state_path)
+        if args.all_unchecked:
+            marked = mark_all_unchecked(rows, state, domain=args.domain.strip())
+        else:
+            keys = [k.strip() for k in str(args.mark_keys).split(",") if k.strip()]
+            if not keys and rows:
+                keys = [prompt_check_key(r) for r in rows]
+            before = len(state.prompt_check.checked_keys)
+            mark_checked(state, keys)
+            marked = len(state.prompt_check.checked_keys) - before
+        save_state(state_path, state)
+        logger.info("marked %d prompt(s) as checked", marked)
+        return 0
 
     llm_url = args.llm_base_url or os.environ.get("JORYU_VLLM_URL", "").strip()
     if llm_url and not llm_url.endswith("/v1"):
