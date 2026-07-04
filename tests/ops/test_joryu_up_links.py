@@ -59,6 +59,33 @@ def test_ensure_dashboard_data_paths_copy_fallback_when_symlink_fails(
     assert public_jsonl.read_text(encoding="utf-8") == jsonl_path.read_text(encoding="utf-8")
 
 
+def test_ensure_dashboard_data_paths_repairs_broken_public_link(
+    repo_layout: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Broken junction/symlink on Windows can make Path.exists() raise WinError 1920."""
+    jsonl_path = repo_layout / "data" / "distilled" / "responses.jsonl"
+    jsonl_path.parent.mkdir(parents=True)
+    jsonl_path.write_text('{"prompt":"repaired"}\n', encoding="utf-8")
+
+    public_jsonl = repo_layout / "dashboard" / "public" / "responses.jsonl"
+    public_jsonl.parent.mkdir(parents=True)
+    public_jsonl.write_text("stale", encoding="utf-8")
+
+    real_exists = Path.exists
+
+    def _exists_raises_on_public(self: Path, *args, **kwargs) -> bool:
+        if self == public_jsonl:
+            raise OSError(1920, "ファイルにアクセスできません。")
+        return real_exists(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "exists", _exists_raises_on_public, raising=False)
+
+    ensure_dashboard_data_paths(repo_layout)
+
+    assert public_jsonl.read_text(encoding="utf-8") == jsonl_path.read_text(encoding="utf-8")
+
+
 def test_sync_dashboard_responses_copy_updates_public_file(
     repo_layout: Path,
     monkeypatch: pytest.MonkeyPatch,

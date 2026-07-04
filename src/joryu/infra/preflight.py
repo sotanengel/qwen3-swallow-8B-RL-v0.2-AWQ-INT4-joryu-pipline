@@ -763,17 +763,47 @@ def ensure_dashboard_data_paths(repo_root: Path) -> None:
     _ensure_dashboard_link(public_dir / cfg.distill.out_file, jsonl_path)
 
 
-def _dashboard_link_ok(public_path: Path, target: Path) -> bool:
-    if not public_path.exists() and not public_path.is_symlink():
+def _path_exists_safe(path: Path) -> bool:
+    try:
+        return path.exists()
+    except OSError:
         return False
-    if public_path.is_symlink():
+
+
+def _path_is_symlink_safe(path: Path) -> bool:
+    try:
+        return path.is_symlink()
+    except OSError:
+        return False
+
+
+def _remove_dashboard_public_entry(public_path: Path) -> None:
+    """Remove symlink/junction/copy; broken reparse points may raise on exists()."""
+    try:
+        present = public_path.exists() or public_path.is_symlink()
+    except OSError:
+        present = True
+    if present:
+        public_path.unlink(missing_ok=True)
+
+
+def _dashboard_link_ok(public_path: Path, target: Path) -> bool:
+    if not _path_exists_safe(public_path) and not _path_is_symlink_safe(public_path):
+        return False
+    if _path_is_symlink_safe(public_path):
         try:
             return public_path.resolve() == target.resolve()
         except OSError:
             return False
     if not target.exists():
-        return public_path.stat().st_size > 0
-    if public_path.stat().st_size == 0 and target.stat().st_size > 0:
+        try:
+            return public_path.stat().st_size > 0
+        except OSError:
+            return False
+    try:
+        if public_path.stat().st_size == 0 and target.stat().st_size > 0:
+            return False
+    except OSError:
         return False
     try:
         return public_path.read_bytes() == target.read_bytes()
@@ -786,8 +816,7 @@ def _ensure_dashboard_link(public_path: Path, target: Path) -> None:
     public_path.parent.mkdir(parents=True, exist_ok=True)
     if _dashboard_link_ok(public_path, target):
         return
-    if public_path.exists() or public_path.is_symlink():
-        public_path.unlink(missing_ok=True)
+    _remove_dashboard_public_entry(public_path)
     try:
         public_path.symlink_to(target.resolve(), target_is_directory=False)
         return
