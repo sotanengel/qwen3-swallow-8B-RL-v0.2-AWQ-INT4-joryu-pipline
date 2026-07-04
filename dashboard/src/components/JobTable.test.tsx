@@ -137,4 +137,27 @@ describe("JobTable", () => {
     expect(screen.getByText("種別")).toBeTruthy();
     expect(screen.getAllByText("distill")).toHaveLength(2);
   });
+
+  it("renders at most five job rows when more jobs are provided", () => {
+    const manyRows: Row[] = Array.from({ length: 7 }, (_, i) => ({
+      id: `job-${i}-abcdefgh`,
+      status: "succeeded" as const,
+      created_at: `2026-01-0${i + 1}T00:00:00Z`,
+      finished_at: `2026-01-0${i + 1}T00:30:00Z`,
+    }));
+
+    render(
+      <JobTable
+        jobs={manyRows}
+        selectedId={null}
+        onSelect={() => {}}
+        onCancel={() => {}}
+      />,
+    );
+
+    expect(screen.getAllByTestId("job-row")).toHaveLength(5);
+    expect(screen.getByTitle("job-0-abcdefgh")).toBeTruthy();
+    expect(screen.getByTitle("job-4-abcdefgh")).toBeTruthy();
+    expect(screen.queryByTitle("job-5-abcdefgh")).toBeNull();
+  });
 });

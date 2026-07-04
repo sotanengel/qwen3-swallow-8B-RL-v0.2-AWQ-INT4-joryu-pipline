@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 
 import { StatusBadge } from "@/components/StatusBadge";
-import { isActiveStatus } from "@/lib/job-client";
+import { JOB_LIST_DISPLAY_LIMIT, isActiveStatus } from "@/lib/job-client";
 
 export type JobRowLike = {
   id: string;
@@ -43,6 +43,8 @@ export function JobTable<Row extends JobRowLike>({
     return <p className="muted">{emptyLabel}</p>;
   }
 
+  const visibleJobs = jobs.slice(0, JOB_LIST_DISPLAY_LIMIT);
+
   const handleCancel = (row: Row) => {
     if (!isActiveStatus(row.status)) return;
     if (typeof window !== "undefined" && !window.confirm(cancelConfirmMessage)) {
@@ -66,7 +68,7 @@ export function JobTable<Row extends JobRowLike>({
         </tr>
       </thead>
       <tbody>
-        {jobs.map((job) => (
+        {visibleJobs.map((job) => (
           <tr
             key={job.id}
             className={`job-row-clickable${selectedId === job.id ? " row-selected" : ""}`}
