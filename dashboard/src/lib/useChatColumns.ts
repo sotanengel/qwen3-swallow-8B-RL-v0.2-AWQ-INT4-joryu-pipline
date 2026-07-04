@@ -3,6 +3,10 @@ import { useCallback, useState } from "react";
 import { applyChatEvent, finalizeColumnDefensively, type ColumnUiState } from "@/components/ChatColumn";
 import {
   JobActiveError,
+  ProfileSwitchingError,
+  WrongProfileError,
+} from "@/lib/api/errors";
+import {
   streamColumnMessage,
   streamMessage,
   type ChatColumnState,
@@ -11,6 +15,7 @@ import {
 
 type UseChatColumnsOptions = {
   onJobBlocked?: () => void;
+  onProfileBlocked?: () => void;
   onSuccess?: () => void;
 };
 
@@ -23,7 +28,7 @@ export type UseChatColumnsResult = {
 };
 
 export function useChatColumns(options: UseChatColumnsOptions = {}): UseChatColumnsResult {
-  const { onJobBlocked, onSuccess } = options;
+  const { onJobBlocked, onProfileBlocked, onSuccess } = options;
   const [columns, setColumns] = useState<ColumnUiState[]>([]);
   const [globalSending, setGlobalSending] = useState(false);
 
@@ -44,10 +49,15 @@ export function useChatColumns(options: UseChatColumnsOptions = {}): UseChatColu
     (err: unknown) => {
       if (err instanceof JobActiveError) {
         onJobBlocked?.();
+      } else if (
+        err instanceof WrongProfileError ||
+        err instanceof ProfileSwitchingError
+      ) {
+        onProfileBlocked?.();
       }
       throw err;
     },
-    [onJobBlocked],
+    [onJobBlocked, onProfileBlocked],
   );
 
   const sendGlobal = useCallback(
@@ -113,4 +123,4 @@ export function useChatColumns(options: UseChatColumnsOptions = {}): UseChatColu
   };
 }
 
-export { JobActiveError };
+export { JobActiveError, ProfileSwitchingError, WrongProfileError } from "@/lib/api/errors";

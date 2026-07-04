@@ -449,6 +449,7 @@ class JobRunner:
         self._running_process: subprocess.Popen[str] | None = None
         self._running_container_name: str | None = None
         self._cancel_requested: set[str] = set()
+        self._artifact_refresh_lock = threading.Lock()
 
     @property
     def running_id(self) -> str | None:
@@ -537,6 +538,58 @@ class JobRunner:
 
         threading.Thread(target=_stop, daemon=True).start()
 
+    def _release_running_and_start_next(self) -> None:
+        with self._lock:
+            self._running_id = None
+        self._maybe_start_next()
+
+    def _locked_refresh_stats(self, spec: DistillJobSpec) -> None:
+        with self._artifact_refresh_lock:
+            try:
+                self._refresh_stats(spec)
+            except Exception:
+                logger.exception("stats refresh failed")
+
+    def _locked_refresh_curation(self, spec: CurateJobSpec, job_id: str) -> None:
+        with self._artifact_refresh_lock:
+            try:
+                self._refresh_curation(spec, job_id)
+            except Exception:
+                logger.exception("curation refresh failed", extra={"job_id": job_id})
+
+    def _run_post_job_cleanup(self, job_id: str, record: JobRecord) -> None:
+        def _cleanup() -> None:
+            try:
+                if record.kind == JobKind.DISTILL and isinstance(record.spec, DistillJobSpec):
+                    from joryu.infra.preflight import (
+                        ensure_dashboard_data_paths,
+                        sync_dashboard_responses_copy,
+                    )
+
+                    ensure_dashboard_data_paths(self.repo_root)
+                    self._locked_refresh_stats(record.spec)
+                    sync_dashboard_responses_copy(self.repo_root)
+                elif record.kind == JobKind.CURATE and isinstance(record.spec, CurateJobSpec):
+                    self._locked_refresh_curation(record.spec, job_id)
+            except Exception:
+                logger.exception("post-job cleanup failed", extra={"job_id": job_id})
+                self.store.append_log(job_id, "[joryu-runner] post-job cleanup failed\n")
+
+            if self._orchestrator is not None:
+                try:
+                    self._orchestrator.maybe_auto_restore(
+                        log=lambda msg: self.store.append_log(job_id, msg + "\n"),
+                    )
+                except Exception as exc:
+                    logger.error("auto_restore failed", exc_info=True)
+                    self.store.append_log(job_id, f"[joryu-runner] auto_restore failed: {exc}\n")
+
+        threading.Thread(
+            target=_cleanup,
+            daemon=True,
+            name=f"joryu-post-job-{job_id[:8]}",
+        ).start()
+
     def _run_job(self, job_id: str) -> None:
         record = self.store.load(job_id)
         record.status = JobStatus.RUNNING
@@ -606,7 +659,7 @@ class JobRunner:
                 return
 
             def _refresh_stats_loop() -> None:
-                self._refresh_stats(record.spec)
+                self._locked_refresh_stats(record.spec)
 
             refresh_thread = threading.Thread(
                 target=_stats_refresh_loop,
@@ -618,7 +671,7 @@ class JobRunner:
             curate_spec = record.spec
 
             def _refresh_curation_loop() -> None:
-                self._refresh_curation(curate_spec, job_id)
+                self._locked_refresh_curation(curate_spec, job_id)
 
             refresh_thread = threading.Thread(
                 target=_stats_refresh_loop,
@@ -657,7 +710,7 @@ class JobRunner:
         finally:
             stop_refresh.set()
             if refresh_thread is not None:
-                refresh_thread.join(timeout=1.0)
+                refresh_thread.join()
 
         record.finished_at = datetime.now(UTC).isoformat()
         with self._lock:
@@ -673,23 +726,8 @@ class JobRunner:
             record.status = JobStatus.SUCCEEDED if exit_code == 0 else JobStatus.FAILED
         self.store.save(record)
 
-        if record.kind == JobKind.DISTILL and isinstance(record.spec, DistillJobSpec):
-            self._refresh_stats(record.spec)
-        elif record.kind == JobKind.CURATE and isinstance(record.spec, CurateJobSpec):
-            self._refresh_curation(record.spec, job_id)
-
-        if self._orchestrator is not None:
-            try:
-                self._orchestrator.maybe_auto_restore(
-                    log=lambda msg: self.store.append_log(job_id, msg + "\n"),
-                )
-            except RuntimeError as exc:
-                logger.error("auto_restore failed", exc_info=True)
-                self.store.append_log(job_id, f"[joryu-runner] auto_restore failed: {exc}\n")
-
-        with self._lock:
-            self._running_id = None
-        self._maybe_start_next()
+        self._release_running_and_start_next()
+        self._run_post_job_cleanup(job_id, record)
 
 
 def make_refresh_stats(repo_root: Path) -> Callable[[DistillJobSpec], int]:

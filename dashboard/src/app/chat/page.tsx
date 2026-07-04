@@ -21,16 +21,21 @@ export default function ChatPage() {
   const [error, setError] = useState<string | null>(null);
   const [globalPrompt, setGlobalPrompt] = useState("");
   const [jobBlocked, setJobBlocked] = useState(false);
+  const [profileBlocked, setProfileBlocked] = useState(false);
   const [sidebarRefreshKey, setSidebarRefreshKey] = useState(0);
   const distillActive = useDistillJobFastPoll();
   const curateActive = useCurateJobFastPoll();
   const jobActive = distillActive || curateActive;
-  const chatDisabled = jobActive || jobBlocked;
+  const chatDisabled = jobActive || jobBlocked || profileBlocked;
 
   const { columns, setColumnsFromSession, globalSending, sendGlobal, sendColumn } =
     useChatColumns({
       onJobBlocked: () => setJobBlocked(true),
-      onSuccess: () => setJobBlocked(false),
+      onProfileBlocked: () => setProfileBlocked(true),
+      onSuccess: () => {
+        setJobBlocked(false);
+        setProfileBlocked(false);
+      },
     });
 
   const applySession = useCallback(
@@ -174,9 +179,14 @@ export default function ChatPage() {
             セッションを切り替え中…
           </p>
         ) : null}
-        {chatDisabled ? (
+        {jobBlocked || jobActive ? (
           <div className="warning-banner" role="alert">
             ジョブ実行中のためチャットを停止しています
+          </div>
+        ) : null}
+        {profileBlocked ? (
+          <div className="warning-banner" role="alert">
+            LLM プロファイルの復旧中のためチャットを一時停止しています
           </div>
         ) : null}
         {error ? <p className="text-danger" style={{ marginBottom: "1rem" }}>{error}</p> : null}

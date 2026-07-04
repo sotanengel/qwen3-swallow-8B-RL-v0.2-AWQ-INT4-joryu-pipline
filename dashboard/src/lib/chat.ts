@@ -3,7 +3,7 @@ import { checkResponse, JobActiveError } from "./api/errors";
 
 export type { ChatEvent } from "./sse-parse";
 export { parseSseBuffer, parseSseText } from "./sse-parse";
-export { JobActiveError } from "./api/errors";
+export { JobActiveError, ProfileSwitchingError, WrongProfileError } from "./api/errors";
 
 export type ChatMessage = {
   role: string;

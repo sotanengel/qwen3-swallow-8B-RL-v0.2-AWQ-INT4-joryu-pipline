@@ -3,7 +3,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import { JobActiveError } from "@/lib/api/errors";
+import { JobActiveError, WrongProfileError } from "@/lib/api/errors";
 import { useChatColumns } from "@/lib/useChatColumns";
 
 const mockStreamMessage = vi.hoisted(() => vi.fn());
@@ -94,6 +94,26 @@ describe("useChatColumns", () => {
     });
 
     expect(onJobBlocked).toHaveBeenCalled();
+  });
+
+  it("calls onProfileBlocked when stream returns wrong_profile 409", async () => {
+    mockStreamMessage.mockRejectedValue(new WrongProfileError({ error: "wrong_profile" }));
+    const onProfileBlocked = vi.fn();
+    const { result } = renderHook(() => useChatColumns({ onProfileBlocked }));
+
+    act(() => {
+      result.current.setColumnsFromSession([
+        { style_id: "prose", label: "散文", messages: [], turn_index: 0 },
+      ]);
+    });
+
+    await act(async () => {
+      await expect(result.current.sendGlobal("sess-1", "hello")).rejects.toThrow(
+        WrongProfileError,
+      );
+    });
+
+    expect(onProfileBlocked).toHaveBeenCalled();
   });
 
   it("finalizes column when stream ends without column_done", async () => {
