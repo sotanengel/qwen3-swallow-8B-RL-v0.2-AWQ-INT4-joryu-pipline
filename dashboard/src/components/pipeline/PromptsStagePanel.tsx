@@ -85,12 +85,15 @@ export function PromptsStagePanel({
         <h3>プロンプト生成 (seed_gen create)</h3>
         <div className="job-form">
           <label>
-            分野 (空=全分野)
-            <input
-              value={domain}
-              onChange={(e) => setDomain(e.target.value)}
-              placeholder="math"
-            />
+            分野
+            <select value={domain} onChange={(e) => setDomain(e.target.value)}>
+              <option value="">全分野</option>
+              {(displayStatus?.domains ?? []).map((d) => (
+                <option key={d.key} value={d.key}>
+                  {d.key}
+                </option>
+              ))}
+            </select>
           </label>
           <button type="button" className="primary-btn" onClick={submitCreate}>
             プロンプト作成を実行
@@ -114,7 +117,17 @@ export function PromptsStagePanel({
           </label>
           <label>
             分野
-            <input value={manualDomain} onChange={(e) => setManualDomain(e.target.value)} />
+            <select value={manualDomain} onChange={(e) => setManualDomain(e.target.value)}>
+              {(displayStatus?.domains ?? []).length > 0 ? (
+                displayStatus!.domains.map((d) => (
+                  <option key={d.key} value={d.key}>
+                    {d.key}
+                  </option>
+                ))
+              ) : (
+                <option value={manualDomain}>{manualDomain}</option>
+              )}
+            </select>
           </label>
           <button
             type="button"
@@ -131,10 +144,10 @@ export function PromptsStagePanel({
       </section>
 
       {displayStatus && (
-        <section className="card">
-          <h3>
-            分野進捗 (バンク総件数 {displayStatus.bank_total} / 目標 {displayStatus.target_total})
-          </h3>
+        <details className="card">
+          <summary>
+            分野進捗 — バンク {displayStatus.bank_total} / 目標 {displayStatus.target_total}
+          </summary>
           <table>
             <thead>
               <tr>
@@ -155,7 +168,7 @@ export function PromptsStagePanel({
               ))}
             </tbody>
           </table>
-        </section>
+        </details>
       )}
     </>
   );

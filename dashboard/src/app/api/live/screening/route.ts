@@ -25,6 +25,6 @@ export async function GET() {
       headers: { "Content-Type": "application/json", ...NO_STORE },
     });
   } catch {
-    return Response.json(EMPTY, { headers: NO_STORE, status: 404 });
+    return Response.json(EMPTY, { headers: NO_STORE });
   }
 }

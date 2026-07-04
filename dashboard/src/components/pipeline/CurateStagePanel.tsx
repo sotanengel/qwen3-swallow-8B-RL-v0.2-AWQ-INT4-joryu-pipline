@@ -25,7 +25,6 @@ export function CurateStagePanel({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [skipLlm, setSkipLlm] = useState(false);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
 
   const [jobs, refreshJobs, listError] = useJobList<CurateJobRecord>(
@@ -37,10 +36,7 @@ export function CurateStagePanel({
 
   useEffect(() => {
     loadCurateJobOptions()
-      .then((opts) => {
-        setOptions(opts);
-        setSkipLlm(!opts.vllm_available);
-      })
+      .then((opts) => setOptions(opts))
       .catch((exc) => setError(exc instanceof Error ? exc.message : String(exc)));
   }, []);
 
@@ -53,7 +49,7 @@ export function CurateStagePanel({
     setSubmitting(true);
     setError(null);
     try {
-      const job = await createCurateJob({ skip_llm: skipLlm });
+      const job = await createCurateJob({ skip_llm: false });
       setSelectedId(job.id);
       await refreshJobs();
     } catch (exc) {
@@ -77,7 +73,6 @@ export function CurateStagePanel({
   };
 
   const inputReady = options?.input_ready ?? false;
-  const vllmAvailable = options?.vllm_available ?? false;
 
   const form = (
     <div className="card card-stack">
@@ -87,19 +82,6 @@ export function CurateStagePanel({
           <code> uv run joryu-distill</code> を実行してください。
         </p>
       )}
-      <label className="checkbox-label">
-        <input
-          type="checkbox"
-          checked={skipLlm}
-          onChange={(e) => setSkipLlm(e.target.checked)}
-        />
-        LLM judge をスキップ (--skip-llm)
-        {!vllmAvailable && (
-          <span className="muted" style={{ marginLeft: "0.5rem" }}>
-            vLLM 未起動のため推奨
-          </span>
-        )}
-      </label>
       <button
         type="button"
         className="primary-btn"
