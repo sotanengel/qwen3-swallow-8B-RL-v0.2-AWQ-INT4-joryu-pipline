@@ -181,6 +181,34 @@ def test_load_done_keys_excludes_latest_truncated_record(tmp_path: Path) -> None
     assert key not in load_done_keys(p)
 
 
+def test_run_key_from_record_includes_tools_hash() -> None:
+    """variant_run_key と run_key_from_record が tools 付きレコードで一致する。"""
+    from joryu.core.prompt_bank import EffectiveSampling, PromptRow
+    from joryu.core.variants import DistillVariant
+    from joryu.distill.keys import variant_run_key
+
+    search_tool = {
+        "type": "function",
+        "function": {"name": "search", "description": "d", "parameters": {}},
+    }
+    rec = {
+        "prompt": "P1",
+        "answer": "完了。",
+        "finish_reason": "stop",
+        "style_id": "prose",
+        "sampling": {"temperature": 0.6, "top_p": 0.95},
+        "tools": [search_tool],
+    }
+    row = PromptRow(prompt="P1")
+    eff = EffectiveSampling(
+        system_prompt="sys",
+        sampling={"temperature": 0.6, "top_p": 0.95},
+        style_id="prose",
+        tools=[search_tool],
+    )
+    assert run_key_from_record(rec) == variant_run_key(DistillVariant(row=row, eff=eff))
+
+
 def test_load_done_keys_includes_key_when_latest_is_complete(tmp_path: Path) -> None:
     cfg = Config()
     p = tmp_path / "out.jsonl"

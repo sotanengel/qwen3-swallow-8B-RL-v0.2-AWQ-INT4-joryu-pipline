@@ -15,7 +15,7 @@ from joryu.core.paths import DEFAULT_CONFIG, resolve_config_relative, resolve_re
 from joryu.core.prompt_bank import PromptRow, load_prompt_bank
 from joryu.core.styles import StylePreset, load_styles, resolve_style_ids
 from joryu.core.variants import expand_variants
-from joryu.distill.keys import variant_run_key
+from joryu.distill.keys import count_done_variants, variant_run_key
 from joryu.distill.live import DistillLiveState
 from joryu.distill.progress_reporter import DistillProgressReporter
 from joryu.distill.protocol import DistillContext, Stage
@@ -247,7 +247,6 @@ def run_distill(
     pending = [v for v in all_variants if variant_run_key(v) not in done]
 
     total_in_bank = len(all_variants)
-    already_done = total_in_bank - len(pending)
     run_total = min(count, len(pending)) if count else len(pending)
 
     if run_total == 0:
@@ -274,10 +273,11 @@ def run_distill(
     reporter = DistillProgressReporter(
         prefix="[joryu-distill]",
         total_in_bank=total_in_bank,
-        already_done=already_done,
         run_total=run_total,
         action_label="蒸留",
         log=log,
+        out_path=out_p,
+        count_done_variants=partial(count_done_variants, all_variants=all_variants),
     )
     reporter.log_start()
 
@@ -351,7 +351,7 @@ def run_distill(
                             file=sys.stderr,
                         )
                         log(f"[joryu-distill] [{i}/{run_total}] エラー: {exc}", file=sys.stderr)
-                        reporter.update(i)
+                        reporter.update(attempted_in_run=i)
                         break
                     if _should_retry_without_tools(exc, had_tools=had_tools):
                         log(
@@ -388,7 +388,7 @@ def run_distill(
                                 f"[joryu-distill] [{i}/{run_total}] エラー: {retry_exc}",
                                 file=sys.stderr,
                             )
-                            reporter.update(i)
+                            reporter.update(attempted_in_run=i)
                             continue
                     else:
                         logger.warning("[distill] row failed (prompt=%r): %s", row.prompt[:40], exc)
@@ -396,7 +396,7 @@ def run_distill(
                             f"[joryu-distill] [{i}/{run_total}] エラー: {exc}",
                             file=sys.stderr,
                         )
-                        reporter.update(i)
+                        reporter.update(attempted_in_run=i)
                         continue
                 except Exception as exc:  # noqa: BLE001
                     logger.warning("[distill] row failed (prompt=%r): %s", row.prompt[:40], exc)
@@ -404,7 +404,7 @@ def run_distill(
                         f"[joryu-distill] [{i}/{run_total}] エラー: {exc}",
                         file=sys.stderr,
                     )
-                    reporter.update(i)
+                    reporter.update(attempted_in_run=i)
                     continue
 
                 if record is None:
@@ -413,7 +413,7 @@ def run_distill(
                         "打ち切りのまま deadline 到達 — 書き込みスキップ",
                         file=sys.stderr,
                     )
-                    reporter.update(i)
+                    reporter.update(attempted_in_run=i)
                     continue
 
                 if tools_disabled_retry:
@@ -443,13 +443,13 @@ def run_distill(
                         f"重複プロンプト上限 — スキップ (style={style_key!r})",
                         file=sys.stderr,
                     )
-                    reporter.update(i)
+                    reporter.update(attempted_in_run=i)
                     continue
                 writer.write(record)
                 dedup_guard.record(prompt=row.prompt, style_id=style_key)
                 n += 1
                 reporter.record_success(row.prompt, final_answer, style_id=eff.style_id)
-                reporter.update(i)
+                reporter.update(attempted_in_run=i)
                 if stats_throttler is not None:
                     stats_throttler.maybe_refresh()
     finally:

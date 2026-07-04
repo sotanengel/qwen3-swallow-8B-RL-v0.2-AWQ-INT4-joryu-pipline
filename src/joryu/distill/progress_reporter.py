@@ -69,30 +69,36 @@ def _truncate(text: str, max_len: int) -> str:
 
 
 class DistillProgressReporter:
-    """joryu-distill 用ターミナル進捗表示。"""
+    """joryu-distill 用ターミナル進捗表示。
+
+    処理済件数・ETA は ``responses.jsonl`` を再読み込みした variant 完了数に基づく。
+    """
 
     def __init__(
         self,
         *,
         prefix: str,
         total_in_bank: int,
-        already_done: int,
         run_total: int,
         action_label: str,
         log: Callable[..., Any],
+        out_path: Path,
+        count_done_variants: Callable[[Path], int],
         tty: bool | None = None,
         start_time: datetime | None = None,
         now_fn: Callable[[], datetime] | None = None,
     ) -> None:
         self._prefix = prefix
         self._total_in_bank = total_in_bank
-        self._already_done = already_done
         self._run_total = run_total
         self._action_label = action_label
         self._log = log
+        self._out_path = out_path
+        self._count_done_variants = count_done_variants
         self._tty = sys.stderr.isatty() if tty is None else tty
         self._start_time = start_time or datetime.now()
         self._now_fn = now_fn or datetime.now
+        self._done_at_start = count_done_variants(out_path)
         self._last_line_was_progress = False
         self._recent: deque[RecentCompletion] = deque(maxlen=_RECENT_MAX)
 
@@ -111,32 +117,37 @@ class DistillProgressReporter:
 
     def log_start(self) -> None:
         """開始時サマリを出力する。"""
-        pending = self._total_in_bank - self._already_done
+        done_now = self._count_done_variants(self._out_path)
+        pending = self._total_in_bank - done_now
         msg = (
             f"{self._prefix} 全体 {self._total_in_bank}件 | "
-            f"処理済 {self._already_done}件 | 未処理 {pending}件 | "
+            f"処理済 {done_now}件 | 未処理 {pending}件 | "
             f"今回 {self._run_total}件を{self._action_label}"
         )
         self._emit(msg, final=True)
 
-    def update(self, completed_in_run: int) -> None:
+    def update(self, *, attempted_in_run: int) -> None:
         """ループ内で1イテレーション完了ごとに進捗を更新する。"""
-        processed_total = self._already_done + completed_in_run
-        pending_total = self._total_in_bank - processed_total
+        done_now = self._count_done_variants(self._out_path)
+        written_in_run = max(0, done_now - self._done_at_start)
+        pending_total = self._total_in_bank - done_now
         elapsed = self._now_fn() - self._start_time
-        pct = int(completed_in_run * 100 / self._run_total) if self._run_total else 100
-        remaining_in_run = self._run_total - completed_in_run
+        pct = int(written_in_run * 100 / self._run_total) if self._run_total else 100
 
+        remaining_total = self._total_in_bank - done_now
         eta = estimate_remaining(
             elapsed,
-            completed=completed_in_run,
-            remaining=remaining_in_run,
+            completed=written_in_run,
+            remaining=remaining_total,
         )
         eta_text = f"残り約 {eta}" if eta is not None else "残り約 --"
 
+        progress = f"{self._prefix} 進捗 {written_in_run}/{self._run_total} ({pct}%)"
+        if attempted_in_run != written_in_run:
+            progress += f" 試行 {attempted_in_run}/{self._run_total}"
         msg = (
-            f"{self._prefix} 進捗 {completed_in_run}/{self._run_total} ({pct}%) | "
-            f"全体 処理済 {processed_total}/{self._total_in_bank} 未処理 {pending_total} | "
+            f"{progress} | "
+            f"全体 処理済 {done_now}/{self._total_in_bank} 未処理 {pending_total} | "
             f"経過 {format_duration(elapsed)} {eta_text}"
         )
 

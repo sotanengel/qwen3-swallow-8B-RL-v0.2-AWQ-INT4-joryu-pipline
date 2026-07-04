@@ -172,6 +172,35 @@ def test_system_prompt_override_per_row(tmp_path: Path) -> None:
     assert msgs[1]["content"] == "P1"
 
 
+def test_progress_reflects_jsonl_not_failed_attempts(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """エラーで書き込まれなかった行は進捗の「処理済」に含めない。"""
+    bank = tmp_path / "bank.jsonl"
+    _write_bank(bank, [{"prompt": "P1"}, {"prompt": "P2"}, {"prompt": "P3"}])
+    out = tmp_path / "out.jsonl"
+
+    class _RaisesOnSecond(FakeVllmClient):
+        def chat_via_template(self, messages, **kw):  # type: ignore[override]
+            from joryu.vllm.protocol import ChatResult
+
+            self.calls.append({"messages": messages})
+            if len(self.calls) == 2:
+                raise RuntimeError("boom")
+            return ChatResult(
+                thinking="T",
+                answer="A",
+                finish_reason="stop",
+                prompt_tokens=1,
+                completion_tokens=1,
+            )
+
+    run_distill(Config(), bank_path=bank, out_path=out, client=_RaisesOnSecond())
+    err = capsys.readouterr().err
+    assert "全体 処理済 2/3" in err
+    assert "試行 3/3" in err
+
+
 def test_client_exception_skips_row_continues(tmp_path: Path) -> None:
     bank = tmp_path / "bank.jsonl"
     _write_bank(bank, [{"prompt": "P1"}, {"prompt": "P2"}, {"prompt": "P3"}])
