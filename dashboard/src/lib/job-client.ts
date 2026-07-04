@@ -15,7 +15,7 @@ export const JOB_LIST_DISPLAY_LIMIT = 5;
 
 const API_BASE =
   (typeof process !== "undefined" && process.env.NEXT_PUBLIC_JORYU_API_URL) ||
-  "http://localhost:8000";
+  (typeof window !== "undefined" ? "/joryu-api" : "http://localhost:8000");
 
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {

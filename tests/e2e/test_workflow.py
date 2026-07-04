@@ -73,6 +73,15 @@ def _snapshot(client: TestClient) -> dict[str, object]:
     return resp.json()
 
 
+def _wait_active_profile(client: TestClient, profile: str, *, timeout: float = 5.0) -> None:
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if _snapshot(client).get("active") == profile:
+            return
+        time.sleep(0.02)
+    assert _snapshot(client)["active"] == profile
+
+
 def test_full_browser_workflow_profile_transitions(
     workflow_client: tuple[TestClient, JobRunner],
 ) -> None:
@@ -95,7 +104,7 @@ def test_full_browser_workflow_profile_transitions(
         if rec.status in (JobStatus.SUCCEEDED, JobStatus.FAILED):
             break
     assert store.load(job1).status == JobStatus.SUCCEEDED
-    assert _snapshot(client)["active"] == "distill"
+    _wait_active_profile(client, "distill")
 
     # 2. seed_gen (profile switch)
     r2 = client.post("/api/seed-gen/jobs", json={"mode": "create", "target_total": 1})
@@ -110,7 +119,7 @@ def test_full_browser_workflow_profile_transitions(
         if rec.status in (JobStatus.SUCCEEDED, JobStatus.FAILED):
             break
     assert store.load(job2).status == JobStatus.SUCCEEDED
-    assert _snapshot(client)["active"] == "distill"
+    _wait_active_profile(client, "distill")
 
     # 3. screening curate
     r3 = client.post(
@@ -142,4 +151,8 @@ def test_full_browser_workflow_profile_transitions(
         if rec.status in (JobStatus.SUCCEEDED, JobStatus.FAILED):
             break
     assert store.load(job4).status == JobStatus.SUCCEEDED
-    assert _snapshot(client)["active"] == "distill"
+    _wait_active_profile(client, "distill")
+
+    health = client.get("/api/health")
+    assert health.status_code == 200
+    assert health.json()["status"] == "ok"

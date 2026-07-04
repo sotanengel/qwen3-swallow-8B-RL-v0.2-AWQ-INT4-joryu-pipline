@@ -691,7 +691,94 @@ def test_runner_ensure_dashboard_data_paths_on_distill_start(tmp_path: Path, mon
             break
         time.sleep(0.05)
 
-    assert called == [tmp_path]
+    deadline = time.time() + 5.0
+    while time.time() < deadline:
+        if store.load(record.id).status == JobStatus.SUCCEEDED and len(called) >= 2:
+            break
+        time.sleep(0.05)
+
+    assert called == [tmp_path, tmp_path]
+
+
+def test_distill_job_end_serializes_stats_refresh(tmp_path: Path, monkeypatch) -> None:
+    """バックグラウンド refresh 実行中のジョブ完了でも stats 更新が同時実行されない。"""
+    monkeypatch.setattr("joryu.jobs.runner.STATS_REFRESH_INTERVAL_SEC", 0.05)
+    concurrent = 0
+    max_concurrent = 0
+    gate = threading.Lock()
+
+    def slow_refresh(_spec: DistillJobSpec) -> int:
+        nonlocal concurrent, max_concurrent
+        with gate:
+            concurrent += 1
+            max_concurrent = max(max_concurrent, concurrent)
+        time.sleep(0.25)
+        with gate:
+            concurrent -= 1
+        return 0
+
+    store = JobStore(tmp_path)
+    record = JobRecord.create(DistillJobSpec(count=1))
+    store.save(record)
+
+    runner = JobRunner(
+        store,
+        tmp_path,
+        run_command=lambda *_args, **_kwargs: 0,
+        refresh_stats=slow_refresh,
+        command_builder=lambda _root, _rec: ["fake-distill"],
+    )
+    runner.enqueue(record)
+
+    deadline = time.time() + 10.0
+    while time.time() < deadline:
+        if store.load(record.id).status == JobStatus.SUCCEEDED:
+            break
+        time.sleep(0.05)
+
+    assert store.load(record.id).status == JobStatus.SUCCEEDED
+    assert max_concurrent == 1
+
+
+def test_run_job_clears_running_id_when_post_refresh_raises(tmp_path: Path, monkeypatch) -> None:
+    """post-job stats 更新が失敗しても runner を解放し次ジョブを起動する。"""
+    monkeypatch.setattr("joryu.jobs.runner.STATS_REFRESH_INTERVAL_SEC", 3600.0)
+    refresh_calls = 0
+
+    def refresh_raises(_spec: DistillJobSpec) -> int:
+        nonlocal refresh_calls
+        refresh_calls += 1
+        raise RuntimeError("refresh-boom")
+
+    store = JobStore(tmp_path)
+    first = JobRecord.create(DistillJobSpec(count=1))
+    second = JobRecord.create(DistillJobSpec(count=2))
+    store.save(first)
+    store.save(second)
+
+    runner = JobRunner(
+        store,
+        tmp_path,
+        run_command=lambda *_args, **_kwargs: 0,
+        refresh_stats=refresh_raises,
+        command_builder=lambda _root, _rec: ["fake-distill"],
+    )
+    runner.enqueue(first)
+    runner.enqueue(second)
+
+    deadline = time.time() + 10.0
+    while time.time() < deadline:
+        if (
+            store.load(first.id).status == JobStatus.SUCCEEDED
+            and store.load(second.id).status == JobStatus.SUCCEEDED
+        ):
+            break
+        time.sleep(0.05)
+
+    assert store.load(first.id).status == JobStatus.SUCCEEDED
+    assert store.load(second.id).status == JobStatus.SUCCEEDED
+    assert runner.running_id is None
+    assert refresh_calls >= 1
 
 
 def test_runner_nonzero_exit_stderr_in_log(tmp_path: Path, monkeypatch) -> None:
