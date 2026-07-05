@@ -39,6 +39,7 @@ def build_record(
         "category": row.category,
         "style_id": eff.style_id,
         "system_prompt": eff.system_prompt,
+        "mode": "thinking",
         "sampling": sampling,
         "thinking_trace": thinking,
         "reasoning": thinking or "",

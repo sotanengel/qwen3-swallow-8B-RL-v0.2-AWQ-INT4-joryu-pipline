@@ -37,7 +37,7 @@ def test_run_distill_writes_records(tmp_path: Path) -> None:
     assert records[0]["category"] == "国語"
     assert records[0]["answer"] == "A"
     assert records[0]["thinking_trace"] == "T"
-    assert "mode" not in records[0]
+    assert records[0]["mode"] == "thinking"
     assert "effective_mode" not in records[0]
     assert records[0]["model"] == cfg.model.name
     assert records[0]["sampling"]["temperature"] == cfg.model.temperature
@@ -122,8 +122,8 @@ def test_distill_always_uses_thinking_mode(tmp_path: Path) -> None:
     assert client.calls[1]["enable_thinking"] is True
 
     records = _load_jsonl(out)
-    # 出力レコードに mode / effective_mode は含まれない
-    assert "mode" not in records[0]
+    assert records[0]["mode"] == "thinking"
+    assert records[1]["mode"] == "thinking"
     assert "effective_mode" not in records[0]
     assert records[0]["thinking_trace"] == "T"
     assert records[1]["thinking_trace"] == "T"

@@ -61,6 +61,39 @@ def test_iter_records_flags_schema_missing(tmp_path: Path) -> None:
     assert out["_schema_ok"] is False
 
 
+def test_iter_records_infers_mode_for_distill_without_mode_field(tmp_path: Path) -> None:
+    """#94 以降の蒸留 JSONL は mode 省略。curate は thinking として読む。"""
+    src = tmp_path / "responses.jsonl"
+    rec = {
+        "prompt": "p",
+        "answer": "a",
+        "sampling": {"temperature": 0.6},
+        "config_hash": "sha256-abc",
+        "thinking_trace": "trace",
+    }
+    src.write_text(json.dumps(rec, ensure_ascii=False), encoding="utf-8")
+
+    [out] = list(iter_records(src))
+    assert out["mode"] == "thinking"
+    assert out["_schema_ok"] is True
+
+
+def test_iter_records_infers_nothinking_when_no_think_fallback_used(tmp_path: Path) -> None:
+    src = tmp_path / "responses.jsonl"
+    rec = {
+        "prompt": "p",
+        "answer": "a",
+        "sampling": {"temperature": 0.6},
+        "config_hash": "sha256-abc",
+        "no_think_fallback_used": True,
+    }
+    src.write_text(json.dumps(rec, ensure_ascii=False), encoding="utf-8")
+
+    [out] = list(iter_records(src))
+    assert out["mode"] == "nothinking"
+    assert out["_schema_ok"] is True
+
+
 def test_iter_records_reads_zst(tmp_path: Path) -> None:
     src = tmp_path / "responses.jsonl.zst"
     data = (json.dumps(_valid_record(), ensure_ascii=False) + "\n").encode("utf-8")
