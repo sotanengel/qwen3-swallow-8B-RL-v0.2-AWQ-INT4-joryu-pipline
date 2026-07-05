@@ -13,6 +13,7 @@ from joryu.infra.docker.compose import (
     compose_up_command,
     image_prune_command,
     run_pre_browser_image_cleanup,
+    run_pre_compose_image_cleanup,
     run_up_startup_cleanup,
     vllm_base_build_command,
 )
@@ -189,6 +190,30 @@ def test_run_up_startup_cleanup_prunes_dangling_only(
     monkeypatch.setattr("joryu.infra.docker.compose.subprocess.run", _fake_run)
     run_up_startup_cleanup()
     assert calls == [image_prune_command()]
+
+
+def test_run_pre_compose_image_cleanup_prunes_dangling_only(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """compose up 直前 cleanup は dangling image のみ削除する。"""
+    import logging
+
+    caplog.set_level(logging.INFO, logger="joryu.infra.docker.compose")
+    calls: list[list[str]] = []
+
+    def _fake_run(cmd: list[str], **_kwargs: object) -> object:
+        calls.append(cmd)
+
+        class _Done:
+            returncode = 0
+
+        return _Done()
+
+    monkeypatch.setattr("joryu.infra.docker.compose.subprocess.run", _fake_run)
+    run_pre_compose_image_cleanup()
+    assert calls == [image_prune_command()]
+    assert any("before compose up" in r.message for r in caplog.records)
 
 
 def test_run_pre_browser_image_cleanup_prunes_dangling_only(
