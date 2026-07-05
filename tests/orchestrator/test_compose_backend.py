@@ -53,14 +53,16 @@ def test_compose_backend_start_profile(tmp_path: Path) -> None:
     spec = ProfileSpec(name="seed_gen", service="joryu-seed", port=8110, compose_profile="seed_gen")
     backend.start_profile(ModelProfile.SEED_GEN, spec=spec)
     assert calls[0][:4] == ["docker", "compose", "-f", compose_file.as_posix()]
-    assert calls[0][4:9] == [
+    assert calls[0][4:] == [
         "--profile",
         "always",
         "--profile",
         "seed_gen",
         "up",
+        "-d",
+        "--build",
+        "joryu-seed",
     ]
-    assert calls[0][-2:] == ["-d", "joryu-seed"]
 
 
 def test_compose_backend_stop_profile_uses_docker_not_compose(tmp_path: Path) -> None:
@@ -109,6 +111,31 @@ def test_compose_backend_stop_other_gpu_profiles_calls_docker_stop(tmp_path: Pat
     assert not any(c[:2] == ["docker", "compose"] for c in calls)
     docker_stops = [c for c in calls if c[:2] == ["docker", "stop"]]
     assert "joryu" in {c[-1] for c in docker_stops}
+
+
+def test_compose_backend_stop_other_gpu_profiles_raises_if_still_running(
+    tmp_path: Path,
+) -> None:
+    _write_compose(tmp_path)
+    calls: list[list[str]] = []
+
+    class _Proc:
+        returncode = 0
+        stdout = "true"
+        stderr = ""
+
+    def _run(cmd: list[str], **kwargs: object) -> _Proc:
+        calls.append(cmd)
+        proc = _Proc()
+        if cmd[:3] == ["docker", "inspect", "-f"] and cmd[-1] == "joryu":
+            proc.stdout = "true"
+        elif cmd[:3] == ["docker", "inspect", "-f"]:
+            proc.stdout = "false"
+        return proc
+
+    backend = ComposeBackend(repo_root=str(tmp_path), docker_run=_run)
+    with pytest.raises(RuntimeError, match="joryu"):
+        backend.stop_other_gpu_profiles(ModelProfile.SEED_GEN, profiles=_profiles())
 
 
 def test_compose_backend_stop_logs_progress(tmp_path: Path) -> None:

@@ -174,6 +174,12 @@ class ModelOrchestrator:
 
         state = transition(state, OrchestratorEvent.HEALTH_TIMEOUT)
         self._save_state(state)
+        container_running = backend.is_profile_container_running(target, spec=spec)
+        health_url = spec.health_url()
+        emit(
+            f"[orchestrator] health timeout for {target.value}: "
+            f"url={health_url} container_running={container_running}"
+        )
         msg = f"profile {target.value} health timeout after {self.health_timeout_s}s"
         raise RuntimeError(msg)
 

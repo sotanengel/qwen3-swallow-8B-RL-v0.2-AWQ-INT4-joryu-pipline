@@ -141,6 +141,26 @@ class ComposeBackend:
             else:
                 log(f"[orchestrator] failed to stop container {service}")
 
+    def _assert_other_gpu_stopped(
+        self,
+        keep: ModelProfile,
+        *,
+        profiles: dict[ModelProfile, ProfileSpec],
+        log: Callable[[str], None] | None = None,
+    ) -> None:
+        still_running = [
+            spec.service
+            for profile, spec in profiles.items()
+            if profile != keep
+            and is_docker_container_running(spec.service, docker_run=self.docker_run)
+        ]
+        if not still_running:
+            return
+        msg = f"GPU containers still running after stop: {', '.join(still_running)}"
+        if log is not None:
+            log(f"[orchestrator] {msg}")
+        raise RuntimeError(msg)
+
     def start_profile(self, profile: ModelProfile, *, spec: ProfileSpec) -> None:
         compose_profile = spec.compose_profile or profile.value
         self._compose(
@@ -150,6 +170,7 @@ class ComposeBackend:
             compose_profile,
             "up",
             "-d",
+            "--build",
             spec.service,
         )
 
@@ -167,6 +188,7 @@ class ComposeBackend:
             if profile == keep:
                 continue
             self._stop_gpu_service(spec.service, log=log)
+        self._assert_other_gpu_stopped(keep, profiles=profiles, log=log)
 
     def is_healthy(
         self, profile: ModelProfile, *, spec: ProfileSpec, timeout_s: float = 1.0
