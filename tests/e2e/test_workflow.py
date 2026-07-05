@@ -49,6 +49,11 @@ models:
         '{"prompt":"p","style":"prose"}\n',
         encoding="utf-8",
     )
+    (tmp_path / "data" / "distilled").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "data" / "distilled" / "responses.jsonl").write_text(
+        '{"prompt":"hello","answer":"world"}\n',
+        encoding="utf-8",
+    )
 
     app = create_app(repo_root=tmp_path)
     runner: JobRunner = app.state.job_runner
@@ -121,10 +126,10 @@ def test_full_browser_workflow_profile_transitions(
     assert store.load(job2).status == JobStatus.SUCCEEDED
     _wait_active_profile(client, "distill")
 
-    # 3. screening curate
+    # 3. curate (skip_llm for speed)
     r3 = client.post(
         "/api/curate/jobs",
-        json={"screening": True, "prompt_bank": True, "skip_llm": True},
+        json={"skip_llm": True},
     )
     assert r3.status_code == 201
     job3 = r3.json()["id"]

@@ -558,7 +558,7 @@ class LlamaCppJudgeClient(OpenAICompatibleJudgeClient):
     """llama.cpp llama-server (OpenAI 互換) 向け judge。"""
 
 
-def resolve_screening_judge(
+def resolve_curate_judge(
     *,
     provider: str,
     model: str,
@@ -566,7 +566,7 @@ def resolve_screening_judge(
     api_key: str | None = None,
     judge_mode: str = "nothinking",
 ) -> JudgeClient:
-    """健全性スクリーニング用 judge を構築する。"""
+    """高品質抽出用 judge を構築する。"""
     if provider == "vllm":
         from joryu.core.config import Config, load_config
         from joryu.core.paths import DEFAULT_CONFIG, resolve_repo_root
@@ -605,5 +605,5 @@ __all__ = [
     "parse_pair_response",
     "parse_rubric_response",
     "parse_self_response",
-    "resolve_screening_judge",
+    "resolve_curate_judge",
 ]

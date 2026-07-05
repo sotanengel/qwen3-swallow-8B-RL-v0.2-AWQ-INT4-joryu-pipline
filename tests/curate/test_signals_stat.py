@@ -179,6 +179,7 @@ def test_build_default_stat_signals_returns_all_codes():
         "LEN-T",
         "RATIO-TA",
         "TRUNC",
+        "END-WELL",
         "THINK-TAG",
         "TOOL-PLAN",
         "TOOL-CLAIM",
@@ -189,6 +190,9 @@ def test_build_default_stat_signals_returns_all_codes():
         "LANG-JA",
         "REPEAT-NG",
         "REPEAT-CHAR",
+        "CTRL-CHAR",
+        "TPL-LEAK",
+        "SYNTAX-BREAK",
         "DUP-GLOB",
         "STYLE-ADH",
     ]

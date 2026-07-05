@@ -118,8 +118,6 @@ class CurateJobSpec:
     config: str = DEFAULT_CONFIG
     skip_llm: bool = False
     threshold: float | None = None
-    screening: bool = False
-    prompt_bank: bool = False
     src: str = ""
     judge_base_url: str = ""
     resume: bool = True
@@ -135,8 +133,6 @@ class CurateJobSpec:
             config=str(data.get("config") or DEFAULT_CONFIG),
             skip_llm=bool(data.get("skip_llm", False)),
             threshold=float(threshold) if threshold is not None else None,
-            screening=bool(data.get("screening", False)),
-            prompt_bank=bool(data.get("prompt_bank", False)),
             src=str(data.get("src") or ""),
             judge_base_url=str(data.get("judge_base_url") or ""),
             resume=bool(data.get("resume", True)),
@@ -149,10 +145,6 @@ class CurateJobSpec:
             argv.append("--skip-llm")
         if self.threshold is not None:
             argv.extend(["--threshold", str(self.threshold)])
-        if self.screening:
-            argv.append("--screening")
-        if self.prompt_bank:
-            argv.append("--prompt-bank")
         if self.src:
             argv.extend(["--src", self.src])
         if self.judge_base_url:

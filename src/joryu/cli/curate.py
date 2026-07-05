@@ -15,7 +15,6 @@ from typing import Any
 from joryu.cli.common import add_config_argument, resolve_cli_config
 from joryu.core.config import Config
 from joryu.core.paths import resolve_distill_output, resolve_repo_root
-from joryu.core.prompt_bank import load_prompt_bank
 from joryu.curate.artifacts import find_latest_run_artifact
 from joryu.curate.best_of_n import apply_best_of_n, parse_strategy
 from joryu.curate.cache import (
@@ -26,11 +25,9 @@ from joryu.curate.cache import (
     signal_result_from_cache,
 )
 from joryu.curate.judge_client import (
-    DEFAULT_RUBRIC_PROMPT,
     FakeJudgeClient,
     JudgeClient,
-    VllmJudgeClient,
-    resolve_screening_judge,
+    resolve_curate_judge,
 )
 from joryu.curate.loader import count_records, iter_records
 from joryu.curate.meta import format_incremental_summary, write_curation_meta
@@ -40,23 +37,19 @@ from joryu.curate.minhash_index import (
 )
 from joryu.curate.progress import clear_existing_outputs, load_resume_state
 from joryu.curate.progress_reporter import CurateProgressReporter
-from joryu.curate.prompt_loader import load_health_rubric, load_prompt_health_rubric
 from joryu.curate.record_hash import compute_record_hash
-from joryu.curate.scoring import build_composite, label_screening_batch, select_by_threshold
-from joryu.curate.signals.llm_judge import LlmHealthRubric, LlmPromptHealthRubric, LLMRubricSignal
+from joryu.curate.scoring import build_composite, select_by_threshold
+from joryu.curate.signals.llm_judge import LLMRubricSignal
 from joryu.curate.signals.stat import (
     SAMP_OUT_CODE,
     SAMP_OUT_VERSION,
     DupGlobal,
     apply_samp_out_filter,
     build_default_stat_signals,
-    build_screening_stat_signals,
 )
 from joryu.curate.stats import (
     DEFAULT_CURATION_OUTPUT,
-    DEFAULT_SCREENING_OUTPUT,
     write_curation_json,
-    write_screening_json,
 )
 from joryu.curate.streaming import (
     StreamedCurateRow,
@@ -67,10 +60,8 @@ from joryu.curate.streaming import (
     uses_streaming_selection,
 )
 from joryu.curate.style_presets import load_style_rules
-from joryu.curate.writer import CurateWriter, ScreeningWriter
+from joryu.curate.writer import CurateWriter
 from joryu.infra.git import git_head_at
-from joryu.seed_gen.check_state import mark_checked, partition_by_checked, prompt_check_key
-from joryu.seed_gen.writer import DEFAULT_STATE_REL, load_state, save_state
 
 
 def _git_sha_repo_root() -> Path:
@@ -147,18 +138,8 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="LLM 呼び出しはせず、合成スコアと採否判定だけやり直す (閾値チューニング用, R-23)。",
     )
-    p.add_argument(
-        "--screening",
-        action="store_true",
-        help="健全性スクリーニングモード (OK/REVIEW/NG 3 段階ラベル, Epic #305)。",
-    )
-    p.add_argument(
-        "--prompt-bank",
-        action="store_true",
-        help="プロンプトバンクを LLM 単体スクリーニング (--screening 必須, Epic #313)。",
-    )
-    p.add_argument("--judge-provider", default=None, help="screening judge provider")
-    p.add_argument("--judge-base-url", default=None, help="screening judge base URL")
+    p.add_argument("--judge-provider", default=None, help="curate judge provider")
+    p.add_argument("--judge-base-url", default=None, help="curate judge base URL")
     return p
 
 
@@ -173,7 +154,7 @@ def _resolve_paths(cfg: Config, args: argparse.Namespace) -> tuple[Path, Path]:
 
 
 def _build_judge(cfg: Config, args: argparse.Namespace) -> JudgeClient | None:
-    """skip_llm=True もしくは vLLM 未インストールなら None。
+    """skip_llm=True なら None。既定は Llama-Swallow GGUF judge。
 
     プロセス内環境変数 `JORYU_CURATE_FAKE_JUDGE=1` で常に Fake を使用 (CI 用)。
     """
@@ -181,31 +162,13 @@ def _build_judge(cfg: Config, args: argparse.Namespace) -> JudgeClient | None:
         return None
     if os.environ.get("JORYU_CURATE_FAKE_JUDGE") == "1":
         return FakeJudgeClient()
-    try:
-        from joryu.vllm.factory import resolve_chat_client
-    except Exception:  # pragma: no cover - lazy import only
-        return None
-    chat = resolve_chat_client(cfg.model, cfg.vllm)
-    return VllmJudgeClient(
-        chat,
-        rubric_prompt=DEFAULT_RUBRIC_PROMPT,
-        judge_mode=args.judge_mode or cfg.curate.judge_mode,
-    )
-
-
-def _build_screening_judge(cfg: Config, args: argparse.Namespace) -> JudgeClient | None:
-    """健全性スクリーニング用 judge (既定 Llama-Swallow)。"""
-    screening = cfg.curate.screening
-    if args.skip_llm or cfg.curate.skip_llm or not screening.llm_health_enabled:
-        return None
-    if os.environ.get("JORYU_CURATE_FAKE_JUDGE") == "1":
-        return FakeJudgeClient()
-    provider = args.judge_provider or screening.judge.provider
-    model = args.judge_model or screening.judge.model
-    base_url = args.judge_base_url or screening.judge.base_url
-    api_key = screening.judge.api_key
+    judge_cfg = cfg.curate.judge
+    provider = args.judge_provider or judge_cfg.provider
+    model = args.judge_model or judge_cfg.model
+    base_url = args.judge_base_url or judge_cfg.base_url
+    api_key = judge_cfg.api_key
     judge_mode = args.judge_mode or cfg.curate.judge_mode
-    return resolve_screening_judge(
+    return resolve_curate_judge(
         provider=provider,
         model=model,
         base_url=base_url,
@@ -238,27 +201,10 @@ def main(
     if args.skip_llm:
         cfg.curate.skip_llm = True
 
-    if args.prompt_bank and not args.screening:
-        log("[joryu-curate] --prompt-bank は --screening と併用必須", file=sys.stderr)
-        return 2
-
-    if args.screening and args.prompt_bank:
-        src = Path(args.src) if args.src else Path(cfg.distill.prompt_bank)
-        if args.dst:
-            dst = Path(args.dst)
-        else:
-            ts = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
-            dst = Path(cfg.curate.out_dir) / f"prompt_screening_{ts}"
-    else:
-        src, dst = _resolve_paths(cfg, args)
+    src, dst = _resolve_paths(cfg, args)
     if not src.exists():
         log(f"[joryu-curate] 入力が見つかりません: {src}", file=sys.stderr)
         return 2
-
-    if args.screening:
-        if args.prompt_bank:
-            return _run_screening_prompt_bank(cfg, args, src, dst, log, _judge)
-        return _run_screening(cfg, args, src, dst, log, _judge)
 
     # --resume / --no-resume: 既存 scores.jsonl からの再開判定
     scores_path = dst / "scores.jsonl"
@@ -781,284 +727,6 @@ def _run_curate_streaming(
     )
     log(format_incremental_summary(incremental), file=sys.stderr)
     log(f"[joryu-curate] meta: {dst / 'curation_meta.json'}", file=sys.stderr)
-    return 0
-
-
-def _run_screening(
-    cfg: Config,
-    args: argparse.Namespace,
-    src: Path,
-    dst: Path,
-    log: Any,
-    _judge: JudgeClient | None,
-) -> int:
-    """健全性スクリーニングモード (Epic #305)。"""
-    screening = cfg.curate.screening
-    health_prompt = load_health_rubric()
-    judge: JudgeClient | None = _judge if _judge is not None else _build_screening_judge(cfg, args)
-    stat_signals = build_screening_stat_signals(cfg.curate.thresholds)
-    llm_signal: LlmHealthRubric | None = None
-    if judge is not None:
-        llm_signal = LlmHealthRubric(
-            judge=judge,
-            version=health_prompt.eval_version,
-            prompt_template=health_prompt.text,
-        )
-
-    evaluator_model = args.judge_model or screening.judge.model if judge is not None else "none"
-    eval_version = health_prompt.eval_version
-
-    scores_path = dst / "scores.jsonl"
-    if not args.resume and dst.exists():
-        clear_existing_outputs(dst)
-    resume_state = load_resume_state(scores_path) if args.resume else None
-
-    composites: list[Any] = []
-    records: list[dict[str, Any]] = []
-    record_hashes: list[str] = []
-    llm_calls = 0
-    input_records = 0
-    resume_hashes = resume_state.evaluated_hashes if resume_state else set()
-
-    log(f"[joryu-curate] screening 入力: {src}", file=sys.stderr)
-    log(f"[joryu-curate] screening 出力: {dst}", file=sys.stderr)
-
-    for i, rec in enumerate(iter_records(src), 1):
-        if args.count and i > args.count:
-            break
-        input_records += 1
-        rh = compute_record_hash(rec)
-        if rh in resume_hashes:
-            continue
-        schema_ok = rec.pop("_schema_ok", True)
-        if not schema_ok:
-            records.append(rec)
-            record_hashes.append(rh)
-            composites.append(_schema_rejected_composite(stat_signals))
-            continue
-
-        stat_results = [s.evaluate(rec) for s in stat_signals]
-        hard = any(r.hard_reject for r in stat_results)
-        llm_results: list[Any] = []
-        if llm_signal is not None and not hard:
-            llm_results = [llm_signal.evaluate(rec)]
-            llm_calls += 1
-
-        composites.append(
-            build_composite(
-                stat_results=stat_results,
-                llm_results=llm_results,
-                w_stat=screening.weights_rule,
-                w_llm=screening.weights_llm,
-            )
-        )
-        records.append(rec)
-        record_hashes.append(rh)
-
-    labels = label_screening_batch(
-        composites,
-        ok_min=screening.thresholds.ok_min,
-        review_min=screening.thresholds.review_min,
-        max_review_rate=screening.max_review_rate,
-    )
-
-    with ScreeningWriter(dst) as writer:
-        for rec, comp, lbl, rh in zip(records, composites, labels, record_hashes, strict=True):
-            writer.write(
-                rec,
-                screening_label=lbl,
-                final_score=comp.final_score,
-                rejected_by=list(comp.hard_rejected_by),
-                signal_versions=comp.signal_versions,
-                signal_scores=comp.signal_scores,
-                signal_raw=comp.signal_raw,
-                record_hash=rh,
-                eval_version=eval_version,
-                evaluator_model=evaluator_model,
-            )
-
-    signal_versions = {s.code: s.version for s in stat_signals}
-    if llm_signal is not None:
-        signal_versions[llm_signal.code] = llm_signal.version
-
-    write_curation_meta(
-        dst,
-        src_path=src,
-        input_records=input_records,
-        kept=writer.kept,
-        rejected=writer.rejected,
-        curate_fingerprints=cfg.curate_fingerprints(),
-        judge_model=evaluator_model,
-        judge_mode=cfg.curate.judge_mode,
-        signal_versions=signal_versions,
-        cli_args=vars(args),
-        git_sha=git_head_at(_git_sha_repo_root()),
-        llm_calls_total=llm_calls,
-        incremental={"screening": True, "ok": writer.ok_count, "review": writer.review_count},
-    )
-
-    repo_root = resolve_repo_root(out_path=Path(cfg.distill.out_dir) / cfg.distill.out_file)
-    scores_file = dst / "scores.jsonl"
-    if repo_root is not None:
-        write_curation_json(scores_file, repo_root / DEFAULT_CURATION_OUTPUT)
-        write_screening_json(scores_file, repo_root / DEFAULT_SCREENING_OUTPUT)
-    else:
-        write_curation_json(scores_file, dst / "curation.json")
-        write_screening_json(scores_file, dst / "screening.json")
-
-    log(
-        f"[joryu-curate] screening 完了: OK={writer.ok_count} REVIEW={writer.review_count} "
-        f"NG={writer.ng_count} / LLM {llm_calls} 回",
-        file=sys.stderr,
-    )
-    return 0
-
-
-def _run_screening_prompt_bank(
-    cfg: Config,
-    args: argparse.Namespace,
-    src: Path,
-    dst: Path,
-    log: Any,
-    _judge: JudgeClient | None,
-) -> int:
-    """プロンプトバンク LLM 単体スクリーニング (Epic #313)。"""
-    screening = cfg.curate.screening
-    health_prompt = load_prompt_health_rubric()
-    judge: JudgeClient | None = _judge if _judge is not None else _build_screening_judge(cfg, args)
-    llm_signal: LlmPromptHealthRubric | None = None
-    if judge is not None:
-        llm_signal = LlmPromptHealthRubric(
-            judge=judge,
-            version=health_prompt.eval_version,
-            prompt_template=health_prompt.text,
-        )
-
-    evaluator_model = args.judge_model or screening.judge.model if judge is not None else "none"
-    eval_version = health_prompt.eval_version
-
-    scores_path = dst / "scores.jsonl"
-    if not args.resume and dst.exists():
-        clear_existing_outputs(dst)
-    resume_state = load_resume_state(scores_path) if args.resume else None
-    resume_hashes = resume_state.evaluated_hashes if resume_state else set()
-
-    log(f"[joryu-curate] prompt-bank screening 入力: {src}", file=sys.stderr)
-    log(f"[joryu-curate] prompt-bank screening 出力: {dst}", file=sys.stderr)
-
-    repo_root = resolve_repo_root(out_path=Path(cfg.distill.out_dir) / cfg.distill.out_file)
-    state_path = (repo_root / DEFAULT_STATE_REL) if repo_root is not None else None
-
-    bank_rows = load_prompt_bank(src)
-    if state_path is not None and state_path.is_file():
-        state_for_filter = load_state(state_path)
-        _, bank_rows = partition_by_checked(bank_rows, state_for_filter.prompt_check.checked_keys)
-        log(
-            f"[joryu-curate] prompt-bank screening unchecked={len(bank_rows)}",
-            file=sys.stderr,
-        )
-
-    composites: list[Any] = []
-    records: list[dict[str, Any]] = []
-    record_hashes: list[str] = []
-    screened_rows: list[Any] = []
-    llm_calls = 0
-    input_records = len(bank_rows)
-
-    for i, row in enumerate(bank_rows, 1):
-        if args.count and i > args.count:
-            break
-        rec = {"prompt": row.prompt, "answer": "", "domain": row.domain, "category": row.category}
-        rh = compute_record_hash(rec)
-        if rh in resume_hashes:
-            continue
-        llm_results: list[Any] = []
-        if llm_signal is not None:
-            llm_results = [llm_signal.evaluate(rec)]
-            llm_calls += 1
-        composites.append(
-            build_composite(
-                stat_results=[],
-                llm_results=llm_results,
-                w_stat=0.0,
-                w_llm=1.0,
-            )
-        )
-        records.append(rec)
-        record_hashes.append(rh)
-        screened_rows.append(row)
-
-    labels = label_screening_batch(
-        composites,
-        ok_min=screening.thresholds.ok_min,
-        review_min=screening.thresholds.review_min,
-        max_review_rate=screening.max_review_rate,
-    )
-
-    with ScreeningWriter(dst) as writer:
-        for rec, comp, lbl, rh in zip(records, composites, labels, record_hashes, strict=True):
-            writer.write(
-                rec,
-                screening_label=lbl,
-                final_score=comp.final_score,
-                rejected_by=list(comp.hard_rejected_by),
-                signal_versions=comp.signal_versions,
-                signal_scores=comp.signal_scores,
-                signal_raw=comp.signal_raw,
-                record_hash=rh,
-                eval_version=eval_version,
-                evaluator_model=evaluator_model,
-            )
-
-    if state_path is not None and screened_rows:
-        state = load_state(state_path)
-        keys_to_mark = [
-            prompt_check_key(row)
-            for row, lbl in zip(screened_rows, labels, strict=True)
-            if lbl in ("OK", "REVIEW")
-        ]
-        if keys_to_mark:
-            mark_checked(state, keys_to_mark)
-            save_state(state_path, state)
-
-    signal_versions: dict[str, str] = {}
-    if llm_signal is not None:
-        signal_versions[llm_signal.code] = llm_signal.version
-
-    write_curation_meta(
-        dst,
-        src_path=src,
-        input_records=input_records,
-        kept=writer.kept,
-        rejected=writer.rejected,
-        curate_fingerprints=cfg.curate_fingerprints(),
-        judge_model=evaluator_model,
-        judge_mode=cfg.curate.judge_mode,
-        signal_versions=signal_versions,
-        cli_args=vars(args),
-        git_sha=git_head_at(_git_sha_repo_root()),
-        llm_calls_total=llm_calls,
-        incremental={
-            "screening": True,
-            "prompt_bank": True,
-            "ok": writer.ok_count,
-            "review": writer.review_count,
-        },
-    )
-
-    scores_file = dst / "scores.jsonl"
-    if repo_root is not None:
-        write_curation_json(scores_file, repo_root / DEFAULT_CURATION_OUTPUT)
-        write_screening_json(scores_file, repo_root / DEFAULT_SCREENING_OUTPUT)
-    else:
-        write_curation_json(scores_file, dst / "curation.json")
-        write_screening_json(scores_file, dst / "screening.json")
-
-    log(
-        f"[joryu-curate] prompt-bank screening 完了: OK={writer.ok_count} "
-        f"REVIEW={writer.review_count} NG={writer.ng_count} / LLM {llm_calls} 回",
-        file=sys.stderr,
-    )
     return 0
 
 

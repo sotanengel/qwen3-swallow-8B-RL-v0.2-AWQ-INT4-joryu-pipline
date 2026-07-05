@@ -54,13 +54,12 @@ uv run joryu-up --detach
 
 # 6b. ブラウザワークフロー — パイプラインハブ (/) から順に実行
 #     1. / (?stage=prompts) — プロンプト生成 (seed_gen create / Qwen2.5)
-#     2. / (?stage=check)   — プロンプトチェック (seed_gen check + LLM 品質スクリーニング) ★必須
+#     2. / (?stage=check)   — プロンプトチェック (seed_gen check / 埋め込み類似 dedup) ★必須
 #     3. / (?stage=distill) — 蒸留 (distill / Qwen3, tools / style / temperature / top_p を指定)
-#     4. / (?stage=curate)  — 高品質抽出 (curate + rubric)
-#     5. / (?stage=screening) 健全性ステージ → /stats?tab=screening で結果を確認
+#     4. / (?stage=curate)  — 高品質抽出 (健全性ルール + LLM-RUBRIC / Llama judge)
 #     ナビは 4 項目: パイプライン(/) / データ(/outputs) / 統計(/stats) / チャット(/chat)
-#     統計は /stats のタブ切替（概要 / 分布 / 抽出品質 / 健全性）で参照
-#     旧 URL (/jobs, /prompts, /curation, /distributions, /screening, /search) は permanent redirect
+#     統計は /stats のタブ切替（概要 / 分布 / 抽出品質）で参照
+#     旧 URL (/jobs, /prompts, /curation, /distributions, /search) は permanent redirect
 #     ヘッダの LLM ステータスバーと GET /api/system/models で profile 状態を確認
 #     チャット: http://localhost:3000/chat でスタイル別並列対話（蒸留データ化）
 #     API: http://localhost:8000  (ローカル専用・認証なし)

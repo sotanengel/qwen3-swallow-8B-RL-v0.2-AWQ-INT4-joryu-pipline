@@ -43,8 +43,3 @@ def test_get_models_snapshot(client: TestClient) -> None:
     assert data["status"] == "active"
     assert data["active"] == "distill"
     assert any(p["name"] == "seed_gen" for p in data["profiles"])
-
-
-def test_live_screening_not_found(client: TestClient) -> None:
-    resp = client.get("/api/live/screening")
-    assert resp.status_code == 404

@@ -8,7 +8,6 @@ const nextConfig = {
       { source: "/prompts", destination: "/?stage=prompts", permanent: true },
       { source: "/curation", destination: "/?stage=curate", permanent: true },
       { source: "/distributions", destination: "/stats?tab=distributions", permanent: true },
-      { source: "/screening", destination: "/stats?tab=screening", permanent: true },
       { source: "/search", destination: "/outputs", permanent: true },
     ];
   },

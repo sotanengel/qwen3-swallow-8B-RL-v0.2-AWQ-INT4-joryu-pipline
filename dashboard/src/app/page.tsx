@@ -9,16 +9,14 @@ import { CheckStagePanel } from "@/components/pipeline/CheckStagePanel";
 import { CurateStagePanel } from "@/components/pipeline/CurateStagePanel";
 import { DistillStagePanel } from "@/components/pipeline/DistillStagePanel";
 import { PromptsStagePanel } from "@/components/pipeline/PromptsStagePanel";
-import { ScreeningPanel } from "@/components/stats/ScreeningPanel";
 import type { CurateJobRecord } from "@/lib/curate-jobs";
 import type { JobRecord } from "@/lib/jobs";
 import { EMPTY_STATS, loadStats, statsDataChanged } from "@/lib/stats";
 import type { PromptCheckStatus, SeedGenJobRecord } from "@/lib/seed-gen-jobs";
 import { loadPromptCheckStatus, loadSeedGenStatus } from "@/lib/seed-gen-jobs";
-import { EMPTY_SCREENING, loadScreening, screeningDataChanged } from "@/lib/screening";
 import { useIntervalPoll } from "@/lib/useIntervalPoll";
 
-const STAGE_IDS: PipelineStageId[] = ["prompts", "check", "distill", "curate", "screening"];
+const STAGE_IDS: PipelineStageId[] = ["prompts", "check", "distill", "curate"];
 
 function useActiveStage(): [PipelineStageId, (id: PipelineStageId) => void] {
   const params = useSearchParams();
@@ -54,10 +52,6 @@ function HubContent() {
     null as PromptCheckStatus | null,
     { intervalMs: 3000 },
   );
-  const screening = useIntervalPoll(loadScreening, EMPTY_SCREENING, {
-    shouldUpdate: screeningDataChanged,
-    intervalMs: 3000,
-  });
 
   const checkCompleted = useMemo(
     () =>
@@ -70,9 +64,6 @@ function HubContent() {
     ? `${seedStatus.bank_total.toLocaleString()} 件`
     : "—";
   const distillMetric = stats.total ? `${stats.total.toLocaleString()} レコード` : "—";
-  const screeningMetric = screening.total
-    ? `${screening.total.toLocaleString()} 件`
-    : "—";
 
   const [handlePromptsLastJob, handleCheckLastJob, handleDistillLastJob, handleCurateLastJob] =
     useMemo(
@@ -86,7 +77,6 @@ function HubContent() {
     );
 
   useEffect(() => {
-    // ステージ遷移時にスクロール位置を上に戻す UX 上の配慮
     if (typeof window !== "undefined" && typeof window.scrollTo === "function") {
       try {
         window.scrollTo({ top: 0, behavior: "smooth" });
@@ -101,7 +91,7 @@ function HubContent() {
       <section className="section">
         <h2>パイプライン</h2>
         <p className="section-subtitle">
-          プロンプト生成 → プロンプトチェック (LLM) → 蒸留 → 高品質抽出 → 健全性 の順で実行します。
+          プロンプト生成 → プロンプトチェック (dedup) → 蒸留 → 高品質抽出 の順で実行します。
           カードを選ぶと下部にステージ別のパネルが開きます。
           統計や履歴は <Link href="/stats">/stats</Link>、出力は <Link href="/outputs">/outputs</Link> で確認できます。
         </p>
@@ -119,8 +109,8 @@ function HubContent() {
           <PipelineStageCard
             index={2}
             id="check"
-            title="プロンプトチェック (LLM)"
-            description="seed_gen check + LLM 品質スクリーニング (連動起動)。作成したプロンプトは必ずここを通します。"
+            title="プロンプトチェック (dedup)"
+            description="seed_gen check: 埋め込み類似 dedup で重複プロンプトを除外します。"
             metric={
               checkStatus ?? polledCheckStatus
                 ? `未チェック: ${(checkStatus ?? polledCheckStatus)!.unchecked_count.toLocaleString()}`
@@ -156,19 +146,10 @@ function HubContent() {
             index={4}
             id="curate"
             title="高品質抽出"
-            description="joryu-curate: 蒸留 JSONL に LLM-RUBRIC 判定と閾値フィルタを適用します。"
+            description="joryu-curate: 蒸留 JSONL に健全性ルール + LLM-RUBRIC (Llama judge) を適用します。"
             metric={distillMetric}
             lastStatus={lastCurateJob?.status}
             active={active === "curate"}
-            onSelect={setActive}
-          />
-          <PipelineStageCard
-            index={5}
-            id="screening"
-            title="健全性"
-            description="健全性スクリーニング結果 (screening.json) を確認します。詳細は /stats?tab=screening。"
-            metric={screeningMetric}
-            active={active === "screening"}
             onSelect={setActive}
           />
         </div>
@@ -191,15 +172,6 @@ function HubContent() {
           />
         )}
         {active === "curate" && <CurateStagePanel onLastJob={handleCurateLastJob} />}
-        {active === "screening" && (
-          <div data-testid="panel-screening">
-            <p className="muted" style={{ marginBottom: "1rem" }}>
-              スクリーニングは「プロンプトチェック」ステージから curate と一緒に自動起動されます。
-              詳細履歴は <Link href="/stats?tab=screening">/stats?tab=screening</Link> でも確認できます。
-            </p>
-            <ScreeningPanel />
-          </div>
-        )}
       </section>
     </>
   );

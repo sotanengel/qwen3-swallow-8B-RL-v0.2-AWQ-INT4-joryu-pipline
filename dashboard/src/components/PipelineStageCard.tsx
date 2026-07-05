@@ -8,8 +8,7 @@ export type PipelineStageId =
   | "prompts"
   | "check"
   | "distill"
-  | "curate"
-  | "screening";
+  | "curate";
 
 export type PipelineStageCardProps = {
   index: number;
@@ -25,7 +24,7 @@ export type PipelineStageCardProps = {
 };
 
 /**
- * パイプラインの 1 ステージ (プロンプト生成 / プロンプトチェック / 蒸留 / 高品質抽出 / 健全性)。
+ * パイプラインの 1 ステージ (プロンプト生成 / プロンプトチェック / 蒸留 / 高品質抽出)。
  * カードを選ぶと onSelect が発火し、下部の JobPanel が該当ステージに切り替わる。
  */
 export function PipelineStageCard({

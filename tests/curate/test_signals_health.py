@@ -13,7 +13,7 @@ from joryu.curate.signals.health import (
     find_syntax_break,
     find_template_leak,
 )
-from joryu.curate.signals.stat import build_screening_stat_signals
+from joryu.curate.signals.stat import build_default_stat_signals
 
 
 def _rec(**overrides):
@@ -107,11 +107,11 @@ def test_syntax_break_signal():
     assert bad.hard_reject is True
 
 
-def test_build_screening_stat_signals_includes_health():
-    signals = build_screening_stat_signals(CurateSignalThresholds())
+def test_build_default_stat_signals_includes_health():
+    signals = build_default_stat_signals(CurateSignalThresholds())
     codes = {s.code for s in signals}
     assert "END-WELL" in codes
     assert "CTRL-CHAR" in codes
     assert "TPL-LEAK" in codes
     assert "SYNTAX-BREAK" in codes
-    assert "TOOL-LEAK" not in codes
+    assert "TOOL-LEAK" in codes
