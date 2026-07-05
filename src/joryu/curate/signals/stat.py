@@ -353,28 +353,6 @@ def _annotate_samp_version(composite: Any) -> None:
         versions[SAMP_OUT_CODE] = SAMP_OUT_VERSION
 
 
-def build_screening_stat_signals(
-    th: CurateSignalThresholds,
-) -> list[Signal]:
-    """健全性スクリーニング用の統計シグナル群 (Epic #305 Phase 1)。
-
-    学習価値向けシグナル (TOOL-*, FACT-HALL 等) は含めない。
-    """
-    return [
-        LenAnswer(th=th),
-        LenThinking(th=th),
-        ThinkTag(),
-        Truncated(),
-        EndWell(),
-        RepeatNGram(th=th),
-        RepeatChar(th=th),
-        CtrlChar(),
-        LangJapanese(th=th),
-        TemplateLeak(),
-        SyntaxBreak(),
-    ]
-
-
 def build_default_stat_signals(
     th: CurateSignalThresholds,
     *,
@@ -391,6 +369,7 @@ def build_default_stat_signals(
         LenThinking(th=th),
         RatioTA(th=th),
         Truncated(),
+        EndWell(),
         ThinkTag(),
         ToolPlannedNotCalled(),
         ActionClaimWithoutCall(),
@@ -401,6 +380,9 @@ def build_default_stat_signals(
         LangJapanese(th=th),
         RepeatNGram(th=th),
         RepeatChar(th=th),
+        CtrlChar(),
+        TemplateLeak(),
+        SyntaxBreak(),
         DupGlobal(),
         StyleAdherence(th=th, rules=style_rules),
     ]
@@ -421,5 +403,4 @@ __all__ = [
     "Truncated",
     "apply_samp_out_filter",
     "build_default_stat_signals",
-    "build_screening_stat_signals",
 ]

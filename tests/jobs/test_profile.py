@@ -33,17 +33,22 @@ def test_seed_gen_create_requires_seed_gen_profile() -> None:
     )
 
 
-def test_seed_gen_check_requires_screening_profile() -> None:
-    assert required_profile(_seed_record(SEED_GEN_MODE_CHECK)) == ModelProfile.SCREENING
+def test_seed_gen_check_requires_seed_gen_profile() -> None:
+    assert required_profile(_seed_record(SEED_GEN_MODE_CHECK)) == ModelProfile.SEED_GEN
     assert (
         required_profile_from_spec(JobKind.SEED_GEN, SeedGenJobSpec(mode=SEED_GEN_MODE_CHECK))
-        == ModelProfile.SCREENING
+        == ModelProfile.SEED_GEN
     )
 
 
-def test_curate_screening_prompt_bank_requires_screening() -> None:
-    spec = CurateJobSpec(screening=True, prompt_bank=True)
+def test_curate_with_llm_requires_screening_profile() -> None:
+    spec = CurateJobSpec(skip_llm=False)
     assert required_profile_from_spec(JobKind.CURATE, spec) == ModelProfile.SCREENING
+
+
+def test_curate_skip_llm_requires_distill_profile() -> None:
+    spec = CurateJobSpec(skip_llm=True)
+    assert required_profile_from_spec(JobKind.CURATE, spec) == ModelProfile.DISTILL
 
 
 def test_distill_requires_distill_profile() -> None:

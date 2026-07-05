@@ -3,13 +3,11 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
-from joryu.core.paths import SCREENING_JSON_REL
 from joryu.orchestrator.service import ModelOrchestrator
 
 router = APIRouter()
@@ -56,18 +54,3 @@ def stream_models(request: Request) -> StreamingResponse:
             yield f"data: {payload}\n\n"
 
     return StreamingResponse(event_stream(), media_type="text/event-stream", headers=_NO_STORE)
-
-
-@live_router.get("/screening")
-def live_screening(request: Request) -> JSONResponse:
-    root: Path = request.app.state.repo_root
-    path = root / SCREENING_JSON_REL
-    if not path.is_file():
-        raise HTTPException(status_code=404, detail="screening.json not found")
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        raise HTTPException(status_code=500, detail="failed to read screening.json") from exc
-    if not isinstance(data, dict):
-        raise HTTPException(status_code=500, detail="invalid screening.json")
-    return JSONResponse(data, headers=_NO_STORE)

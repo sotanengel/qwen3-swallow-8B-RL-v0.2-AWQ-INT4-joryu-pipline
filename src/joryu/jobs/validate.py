@@ -69,19 +69,10 @@ def validate_curate_job_spec(spec: CurateJobSpec, *, repo_root: Path | None = No
     if spec.threshold is not None and not (0.0 <= spec.threshold <= 1.0):
         raise ValueError("threshold must be between 0.0 and 1.0")
 
-    if repo_root is not None and not (spec.screening and spec.prompt_bank):
+    if repo_root is not None:
         jsonl = resolve_distill_jsonl(repo_root)
         if not jsonl_has_content(jsonl):
             raise ValueError(f"distill output is empty or missing: {jsonl}")
-
-    if spec.screening and spec.prompt_bank and not spec.src and repo_root is not None:
-        cfg_path = Path(spec.config)
-        if not cfg_path.is_absolute():
-            cfg_path = repo_root / cfg_path
-        cfg = load_config(cfg_path)
-        bank = repo_root / cfg.distill.prompt_bank
-        if not bank.is_file():
-            raise ValueError(f"prompt bank not found: {bank}")
 
 
 def validate_seed_gen_job_spec(spec: SeedGenJobSpec, *, repo_root: Path | None = None) -> None:

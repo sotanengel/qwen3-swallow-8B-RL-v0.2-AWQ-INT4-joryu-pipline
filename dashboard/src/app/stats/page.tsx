@@ -6,7 +6,6 @@ import { StatsTabs, useStatsActiveTab } from "@/components/StatsTabs";
 import { CurationQualityPanel } from "@/components/stats/CurationQualityPanel";
 import { DistributionsPanel } from "@/components/stats/DistributionsPanel";
 import { OverviewPanel } from "@/components/stats/OverviewPanel";
-import { ScreeningPanel } from "@/components/stats/ScreeningPanel";
 
 function StatsContent() {
   const active = useStatsActiveTab();
@@ -17,7 +16,6 @@ function StatsContent() {
         {active === "overview" && <OverviewPanel />}
         {active === "distributions" && <DistributionsPanel />}
         {active === "curation" && <CurationQualityPanel />}
-        {active === "screening" && <ScreeningPanel />}
       </div>
     </>
   );

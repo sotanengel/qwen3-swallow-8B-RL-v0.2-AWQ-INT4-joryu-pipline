@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { JobPanel } from "@/components/JobPanel";
-import { createCurateJob } from "@/lib/curate-jobs";
 import {
   PromptBankItem,
   PromptCheckStatus,
@@ -141,7 +140,6 @@ export function CheckStagePanel({
       });
       setSelectedId(job.id);
       await refreshJobs();
-      await createCurateJob({ screening: true, prompt_bank: true, skip_llm: false });
     } catch (exc) {
       setError(String(exc));
     }
@@ -163,7 +161,7 @@ export function CheckStagePanel({
   const form = (
     <>
       <section className="card">
-        <h3>プロンプトチェック (LLM 品質スクリーニング)</h3>
+        <h3>プロンプトチェック (埋め込み類似 dedup)</h3>
         {checkStatus && (
           <p className="muted" data-testid="check-status-summary">
             チェック済み {checkStatus.checked_count.toLocaleString()} /{" "}

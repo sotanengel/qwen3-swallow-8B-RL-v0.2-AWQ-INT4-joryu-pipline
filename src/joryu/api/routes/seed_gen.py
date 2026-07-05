@@ -166,7 +166,7 @@ def _resolve_domains(repo_root: Any) -> SeedGenConfig:
 def seed_gen_options(request: Request) -> dict[str, Any]:
     orchestrator = get_orchestrator(request)
     seed_ready = orchestrator.profile_ready(ModelProfile.SEED_GEN)
-    screening_ready = orchestrator.profile_ready(ModelProfile.SCREENING)
+    judge_ready = orchestrator.profile_ready(ModelProfile.SCREENING)
     return {
         "defaults": {
             "bank": DEFAULT_BANK_REL,
@@ -175,7 +175,7 @@ def seed_gen_options(request: Request) -> dict[str, Any]:
         },
         "vllm_available": seed_ready,
         "seed_gen_ready": seed_ready,
-        "screening_ready": screening_ready,
+        "judge_ready": judge_ready,
     }
 
 

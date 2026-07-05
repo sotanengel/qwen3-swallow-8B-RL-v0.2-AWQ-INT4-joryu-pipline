@@ -3,7 +3,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback } from "react";
 
-export type StatsTabKey = "overview" | "distributions" | "curation" | "screening";
+export type StatsTabKey = "overview" | "distributions" | "curation";
 
 export type StatsTabsProps = {
   active: StatsTabKey;
@@ -14,7 +14,6 @@ const TABS: { key: StatsTabKey; label: string }[] = [
   { key: "overview", label: "概要" },
   { key: "distributions", label: "分布" },
   { key: "curation", label: "抽出品質" },
-  { key: "screening", label: "健全性" },
 ];
 
 export function useStatsActiveTab(defaultKey: StatsTabKey = "overview"): StatsTabKey {

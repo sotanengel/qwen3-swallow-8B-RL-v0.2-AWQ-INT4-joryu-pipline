@@ -31,9 +31,6 @@ vi.mock("@/components/pipeline/DistillStagePanel", () => ({
 vi.mock("@/components/pipeline/CurateStagePanel", () => ({
   CurateStagePanel: () => <div data-testid="panel-curate">CURATE</div>,
 }));
-vi.mock("@/components/stats/ScreeningPanel", () => ({
-  ScreeningPanel: () => <div data-testid="screening-panel">SCREENING</div>,
-}));
 
 vi.mock("@/lib/stats", () => ({
   EMPTY_STATS: { total: 0 },
@@ -57,11 +54,6 @@ vi.mock("@/lib/seed-gen-jobs", async () => {
     ),
   };
 });
-vi.mock("@/lib/screening", () => ({
-  EMPTY_SCREENING: { total: 0 },
-  loadScreening: vi.fn(() => Promise.resolve({ total: 0 })),
-  screeningDataChanged: () => false,
-}));
 
 afterEach(() => {
   cleanup();
@@ -70,11 +62,10 @@ afterEach(() => {
 });
 
 describe("HomePage (Pipeline Hub)", () => {
-  it("renders the 5 stages in order: prompts -> check -> distill -> curate -> screening", async () => {
+  it("renders the 4 stages in order: prompts -> check -> distill -> curate", async () => {
     render(<HomePage />);
     await waitFor(() => expect(screen.getByTestId("pipeline-stages")).toBeTruthy());
     const cards = screen.getByTestId("pipeline-stages").querySelectorAll('[data-testid^="pipeline-stage-"]');
-    // 5 cards × (card wrapper + metric + button) — filter for the card wrappers only
     const stageIds = Array.from(cards)
       .map((c) => c.getAttribute("data-testid"))
       .filter((id) => id && !id.includes("-metric") && !id.includes("-btn"));
@@ -83,16 +74,15 @@ describe("HomePage (Pipeline Hub)", () => {
       "pipeline-stage-check",
       "pipeline-stage-distill",
       "pipeline-stage-curate",
-      "pipeline-stage-screening",
     ]);
   });
 
-  it("check stage is presented as an independent stage with LLM linkage in its description", async () => {
+  it("check stage describes embedding dedup", async () => {
     render(<HomePage />);
     await waitFor(() => expect(screen.getByTestId("pipeline-stage-check")).toBeTruthy());
     const card = screen.getByTestId("pipeline-stage-check");
     expect(card.textContent).toContain("プロンプトチェック");
-    expect(card.textContent).toContain("LLM 品質スクリーニング");
+    expect(card.textContent).toContain("dedup");
   });
 
   it("defaults to the prompts stage when ?stage= is missing", async () => {
@@ -112,12 +102,5 @@ describe("HomePage (Pipeline Hub)", () => {
     render(<HomePage />);
     await waitFor(() => expect(screen.getByTestId("panel-distill")).toBeTruthy());
     expect(screen.getByTestId("panel-distill").getAttribute("data-check")).toBe("false");
-  });
-
-  it("opens the screening panel when ?stage=screening", async () => {
-    mockSearchParamsGet.mockImplementation((k) => (k === "stage" ? "screening" : null));
-    render(<HomePage />);
-    await waitFor(() => expect(screen.getByTestId("panel-screening")).toBeTruthy());
-    expect(screen.getByTestId("screening-panel")).toBeTruthy();
   });
 });

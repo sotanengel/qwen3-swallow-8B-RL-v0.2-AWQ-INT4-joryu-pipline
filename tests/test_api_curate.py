@@ -61,27 +61,6 @@ def test_create_curate_job_without_vllm(client: TestClient) -> None:
     assert job["spec"]["skip_llm"] is True
 
 
-def test_create_screening_prompt_bank_job(client: TestClient, repo_root: Path) -> None:
-    bank = repo_root / "data" / "prompts" / "training_prompts.jsonl"
-    bank.parent.mkdir(parents=True)
-    bank.write_text('{"prompt":"テスト質問","domain":"general_qa"}\n', encoding="utf-8")
-
-    resp = client.post(
-        "/api/curate/jobs",
-        json={
-            "screening": True,
-            "prompt_bank": True,
-            "skip_llm": True,
-            "src": "data/prompts/training_prompts.jsonl",
-        },
-    )
-    assert resp.status_code == 201
-    job = resp.json()
-    assert job["spec"]["screening"] is True
-    assert job["spec"]["prompt_bank"] is True
-    assert job["spec"]["src"] == "data/prompts/training_prompts.jsonl"
-
-
 def test_list_curate_jobs(client: TestClient) -> None:
     created = client.post("/api/curate/jobs", json={"skip_llm": True}).json()
     listed = client.get("/api/curate/jobs").json()

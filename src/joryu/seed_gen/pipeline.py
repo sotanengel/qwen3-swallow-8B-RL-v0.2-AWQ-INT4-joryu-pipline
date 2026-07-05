@@ -4,7 +4,7 @@
 - ``create``: LLM でプロンプトを生成し、Stage1 完全一致 dedup のみで bank へ追記。
 - ``check``: 既存 bank を走査して Stage2 埋め込み類似 dedup を行い、類似行を
   ``data/prompts/rejected/similar.jsonl`` へ隔離する。LLM ベースの品質スクリーニングは
-  従来通り ``joryu-curate --screening --prompt-bank`` (別ジョブ) が担当する。
+  従来通り ``joryu-curate`` が高品質抽出と健全性ルール統合を担当する。
 """
 
 from __future__ import annotations

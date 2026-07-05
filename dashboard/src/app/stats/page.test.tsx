@@ -24,9 +24,6 @@ vi.mock("@/components/stats/DistributionsPanel", () => ({
 vi.mock("@/components/stats/CurationQualityPanel", () => ({
   CurationQualityPanel: () => <div data-testid="curation">CURATION</div>,
 }));
-vi.mock("@/components/stats/ScreeningPanel", () => ({
-  ScreeningPanel: () => <div data-testid="screening">SCREENING</div>,
-}));
 
 afterEach(() => {
   cleanup();
@@ -53,12 +50,6 @@ describe("StatsPage", () => {
     mockSearchParamsGet.mockImplementation((k) => (k === "tab" ? "curation" : null));
     render(<StatsPage />);
     await waitFor(() => expect(screen.getByTestId("curation")).toBeTruthy());
-  });
-
-  it("selects screening tab from ?tab=screening", async () => {
-    mockSearchParamsGet.mockImplementation((k) => (k === "tab" ? "screening" : null));
-    render(<StatsPage />);
-    await waitFor(() => expect(screen.getByTestId("screening")).toBeTruthy());
   });
 
   it("navigates when clicking a tab", async () => {

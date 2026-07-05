@@ -92,10 +92,14 @@ curate:
   top_k: null
   keep_rate: null
 
-  # judge (LLM 評価器) 設定
-  judge_model: "joryu"
+  # judge (LLM 評価器) 設定 — Llama-Swallow GGUF (セルフバイアス回避)
+  judge_model: "Llama-3.1-Swallow-8B-Instruct-v0.5"
   judge_mode: "nothinking"      # "thinking" | "nothinking"
   skip_llm: false               # true で統計シグナルのみ
+  judge:
+    provider: llama_cpp
+    model: Llama-3.1-Swallow-8B-Instruct-v0.5
+    base_url: http://joryu-judge:8080
 
   # 出力先 (子ディレクトリ <YYYYMMDD_HHMMSS>/ が自動付与される)
   out_dir: "data/curated"
@@ -115,20 +119,6 @@ curate:
     samp_out_z_min: -2.0
     samp_out_min_bucket_size: 5
     style_adh_default_min: 0.3
-
-  # 健全性スクリーニング (--screening, Epic #305)
-  screening:
-    weights_rule: 0.4
-    weights_llm: 0.6
-    max_review_rate: 0.3
-    llm_health_enabled: true
-    thresholds:
-      ok_min: 0.75
-      review_min: 0.40
-    judge:
-      provider: llama_cpp
-      model: Llama-3.1-Swallow-8B-Instruct-v0.5
-      base_url: http://joryu-judge:8080
 
 # GPU ModelProfile 定義 (ADR 0005)。compose サービス / health / モデル ID の単一情報源。
 models:
