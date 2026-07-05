@@ -320,6 +320,9 @@ def build_docker_command(
     if tools_path is not None and tools_rel:
         rel = tools_rel.replace("\\", "/")
         cmd.extend(["-v", f"{tools_path}:/app/{rel}:ro"])
+    git_dir = cwd / ".git"
+    if git_dir.exists():
+        cmd.extend(["-v", f"{git_dir}:/app/.git:ro"])
     module_argv: list[str] = ["python", "-m", cli_module]
     if native_flag:
         module_argv.append(native_flag)

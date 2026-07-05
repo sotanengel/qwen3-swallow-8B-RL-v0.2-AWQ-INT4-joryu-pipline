@@ -38,6 +38,10 @@ COPY --from=builder /app/README.md /app/README.md
 
 RUN uv sync --frozen --no-dev --extra api --extra seed_gen
 
+# curation_meta.json の git_sha 記録用 (joryu-curate が git rev-parse HEAD を呼ぶ)
+RUN apt-get update && apt-get install -y --no-install-recommends git \
+    && rm -rf /var/lib/apt/lists/*
+
 ENV PATH="/app/.venv/bin:/usr/local/bin:$PATH" \
     PYTHONPATH=/app/src \
     PYTHONUNBUFFERED=1 \
