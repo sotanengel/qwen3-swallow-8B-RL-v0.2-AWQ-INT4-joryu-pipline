@@ -6,6 +6,7 @@ import sys
 import threading
 import time
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -870,3 +871,86 @@ def test_stats_refresh_loop_calls_refresh_before_wait() -> None:
     thread.join(timeout=1.0)
     assert calls[0] == 1
     assert len(calls) >= 2
+
+
+def _wait_for_job_status(store: JobStore, job_id: str, *statuses: JobStatus) -> JobRecord:
+    deadline = time.time() + 10.0
+    while time.time() < deadline:
+        loaded = store.load(job_id)
+        if loaded.status in statuses:
+            return loaded
+        time.sleep(0.05)
+    loaded = store.load(job_id)
+    raise AssertionError(f"job {job_id} status {loaded.status}, expected {statuses}")
+
+
+def test_auto_restore_runs_when_queue_empty_after_distill(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """distill 完了かつキュー空のときだけ maybe_auto_restore する。"""
+    monkeypatch.setattr("joryu.jobs.runner.STATS_REFRESH_INTERVAL_SEC", 3600.0)
+    orchestrator = MagicMock()
+    store = JobStore(tmp_path)
+    record = JobRecord.create(DistillJobSpec(count=1))
+    store.save(record)
+    runner = JobRunner(
+        store,
+        tmp_path,
+        orchestrator=orchestrator,
+        run_command=lambda *_args, **_kwargs: 0,
+        refresh_stats=lambda _s: 0,
+        command_builder=lambda _root, _rec: ["fake-distill"],
+    )
+    runner.enqueue(record)
+    _wait_for_job_status(store, record.id, JobStatus.SUCCEEDED)
+    deadline = time.time() + 2.0
+    while time.time() < deadline:
+        if orchestrator.maybe_auto_restore.call_count >= 1:
+            break
+        time.sleep(0.05)
+    assert orchestrator.maybe_auto_restore.call_count == 1
+
+
+def test_auto_restore_deferred_while_queued_curate_runs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """distill 完了直後に curate がキューにあるとき、curate 完了まで auto_restore しない。"""
+    monkeypatch.setattr("joryu.jobs.runner.STATS_REFRESH_INTERVAL_SEC", 3600.0)
+    orchestrator = MagicMock()
+    curate_started = threading.Event()
+    allow_curate_finish = threading.Event()
+
+    def run_command(cmd, *_args, **_kwargs):
+        if cmd == ["fake-curate"]:
+            curate_started.set()
+            assert allow_curate_finish.wait(timeout=5.0)
+        return 0
+
+    store = JobStore(tmp_path)
+    distill = JobRecord.create(DistillJobSpec(count=1))
+    curate = JobRecord.create(CurateJobSpec(skip_llm=True))
+    store.save(distill)
+    store.save(curate)
+    runner = JobRunner(
+        store,
+        tmp_path,
+        orchestrator=orchestrator,
+        run_command=run_command,
+        refresh_stats=lambda _s: 0,
+        command_builder=lambda _root, rec: (
+            ["fake-distill"] if rec.kind == JobKind.DISTILL else ["fake-curate"]
+        ),
+    )
+    runner.enqueue(distill)
+    runner.enqueue(curate)
+    _wait_for_job_status(store, distill.id, JobStatus.SUCCEEDED)
+    assert curate_started.wait(timeout=5.0)
+    assert orchestrator.maybe_auto_restore.call_count == 0
+    allow_curate_finish.set()
+    _wait_for_job_status(store, curate.id, JobStatus.SUCCEEDED)
+    deadline = time.time() + 2.0
+    while time.time() < deadline:
+        if orchestrator.maybe_auto_restore.call_count >= 1:
+            break
+        time.sleep(0.05)
+    assert orchestrator.maybe_auto_restore.call_count == 1

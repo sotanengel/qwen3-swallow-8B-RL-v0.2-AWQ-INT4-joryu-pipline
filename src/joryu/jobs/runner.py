@@ -451,6 +451,11 @@ class JobRunner:
     def running_id(self) -> str | None:
         return self._running_id
 
+    def is_idle(self) -> bool:
+        """実行中ジョブもキューも空なら True。"""
+        with self._lock:
+            return self._running_id is None and not self._queue
+
     def _build_job_command(self, record: JobRecord) -> list[str]:
         if self._command_builder is not None:
             return self._command_builder(self.repo_root, record)
@@ -504,14 +509,25 @@ class JobRunner:
                 return True
         return False
 
+    def _maybe_auto_restore_if_idle(self) -> None:
+        if self._orchestrator is None or not self.is_idle():
+            return
+        try:
+            self._orchestrator.maybe_auto_restore()
+        except Exception:
+            logger.exception("auto_restore failed")
+
     def _maybe_start_next(self) -> None:
+        job_id: str | None = None
         with self._lock:
             if self._running_id is not None:
                 return
-            if not self._queue:
-                return
-            job_id = self._queue.pop(0)
-            self._running_id = job_id
+            if self._queue:
+                job_id = self._queue.pop(0)
+                self._running_id = job_id
+        if job_id is None:
+            self._maybe_auto_restore_if_idle()
+            return
         thread = threading.Thread(target=self._run_job, args=(job_id,), daemon=True)
         thread.start()
 
@@ -570,15 +586,6 @@ class JobRunner:
             except Exception:
                 logger.exception("post-job cleanup failed", extra={"job_id": job_id})
                 self.store.append_log(job_id, "[joryu-runner] post-job cleanup failed\n")
-
-            if self._orchestrator is not None:
-                try:
-                    self._orchestrator.maybe_auto_restore(
-                        log=lambda msg: self.store.append_log(job_id, msg + "\n"),
-                    )
-                except Exception as exc:
-                    logger.error("auto_restore failed", exc_info=True)
-                    self.store.append_log(job_id, f"[joryu-runner] auto_restore failed: {exc}\n")
 
         threading.Thread(
             target=_cleanup,

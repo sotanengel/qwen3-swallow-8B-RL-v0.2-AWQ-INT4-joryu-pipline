@@ -204,6 +204,30 @@ def test_wait_for_profile_health_emits_progress(
     assert any("waiting health" in line for line in logs)
 
 
+def test_wait_for_profile_health_timeout_logs_diagnostics(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    backend = FakeBackend()
+    orch = ModelOrchestrator(
+        repo_root=tmp_path,
+        profiles=_profiles(),
+        backend=backend,
+        health_timeout_s=0.05,
+        poll_interval_s=0.01,
+    )
+    orch._save_state(
+        OrchestratorState(status=OrchestratorStatus.STARTING, target=ModelProfile.SCREENING)
+    )
+    backend.running.add(ModelProfile.SCREENING)
+    monkeypatch.setattr(backend, "is_healthy", lambda *_a, **_k: False)
+    logs: list[str] = []
+    with pytest.raises(RuntimeError, match="health timeout"):
+        orch.ensure_profile(ModelProfile.SCREENING, log=logs.append)
+    assert any("health timeout for screening" in line for line in logs)
+    assert any("url=http://joryu-judge:8080/health" in line for line in logs)
+    assert any("container_running=True" in line for line in logs)
+
+
 def test_ensure_profile_resumes_switching(orch: ModelOrchestrator) -> None:
     backend = orch.backend
     assert isinstance(backend, FakeBackend)

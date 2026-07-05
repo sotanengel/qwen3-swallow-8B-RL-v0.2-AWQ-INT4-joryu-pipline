@@ -56,7 +56,7 @@ services:
       - --enable-auto-tool-choice
       - --tool-call-parser=hermes
       - --reasoning-parser=qwen3
-    restart: "on-failure:3"
+    restart: "no"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8100/health"]
       interval: 15s
@@ -89,7 +89,7 @@ services:
       - --gpu-memory-utilization=0.80
       - --max-num-seqs=1
       - --enforce-eager
-    restart: "on-failure:3"
+    restart: "no"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8110/health"]
       interval: 15s
@@ -112,7 +112,7 @@ services:
     environment:
       - JORYU_JUDGE_MODEL=Llama-3.1-Swallow-8B-Instruct-v0.5-Q4_K_M.gguf
       - JORYU_JUDGE_HF_REPO=tokyotech-llm/Llama-3.1-Swallow-8B-Instruct-v0.5-GGUF
-    restart: "on-failure:3"
+    restart: "no"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 10s
