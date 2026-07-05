@@ -20,13 +20,16 @@ class _GitRunner(Protocol):
 
 
 def _git_lines(repo_root: Path, args: list[str], git_runner: _GitRunner) -> list[str]:
-    result = git_runner(
-        args,
-        cwd=repo_root,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    try:
+        result = git_runner(
+            args,
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError:
+        return []
     if result.returncode != 0:
         return []
     return [line for line in result.stdout.splitlines() if line.strip()]

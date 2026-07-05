@@ -37,6 +37,20 @@ def test_git_head_at_returns_none_when_output_blank(tmp_path: Path) -> None:
     assert git_head_at(tmp_path, git_runner=runner) is None
 
 
+def test_git_head_at_returns_none_when_git_executable_missing(tmp_path: Path) -> None:
+    def _missing_git_runner(
+        args: list[str],
+        *,
+        cwd: Path,
+        capture_output: bool,
+        text: bool,
+        check: bool,
+    ) -> subprocess.CompletedProcess[str]:
+        raise FileNotFoundError(2, "No such file or directory", "git")
+
+    assert git_head_at(tmp_path, git_runner=_missing_git_runner) is None
+
+
 def test_git_head_at_uses_real_subprocess_by_default(tmp_path: Path) -> None:
     subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True, check=True)
     subprocess.run(
