@@ -64,6 +64,11 @@ from joryu.seed_gen.check_state import mark_checked, partition_by_checked, promp
 from joryu.seed_gen.writer import DEFAULT_STATE_REL, load_state, save_state
 
 
+def _git_sha_repo_root() -> Path:
+    """curation_meta git_sha 用。API コンテナは JORYU_REPO_ROOT=/workspace、job は /app。"""
+    return resolve_repo_root() or Path.cwd()
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="joryu-curate",
@@ -463,7 +468,7 @@ def main(
         judge_mode=cfg.curate.judge_mode,
         signal_versions=signal_versions,
         cli_args=vars(args),
-        git_sha=git_head_at(Path.cwd()),
+        git_sha=git_head_at(_git_sha_repo_root()),
         llm_calls_total=llm_calls,
         incremental=incremental,
     )
@@ -604,7 +609,7 @@ def _run_screening(
         judge_mode=cfg.curate.judge_mode,
         signal_versions=signal_versions,
         cli_args=vars(args),
-        git_sha=git_head_at(Path.cwd()),
+        git_sha=git_head_at(_git_sha_repo_root()),
         llm_calls_total=llm_calls,
         incremental={"screening": True, "ok": writer.ok_count, "review": writer.review_count},
     )
@@ -748,7 +753,7 @@ def _run_screening_prompt_bank(
         judge_mode=cfg.curate.judge_mode,
         signal_versions=signal_versions,
         cli_args=vars(args),
-        git_sha=git_head_at(Path.cwd()),
+        git_sha=git_head_at(_git_sha_repo_root()),
         llm_calls_total=llm_calls,
         incremental={
             "screening": True,
