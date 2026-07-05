@@ -25,6 +25,24 @@ REQUIRED_FIELDS: tuple[str, ...] = (
 )
 
 
+def infer_record_mode(record: dict[str, Any]) -> str:
+    """蒸留 JSONL の mode を返す。欠落時は #94 以降の distill 仕様に合わせて推論する。"""
+    mode = record.get("mode")
+    if mode in ("thinking", "nothinking"):
+        return mode
+    if record.get("no_think_fallback_used"):
+        return "nothinking"
+    if record.get("thinking_trace") or record.get("reasoning"):
+        return "thinking"
+    return "thinking"
+
+
+def normalize_record(record: dict[str, Any]) -> None:
+    """curate 下流が期待するフィールドを in-place で補完する。"""
+    if record.get("mode") not in ("thinking", "nothinking"):
+        record["mode"] = infer_record_mode(record)
+
+
 def _open_text(path: Path) -> io.TextIOBase:
     """JSONL / .jsonl.zst を utf-8 テキストモードで開く。"""
     if path.suffix == ".zst" or path.name.endswith(".jsonl.zst"):
@@ -58,6 +76,7 @@ def iter_records(src: str | Path) -> Iterator[dict[str, Any]]:
             if not isinstance(rec, dict):
                 logger.warning("[curate.loader] skip non-object line %d", lineno)
                 continue
+            normalize_record(rec)
             rec["_schema_ok"] = all(rec.get(k) is not None for k in REQUIRED_FIELDS)
             yield rec
 
