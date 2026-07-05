@@ -38,6 +38,7 @@ from joryu.infra.docker.compose import (
     run_build_artifact_cleanup,
     run_builder_cache_cleanup,
     run_pre_browser_image_cleanup,
+    run_pre_compose_image_cleanup,
     run_up_startup_cleanup,
     staged_build_commands,
     vllm_base_build_command,
@@ -273,6 +274,7 @@ def main(argv: list[str] | None = None) -> int:
             "[joryu-up] starting `docker compose up` in foreground "
             "(Ctrl-C to stop; pass --detach to background instead)",
         )
+    run_pre_compose_image_cleanup()
     rc = run(cmd)
     if rc != 0:
         logger.error("[joryu-up] compose up failed (exit %s); running rollback", rc)

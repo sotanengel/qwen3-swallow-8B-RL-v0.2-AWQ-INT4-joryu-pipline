@@ -171,6 +171,14 @@ def run_up_startup_cleanup() -> None:
     run(image_prune_command())
 
 
+def run_pre_compose_image_cleanup() -> None:
+    """compose up 直前: dangling (<none>) image を回収する。"""
+    logger.info(
+        "[joryu-up] removing dangling images (<none>) before compose up",
+    )
+    run(image_prune_command())
+
+
 def run_pre_browser_image_cleanup() -> None:
     """build 完了後・ブラウザ起動直前: dangling (<none>) image を回収する。"""
     logger.info(
