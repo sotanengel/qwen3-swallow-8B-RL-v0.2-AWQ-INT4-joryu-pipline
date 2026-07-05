@@ -32,13 +32,14 @@ from joryu.curate.judge_client import (
     VllmJudgeClient,
     resolve_screening_judge,
 )
-from joryu.curate.loader import iter_records
+from joryu.curate.loader import count_records, iter_records
 from joryu.curate.meta import format_incremental_summary, write_curation_meta
 from joryu.curate.minhash_index import (
     DEFAULT_INDEX_FILENAME,
     GlobalDuplicateIndex,
 )
 from joryu.curate.progress import clear_existing_outputs, load_resume_state
+from joryu.curate.progress_reporter import CurateProgressReporter
 from joryu.curate.prompt_loader import load_health_rubric, load_prompt_health_rubric
 from joryu.curate.record_hash import compute_record_hash
 from joryu.curate.scoring import build_composite, label_screening_batch, select_by_threshold
@@ -56,6 +57,14 @@ from joryu.curate.stats import (
     DEFAULT_SCREENING_OUTPUT,
     write_curation_json,
     write_screening_json,
+)
+from joryu.curate.streaming import (
+    StreamedCurateRow,
+    immediate_selection,
+    rewrite_curate_outputs,
+    row_from_selection,
+    samp_out_correct_rows,
+    uses_streaming_selection,
 )
 from joryu.curate.style_presets import load_style_rules
 from joryu.curate.writer import CurateWriter, ScreeningWriter
@@ -298,6 +307,28 @@ def main(
         expected_versions[llm_signal.code] = llm_signal.version
     counters = CacheCounters()
 
+    if uses_streaming_selection(
+        best_of_n=args.best_of_n,
+        top_k=args.top_k,
+        keep_rate=args.keep_rate,
+        cfg_top_k=cfg.curate.top_k,
+        cfg_keep_rate=cfg.curate.keep_rate,
+    ):
+        return _run_curate_streaming(
+            cfg=cfg,
+            args=args,
+            src=src,
+            dst=dst,
+            log=log,
+            stat_signals=stat_signals,
+            llm_signal=llm_signal,
+            cache_index=cache_index,
+            expected_versions=expected_versions,
+            counters=counters,
+            dup_index=dup_index,
+            resume_state=resume_state,
+        )
+
     composites = []
     records: list[dict[str, Any]] = []
     record_hashes: list[str] = []
@@ -496,6 +527,258 @@ def main(
         file=sys.stderr,
     )
     # R-25 差分実行サマリを stderr に整形出力
+    log(format_incremental_summary(incremental), file=sys.stderr)
+    log(f"[joryu-curate] meta: {dst / 'curation_meta.json'}", file=sys.stderr)
+    return 0
+
+
+def _run_curate_streaming(
+    *,
+    cfg: Config,
+    args: argparse.Namespace,
+    src: Path,
+    dst: Path,
+    log: Any,
+    stat_signals: list,
+    llm_signal: LLMRubricSignal | None,
+    cache_index: CacheIndex,
+    expected_versions: dict[str, str],
+    counters: CacheCounters,
+    dup_index: GlobalDuplicateIndex,
+    resume_state: Any,
+) -> int:
+    """閾値ベースの逐次評価・書き込み (グローバル選抜なし)。"""
+    from joryu.curate.writer import CurateWriter
+
+    llm_calls = 0
+    input_records = 0
+    schema_skipped = 0
+    skipped_resume = 0
+    resume_hashes = resume_state.evaluated_hashes if resume_state else set()
+    streamed_rows: list[StreamedCurateRow] = []
+
+    total_input = count_records(src)
+    if args.count:
+        total_input = min(total_input, args.count)
+    run_total = max(0, total_input - (resume_state.total if resume_state else 0))
+
+    log(f"[joryu-curate] 入力: {src}", file=sys.stderr)
+    log(f"[joryu-curate] 出力: {dst}", file=sys.stderr)
+
+    reporter = CurateProgressReporter(
+        prefix="[joryu-curate]", run_total=run_total, log=log, tty=False
+    )
+    reporter.log_start(
+        total_input=total_input, resume_skipped=resume_state.total if resume_state else 0
+    )
+
+    evaluated_in_run = 0
+    with CurateWriter(dst) as writer:
+        for i, rec in enumerate(iter_records(src), 1):
+            if args.count and i > args.count:
+                break
+            input_records += 1
+            rh = compute_record_hash(rec)
+            if rh in resume_hashes:
+                skipped_resume += 1
+                continue
+
+            schema_ok = rec.pop("_schema_ok", True)
+            if not schema_ok:
+                schema_skipped += 1
+                comp = _schema_rejected_composite(stat_signals)
+                sel = immediate_selection(comp, threshold=cfg.curate.threshold)
+                row = row_from_selection(rec, comp, rh, sel)
+                streamed_rows.append(row)
+                writer.write(
+                    rec,
+                    accepted=row.accepted,
+                    final_score=row.final_score,
+                    rejected_by=row.rejected_by,
+                    signal_versions=comp.signal_versions,
+                    signal_scores=comp.signal_scores,
+                    signal_raw=comp.signal_raw,
+                    record_hash=rh,
+                )
+                evaluated_in_run += 1
+                reporter.update(
+                    evaluated_in_run=evaluated_in_run,
+                    kept=writer.kept,
+                    rejected=writer.rejected,
+                )
+                continue
+
+            reuse = cache_index.lookup(rh, expected_versions=expected_versions)
+            comp: Any
+
+            if args.rescore_only:
+                if reuse.cached is None:
+                    counters.rescore_only_misses += 1
+                    comp = _rescore_miss_composite(stat_signals, llm_signal)
+                else:
+                    stat_results = [
+                        signal_result_from_cache(s.code, s.version, reuse.cached)
+                        for s in stat_signals
+                    ]
+                    llm_results = (
+                        [
+                            signal_result_from_cache(
+                                llm_signal.code, llm_signal.version, reuse.cached
+                            )
+                        ]
+                        if llm_signal is not None and llm_signal.code in reuse.cached.signal_scores
+                        else []
+                    )
+                    counters.cache_hits_full += 1
+                    counters.llm_calls_saved += 1 if llm_results else 0
+                    comp = build_composite(
+                        stat_results=stat_results,
+                        llm_results=llm_results,
+                        w_stat=cfg.curate.weights_stat,
+                        w_llm=cfg.curate.weights_llm,
+                    )
+            elif reuse.is_full_hit:
+                stat_results = [
+                    signal_result_from_cache(s.code, s.version, reuse.cached) for s in stat_signals
+                ]
+                llm_results = (
+                    [signal_result_from_cache(llm_signal.code, llm_signal.version, reuse.cached)]
+                    if llm_signal is not None and llm_signal.code in reuse.cached.signal_scores
+                    else []
+                )
+                counters.cache_hits_full += 1
+                if llm_results:
+                    counters.llm_calls_saved += 1
+                comp = build_composite(
+                    stat_results=stat_results,
+                    llm_results=llm_results,
+                    w_stat=cfg.curate.weights_stat,
+                    w_llm=cfg.curate.weights_llm,
+                )
+            else:
+                stat_results = []
+                for s in stat_signals:
+                    if s.code in reuse.reusable_signals and reuse.cached is not None:
+                        stat_results.append(
+                            signal_result_from_cache(s.code, s.version, reuse.cached)
+                        )
+                    else:
+                        stat_results.append(s.evaluate(rec))
+                hard = any(r.hard_reject for r in stat_results)
+                llm_results = []
+                if llm_signal is not None and not hard:
+                    if (
+                        reuse.cached is not None
+                        and llm_signal.code in reuse.reusable_signals
+                        and llm_signal.code in reuse.cached.signal_scores
+                    ):
+                        llm_results = [
+                            signal_result_from_cache(
+                                llm_signal.code, llm_signal.version, reuse.cached
+                            )
+                        ]
+                        counters.llm_calls_saved += 1
+                    else:
+                        llm_results = [llm_signal.evaluate(rec)]
+                        llm_calls += 1
+                if reuse.is_partial_hit:
+                    counters.cache_hits_partial += 1
+                else:
+                    counters.newly_evaluated += 1
+                comp = build_composite(
+                    stat_results=stat_results,
+                    llm_results=llm_results,
+                    w_stat=cfg.curate.weights_stat,
+                    w_llm=cfg.curate.weights_llm,
+                )
+
+            sel = immediate_selection(comp, threshold=cfg.curate.threshold)
+            row = row_from_selection(rec, comp, rh, sel)
+            streamed_rows.append(row)
+            writer.write(
+                rec,
+                accepted=row.accepted,
+                final_score=row.final_score,
+                rejected_by=row.rejected_by,
+                signal_versions=comp.signal_versions,
+                signal_scores=comp.signal_scores,
+                signal_raw=comp.signal_raw,
+                record_hash=rh,
+            )
+            evaluated_in_run += 1
+            reporter.update(
+                evaluated_in_run=evaluated_in_run,
+                kept=writer.kept,
+                rejected=writer.rejected,
+            )
+
+    samp_out_rejected = samp_out_correct_rows(
+        streamed_rows,
+        z_min=cfg.curate.thresholds.samp_out_z_min,
+        min_bucket_size=cfg.curate.thresholds.samp_out_min_bucket_size,
+    )
+    if samp_out_rejected:
+        log(f"[joryu-curate] SAMP-OUT post-hoc 棄却: {samp_out_rejected} 件", file=sys.stderr)
+        if resume_state and resume_state.total > 0:
+            log(
+                "[joryu-curate] SAMP-OUT: --resume 中は出力ファイルの再生成をスキップします",
+                file=sys.stderr,
+            )
+        else:
+            rewrite_curate_outputs(dst, streamed_rows)
+
+    run_kept = sum(1 for r in streamed_rows if r.accepted)
+    run_rejected = len(streamed_rows) - run_kept
+    total_kept = run_kept + (resume_state.kept if resume_state else 0)
+    total_rejected = run_rejected + (resume_state.rejected if resume_state else 0)
+
+    signal_versions = _collect_signal_versions(stat_signals, llm_signal)
+    incremental = {
+        "input_records": input_records,
+        "cache_hits_full": counters.cache_hits_full,
+        "cache_hits_partial": counters.cache_hits_partial,
+        "newly_evaluated": counters.newly_evaluated,
+        "llm_calls_total": llm_calls,
+        "llm_calls_saved_vs_full_rerun": counters.llm_calls_saved,
+        "cache_sources": list(cache_index.sources),
+        "rescore_only_misses": counters.rescore_only_misses,
+        "resume_skipped": skipped_resume,
+    }
+    write_curation_meta(
+        dst,
+        src_path=src,
+        input_records=input_records,
+        kept=total_kept,
+        rejected=total_rejected,
+        curate_fingerprints=cfg.curate_fingerprints(),
+        judge_model=cfg.curate.judge_model,
+        judge_mode=cfg.curate.judge_mode,
+        signal_versions=signal_versions,
+        cli_args=vars(args),
+        git_sha=git_head_at(_git_sha_repo_root()),
+        llm_calls_total=llm_calls,
+        incremental=incremental,
+    )
+
+    saved = dup_index.save(dst / DEFAULT_INDEX_FILENAME)
+    log(f"[joryu-curate] MinHash index 保存: {saved} ({len(dup_index)} 件)", file=sys.stderr)
+
+    repo_root = resolve_repo_root(out_path=Path(cfg.distill.out_dir) / cfg.distill.out_file)
+    dashboard_dst: Path | None = (
+        repo_root / DEFAULT_CURATION_OUTPUT if repo_root is not None else None
+    )
+    if dashboard_dst is not None:
+        write_curation_json(dst / "scores.jsonl", dashboard_dst)
+    else:
+        write_curation_json(dst / "scores.jsonl", dst / "curation.json")
+
+    keep_rate = (total_kept / input_records) if input_records else 0.0
+    log(
+        f"[joryu-curate] 入力 {input_records} 件 → 採用 {total_kept} ({keep_rate:.1%}) / "
+        f"棄却 {total_rejected} / schema NG {schema_skipped} / "
+        f"LLM 呼び出し {llm_calls} 回 / resume スキップ {skipped_resume} 件",
+        file=sys.stderr,
+    )
     log(format_incremental_summary(incremental), file=sys.stderr)
     log(f"[joryu-curate] meta: {dst / 'curation_meta.json'}", file=sys.stderr)
     return 0
