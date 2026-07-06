@@ -21,7 +21,7 @@ from joryu.orchestrator.profile import ALWAYS_COMPOSE_PROFILE, ModelProfile, Pro
 logger = logging.getLogger(__name__)
 
 DEFAULT_COMPOSE_TIMEOUT_S = 120.0
-PROFILE_START_COMPOSE_TIMEOUT_S = 900.0
+PROFILE_START_COMPOSE_TIMEOUT_S = 3600.0
 JUDGE_IMAGE = "joryu-judge:latest"
 
 
@@ -171,7 +171,8 @@ class ComposeBackend:
         if self._needs_judge_build(profile):
             if log is not None:
                 log(
-                    "[orchestrator] building joryu-judge image (first run may take several minutes)"
+                    "[orchestrator] building joryu-judge image "
+                    "(first run compiles llama-server with CUDA; may take 10+ minutes)"
                 )
             args.append("--build")
         args.append(spec.service)
