@@ -1,24 +1,44 @@
 # joryu-judge: llama.cpp server for screening profile (ADR 0005).
+# Linux 向け CUDA プリビルドは配布されていないため、llama-server をソースビルドする。
+ARG LLAMACPP_TAG=b9878
+
+FROM nvidia/cuda:13.0.0-devel-ubuntu24.04 AS llama-builder
+ARG LLAMACPP_TAG
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    cmake \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /src
+# devel イメージでは libcuda.so.1 が無いため、ビルド時は driver stub を使う。
+RUN ln -sf /usr/local/cuda/lib64/stubs/libcuda.so /usr/local/cuda/lib64/libcuda.so.1
+RUN git clone --depth 1 --branch "${LLAMACPP_TAG}" https://github.com/ggml-org/llama.cpp.git . \
+    && cmake -B build \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DGGML_CUDA=ON \
+        -DCMAKE_CUDA_ARCHITECTURES=86 \
+        -DLLAMA_BUILD_TESTS=OFF \
+        -DLLAMA_BUILD_EXAMPLES=OFF \
+    && cmake --build build --target llama-server -j"$(nproc)"
+
 FROM nvidia/cuda:13.0.0-runtime-ubuntu24.04
 
 LABEL org.opencontainers.image.source="https://github.com/sotanengel/qwen3-swallow-8B-RL-v0.2-AWQ-INT4-joryu-pipline"
 
-ARG LLAMACPP_TAG=b4282
 ARG TARGETARCH=amd64
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     ca-certificates \
-    unzip \
+    python3-venv \
     python3-pip \
     && rm -rf /var/lib/apt/lists/* \
-    && pip3 install --no-cache-dir "huggingface_hub[cli]>=0.26"
+    && python3 -m venv /opt/hf \
+    && /opt/hf/bin/pip install --no-cache-dir "huggingface_hub[cli]>=0.26"
 
-RUN curl -fsSL "https://github.com/ggerganov/llama.cpp/releases/download/${LLAMACPP_TAG}/llama-${LLAMACPP_TAG}-bin-ubuntu-x64-cuda.zip" \
-    -o /tmp/llama.zip \
-    && unzip /tmp/llama.zip -d /opt/llama \
-    && rm /tmp/llama.zip \
-    && ln -sf /opt/llama/llama-server /usr/local/bin/llama-server
+ENV PATH="/opt/hf/bin:${PATH}"
+
+COPY --from=llama-builder /src/build/bin/llama-server /usr/local/bin/llama-server
 
 WORKDIR /models
 COPY scripts/judge_entrypoint.sh /entrypoint.sh
