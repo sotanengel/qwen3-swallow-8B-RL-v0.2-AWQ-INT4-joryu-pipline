@@ -110,8 +110,8 @@ services:
     volumes:
       - gguf-cache:/models
     environment:
-      - JORYU_JUDGE_MODEL=Llama-3.1-Swallow-8B-Instruct-v0.5-Q4_K_M.gguf
-      - JORYU_JUDGE_HF_REPO=tokyotech-llm/Llama-3.1-Swallow-8B-Instruct-v0.5-GGUF
+      - JORYU_JUDGE_MODEL=Llama-3.1-Swallow-8B-Instruct-v0.5.Q4_K_M.gguf
+      - JORYU_JUDGE_HF_REPO=mradermacher/Llama-3.1-Swallow-8B-Instruct-v0.5-GGUF
     restart: "no"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
