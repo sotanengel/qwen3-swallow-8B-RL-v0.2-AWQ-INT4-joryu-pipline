@@ -32,17 +32,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     python3-venv \
     python3-pip \
+    libgomp1 \
     && rm -rf /var/lib/apt/lists/* \
     && python3 -m venv /opt/hf \
     && /opt/hf/bin/pip install --no-cache-dir "huggingface_hub[cli]>=0.26"
 
 ENV PATH="/opt/hf/bin:${PATH}"
 
-COPY --from=llama-builder /src/build/bin/llama-server /usr/local/bin/llama-server
+COPY --from=llama-builder /src/build/bin/ /opt/llama-cpp/
+ENV PATH="/opt/llama-cpp:${PATH}"
+ENV LD_LIBRARY_PATH="/opt/llama-cpp:${LD_LIBRARY_PATH}"
 
 WORKDIR /models
 COPY scripts/judge_entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+RUN sed -i 's/\r$//' /entrypoint.sh && chmod +x /entrypoint.sh
 
 EXPOSE 8080
 ENTRYPOINT ["/entrypoint.sh"]

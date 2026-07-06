@@ -34,3 +34,15 @@ def test_judge_entrypoint_defaults_match_compose() -> None:
     assert JUDGE_GGUF_HF_REPO in text
     assert JUDGE_GGUF_MODEL_FILE in text
     assert OBSOLETE_HF_REPO not in text
+
+
+def test_judge_dockerfile_strips_crlf_from_entrypoint() -> None:
+    dockerfile = (REPO_ROOT / "Dockerfile.judge").read_text(encoding="utf-8")
+    assert "sed -i 's/\\r$//'" in dockerfile
+
+
+def test_judge_dockerfile_copies_llama_shared_libraries() -> None:
+    dockerfile = (REPO_ROOT / "Dockerfile.judge").read_text(encoding="utf-8")
+    assert "COPY --from=llama-builder /src/build/bin/" in dockerfile
+    assert "LD_LIBRARY_PATH" in dockerfile
+    assert "libgomp1" in dockerfile
