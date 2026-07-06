@@ -21,10 +21,18 @@ from joryu.orchestrator.profile import ALWAYS_COMPOSE_PROFILE, ModelProfile, Pro
 logger = logging.getLogger(__name__)
 
 DEFAULT_COMPOSE_TIMEOUT_S = 120.0
+PROFILE_START_COMPOSE_TIMEOUT_S = 900.0
+JUDGE_IMAGE = "joryu-judge:latest"
 
 
 class Backend(Protocol):
-    def start_profile(self, profile: ModelProfile, *, spec: ProfileSpec) -> None: ...
+    def start_profile(
+        self,
+        profile: ModelProfile,
+        *,
+        spec: ProfileSpec,
+        log: Callable[[str], None] | None = None,
+    ) -> None: ...
 
     def stop_profile(self, profile: ModelProfile, *, spec: ProfileSpec) -> None: ...
 
@@ -53,8 +61,14 @@ class FakeBackend:
     healthy: set[ModelProfile] = field(default_factory=set)
     calls: list[tuple[str, ModelProfile]] = field(default_factory=list)
 
-    def start_profile(self, profile: ModelProfile, *, spec: ProfileSpec) -> None:
-        del spec
+    def start_profile(
+        self,
+        profile: ModelProfile,
+        *,
+        spec: ProfileSpec,
+        log: Callable[[str], None] | None = None,
+    ) -> None:
+        del spec, log
         self.calls.append(("start", profile))
         self.running.add(profile)
 
@@ -111,20 +125,59 @@ class ComposeBackend:
     def _compose(self, *args: str, timeout_s: float | None = None) -> None:
         cmd = [*compose_command_prefix(self._project), *args]
         timeout = self.compose_timeout_s if timeout_s is None else timeout_s
-        proc = self.docker_run(
-            cmd,
-            cwd=self._project.compose_cwd,
-            capture_output=True,
-            text=True,
-            check=False,
-            timeout=timeout,
-        )
+        try:
+            proc = self.docker_run(
+                cmd,
+                cwd=self._project.compose_cwd,
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=timeout,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise RuntimeError(
+                f"compose timed out after {timeout}s (args={' '.join(args)})"
+            ) from exc
         if proc.returncode != 0:
             stderr = (proc.stderr or proc.stdout or "").strip()
             raise RuntimeError(
                 f"compose failed (file={self._project.compose_file}, "
                 f"args={' '.join(args)}): {stderr}"
             )
+
+    def _needs_judge_build(self, profile: ModelProfile) -> bool:
+        if profile != ModelProfile.SCREENING:
+            return False
+        from joryu.infra.preflight import docker_image_exists
+
+        return not docker_image_exists(JUDGE_IMAGE, inspect_runner=self.docker_run)
+
+    def start_profile(
+        self,
+        profile: ModelProfile,
+        *,
+        spec: ProfileSpec,
+        log: Callable[[str], None] | None = None,
+    ) -> None:
+        compose_profile = spec.compose_profile or profile.value
+        args: list[str] = [
+            "--profile",
+            ALWAYS_COMPOSE_PROFILE,
+            "--profile",
+            compose_profile,
+            "up",
+            "-d",
+        ]
+        if self._needs_judge_build(profile):
+            if log is not None:
+                log(
+                    "[orchestrator] building joryu-judge image (first run may take several minutes)"
+                )
+            args.append("--build")
+        args.append(spec.service)
+        if log is not None:
+            log(f"[orchestrator] compose up {spec.service} (profile {profile.value})")
+        self._compose(*args, timeout_s=PROFILE_START_COMPOSE_TIMEOUT_S)
 
     def _stop_gpu_service(
         self,
@@ -160,19 +213,6 @@ class ComposeBackend:
         if log is not None:
             log(f"[orchestrator] {msg}")
         raise RuntimeError(msg)
-
-    def start_profile(self, profile: ModelProfile, *, spec: ProfileSpec) -> None:
-        compose_profile = spec.compose_profile or profile.value
-        self._compose(
-            "--profile",
-            ALWAYS_COMPOSE_PROFILE,
-            "--profile",
-            compose_profile,
-            "up",
-            "-d",
-            "--build",
-            spec.service,
-        )
 
     def stop_profile(self, profile: ModelProfile, *, spec: ProfileSpec) -> None:
         self._stop_gpu_service(spec.service)
