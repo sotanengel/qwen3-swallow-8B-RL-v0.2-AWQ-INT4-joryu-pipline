@@ -138,7 +138,7 @@ class ModelOrchestrator:
         emit: Callable[[str], None],
     ) -> None:
         try:
-            backend.start_profile(target, spec=spec)
+            backend.start_profile(target, spec=spec, log=emit)
         except RuntimeError as exc:
             self._mark_compose_failed(state, target, exc, emit)
             raise

@@ -142,8 +142,8 @@ def test_compose_failure_sets_error_state(orch: ModelOrchestrator) -> None:
     backend = orch.backend
     assert isinstance(backend, FakeBackend)
 
-    def _fail_start(profile: ModelProfile, *, spec: ProfileSpec) -> None:
-        del profile, spec
+    def _fail_start(profile: ModelProfile, *, spec: ProfileSpec, log: object = None) -> None:
+        del profile, spec, log
         raise RuntimeError("compose failed (file=/repo/docker-compose.yml): bad config")
 
     backend.start_profile = _fail_start  # type: ignore[method-assign]

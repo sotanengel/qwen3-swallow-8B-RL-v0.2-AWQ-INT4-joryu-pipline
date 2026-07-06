@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 import re
+import subprocess
 from pathlib import Path
 
 import pytest
 
 from joryu.infra.docker.compose_invoke import ComposeProject
-from joryu.orchestrator.backend import ComposeBackend
+from joryu.orchestrator.backend import (
+    PROFILE_START_COMPOSE_TIMEOUT_S,
+    ComposeBackend,
+)
 from joryu.orchestrator.profile import ModelProfile, ProfileSpec
 
 
@@ -60,9 +64,79 @@ def test_compose_backend_start_profile(tmp_path: Path) -> None:
         "seed_gen",
         "up",
         "-d",
-        "--build",
         "joryu-seed",
     ]
+
+
+def test_compose_backend_start_screening_builds_when_image_missing(tmp_path: Path) -> None:
+    _write_compose(tmp_path)
+    calls: list[list[str]] = []
+
+    class _Proc:
+        returncode = 0
+        stdout = ""
+        stderr = ""
+
+    def _run(cmd: list[str], **kwargs: object) -> _Proc:
+        calls.append(cmd)
+        proc = _Proc()
+        if cmd[:3] == ["docker", "image", "inspect"]:
+            proc.returncode = 1
+        return proc
+
+    backend = ComposeBackend(repo_root=str(tmp_path), docker_run=_run)
+    spec = ProfileSpec(
+        name="screening",
+        service="joryu-judge",
+        port=8080,
+        kind="llama_server",
+        compose_profile="screening",
+    )
+    logs: list[str] = []
+    backend.start_profile(ModelProfile.SCREENING, spec=spec, log=logs.append)
+    compose_call = next(c for c in calls if c[:2] == ["docker", "compose"])
+    assert "--build" in compose_call
+    assert compose_call[-1] == "joryu-judge"
+    assert any("building joryu-judge" in line for line in logs)
+    assert any("compose up joryu-judge" in line for line in logs)
+
+
+def test_compose_backend_start_screening_skips_build_when_image_exists(tmp_path: Path) -> None:
+    _write_compose(tmp_path)
+    calls: list[list[str]] = []
+
+    class _Proc:
+        returncode = 0
+        stdout = ""
+        stderr = ""
+
+    def _run(cmd: list[str], **kwargs: object) -> _Proc:
+        calls.append(cmd)
+        return _Proc()
+
+    backend = ComposeBackend(repo_root=str(tmp_path), docker_run=_run)
+    spec = ProfileSpec(
+        name="screening",
+        service="joryu-judge",
+        port=8080,
+        kind="llama_server",
+        compose_profile="screening",
+    )
+    backend.start_profile(ModelProfile.SCREENING, spec=spec)
+    compose_call = next(c for c in calls if c[:2] == ["docker", "compose"])
+    assert "--build" not in compose_call
+
+
+def test_compose_backend_compose_timeout_raises_runtime_error(tmp_path: Path) -> None:
+    _write_compose(tmp_path)
+
+    def _run(cmd: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        raise subprocess.TimeoutExpired(cmd=cmd, timeout=kwargs.get("timeout", 0))
+
+    backend = ComposeBackend(repo_root=str(tmp_path), docker_run=_run)
+    spec = ProfileSpec(name="seed_gen", service="joryu-seed", port=8110, compose_profile="seed_gen")
+    with pytest.raises(RuntimeError, match="compose timed out"):
+        backend.start_profile(ModelProfile.SEED_GEN, spec=spec)
 
 
 def test_compose_backend_stop_profile_uses_docker_not_compose(tmp_path: Path) -> None:
@@ -173,7 +247,7 @@ def test_compose_backend_start_profile_passes_compose_timeout(tmp_path: Path) ->
     backend = ComposeBackend(repo_root=str(tmp_path), docker_run=_run)
     spec = ProfileSpec(name="seed_gen", service="joryu-seed", port=8110, compose_profile="seed_gen")
     backend.start_profile(ModelProfile.SEED_GEN, spec=spec)
-    assert timeouts == [120.0]
+    assert timeouts == [PROFILE_START_COMPOSE_TIMEOUT_S]
 
 
 def test_compose_backend_uses_resolved_host_repo_root(
