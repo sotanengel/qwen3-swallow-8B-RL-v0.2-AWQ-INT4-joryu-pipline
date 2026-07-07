@@ -31,7 +31,7 @@ def _default_profiles() -> list[ProfileSpecConfig]:
             service="joryu-judge",
             port=8080,
             kind="llama_server",
-            model="Llama-3.1-Swallow-8B-Instruct-v0.5-Q4_K_M.gguf",
+            model="Llama-3.1-Swallow-8B-Instruct-v0.5.Q4_K_M.gguf",
             compose_profile="screening",
         ),
     ]

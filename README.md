@@ -94,7 +94,7 @@ image 構成 (PR #330 で分離):
 | `joryu-vllm-base:latest` | torch + git vLLM コンパイル済みベース（compile/runtime マルチステージ。`src/`・api 依存なし） | `Dockerfile.vllm-base` |
 | `joryu` / `joryu-seed` サービス | 常駐 vLLM サーバ | `joryu-vllm-base:latest` を**直接参照** (src/ なし、`vllm serve` のみ) |
 | `joryu-job:latest` | api からの `compose run` でジョブ実行 | `Dockerfile.job` (vllm-base + src + uv sync) |
-| `joryu-judge:latest` | スクリーニング | `Dockerfile.judge` (llama.cpp + GGUF) |
+| `joryu-judge:latest` | スクリーニング | `Dockerfile.judge` (llama.cpp + [GGUF Q4_K_M](https://huggingface.co/mradermacher/Llama-3.1-Swallow-8B-Instruct-v0.5-GGUF)) |
 | `joryu-api:latest` | API / MCP | `Dockerfile.api` (vLLM なし軽量) |
 
 これにより `src/joryu/*` を変更しても rebuild されるのは `joryu-job:latest` のみで、常駐 `joryu` / `joryu-seed` は再起動も rebuild も不要になる。
@@ -143,6 +143,7 @@ api コンテナから GPU ジョブを実行する場合、Docker デーモン�
 | `JORYU_WEATHER_PROVIDER` | `open_meteo` (既定, キー不要) |
 | `JORYU_FETCH_TIMEOUT` / `JORYU_FETCH_MAX_BYTES` | URL 取得の timeout / 最大バイト |
 | `JORYU_MCP_ENABLED` / `JORYU_MCP_URL` | MCP ブリッジ (`.env.example` 参照。有効化は `config.yaml` の `mcp:`) |
+| `HF_TOKEN` | Curate / `joryu-judge` 用（任意。GGUF は [公開リポジトリ](https://huggingface.co/mradermacher/Llama-3.1-Swallow-8B-Instruct-v0.5-GGUF) から取得） |
 
 ```powershell
 copy .env.example .env

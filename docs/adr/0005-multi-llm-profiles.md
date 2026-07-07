@@ -23,7 +23,7 @@ RTX 3060 Ti (8GB VRAM) 上で次のワークフローをブラウザだけで完
 |---------|-------------------|--------|
 | `distill` | `joryu` | Qwen3-Swallow AWQ |
 | `seed_gen` | `joryu-seed` | Qwen2.5-7B-Instruct-AWQ |
-| `screening` | `joryu-judge` | Llama-3.1-Swallow GGUF Q4_K_M |
+| `screening` | `joryu-judge` | Llama-3.1-Swallow GGUF Q4_K_M ([mradermacher](https://huggingface.co/mradermacher/Llama-3.1-Swallow-8B-Instruct-v0.5-GGUF)) |
 
 ### FSM + 永続状態
 
