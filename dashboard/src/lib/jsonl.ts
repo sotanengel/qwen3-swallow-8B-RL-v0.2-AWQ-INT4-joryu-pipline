@@ -9,6 +9,7 @@ export interface DistilledRecord {
   sampling?: Record<string, number>;
   thinking_trace?: string | null;
   reasoning?: string;
+  no_think_fallback_used?: boolean | null;
   answer: string;
   model?: string;
   config_hash?: string;
@@ -119,12 +120,23 @@ export function jsonlDataChanged(
 
 const RECORD_KEY_SEP = "\x1e";
 
+/**
+ * レコードの mode を返す。欠落時は curate ローダ (src/joryu/curate/loader.py の
+ * infer_record_mode) と同じ規則で推論する。これにより蒸留 JSONL (mode 欠落あり) と
+ * 高品質抽出 JSONL (mode 補完済み) で recordId が一致する。
+ */
+export function inferRecordMode(r: DistilledRecord): "thinking" | "nothinking" {
+  if (r.mode === "thinking" || r.mode === "nothinking") return r.mode;
+  if (r.no_think_fallback_used) return "nothinking";
+  return "thinking";
+}
+
 /** レコードの安定キー文字列を構築する。 */
 export function recordKey(r: DistilledRecord): string {
   return [
     r.prompt,
     r.category ?? "",
-    r.mode ?? "",
+    inferRecordMode(r),
     r.style_id ?? "",
     r.created_at ?? "",
     r.config_hash ?? "",
