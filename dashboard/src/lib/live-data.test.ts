@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  curatedResponsesFetchUrls,
   curationFetchUrls,
   fetchAllLiveJson,
   fetchBestLiveText,
@@ -74,5 +75,15 @@ describe("responsesFetchUrls", () => {
 describe("curationFetchUrls", () => {
   it("includes live route before static file", () => {
     expect(curationFetchUrls()).toEqual(["/api/live/curation", "/curation.json"]);
+  });
+});
+
+describe("curatedResponsesFetchUrls", () => {
+  it("lists live route first, then proxy, direct API, and static", () => {
+    const urls = curatedResponsesFetchUrls();
+    expect(urls[0]).toBe("/api/live/curated");
+    expect(urls[1]).toBe("/joryu-api/api/dashboard/curated");
+    expect(urls[2]).toContain("/api/dashboard/curated");
+    expect(urls[3]).toBe("/responses.high_quality.jsonl");
   });
 });

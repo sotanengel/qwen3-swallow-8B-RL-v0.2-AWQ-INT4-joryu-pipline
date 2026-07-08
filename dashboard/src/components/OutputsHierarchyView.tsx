@@ -36,12 +36,14 @@ interface OutputsHierarchyViewProps {
   records: DistilledRecord[];
   deletingId: string | null;
   onDeleteRecord: (record: DistilledRecord) => void;
+  allowDelete?: boolean;
 }
 
 export function OutputsHierarchyView({
   records,
   deletingId,
   onDeleteRecord,
+  allowDelete = true,
 }: OutputsHierarchyViewProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -214,7 +216,7 @@ export function OutputsHierarchyView({
                   <th>tokens</th>
                   <th>status</th>
                   <th>created_at</th>
-                  <th>操作</th>
+                  {allowDelete ? <th>操作</th> : null}
                 </tr>
               </thead>
               <tbody>
@@ -239,19 +241,21 @@ export function OutputsHierarchyView({
                         )}
                       </td>
                       <td className="cell-nowrap">{r.created_at ?? "-"}</td>
-                      <td>
-                        <button
-                          type="button"
-                          className="danger-btn"
-                          disabled={deletingId === id}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            onDeleteRecord(r);
-                          }}
-                        >
-                          {deletingId === id ? "削除中…" : "削除"}
-                        </button>
-                      </td>
+                      {allowDelete ? (
+                        <td>
+                          <button
+                            type="button"
+                            className="danger-btn"
+                            disabled={deletingId === id}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              onDeleteRecord(r);
+                            }}
+                          >
+                            {deletingId === id ? "削除中…" : "削除"}
+                          </button>
+                        </td>
+                      ) : null}
                     </tr>
                   );
                 })}

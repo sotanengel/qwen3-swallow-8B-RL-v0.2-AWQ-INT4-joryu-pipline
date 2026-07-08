@@ -3,17 +3,19 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse, PlainTextResponse, Response
 
-from joryu.core.paths import resolve_stats_output_path
+from joryu.core.paths import resolve_curated_high_quality_jsonl, resolve_stats_output_path
 from joryu.infra.preflight import ensure_stats_json, resolve_distill_jsonl
 from joryu.persistence.responses_store import delete_all_records, delete_record
 from joryu.persistence.stats import compute_stats
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 _NO_STORE = {"Cache-Control": "no-store, no-cache, must-revalidate"}
 
@@ -52,6 +54,21 @@ def get_responses(request: Request) -> Response:
     try:
         text = jsonl.read_text(encoding="utf-8")
     except OSError:
+        return PlainTextResponse("", headers=_NO_STORE)
+    return PlainTextResponse(text, media_type="application/x-ndjson", headers=_NO_STORE)
+
+
+@router.get("/curated")
+def get_curated(request: Request) -> Response:
+    """高品質抽出 JSONL をライブ読み込み (キャッシュ無効)。"""
+    root = _repo_root(request)
+    jsonl = resolve_curated_high_quality_jsonl(root)
+    if jsonl is None or not jsonl.is_file():
+        return PlainTextResponse("", headers=_NO_STORE)
+    try:
+        text = jsonl.read_text(encoding="utf-8")
+    except OSError:
+        logger.exception("failed to read curated high_quality jsonl: %s", jsonl)
         return PlainTextResponse("", headers=_NO_STORE)
     return PlainTextResponse(text, media_type="application/x-ndjson", headers=_NO_STORE)
 

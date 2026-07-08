@@ -6,7 +6,11 @@ from pathlib import Path
 
 import pytest
 
-from joryu.infra.preflight import ensure_dashboard_data_paths, sync_dashboard_responses_copy
+from joryu.infra.preflight import (
+    ensure_dashboard_data_paths,
+    sync_dashboard_curated_link,
+    sync_dashboard_responses_copy,
+)
 
 
 @pytest.fixture
@@ -108,3 +112,25 @@ def test_sync_dashboard_responses_copy_updates_public_file(
 
     public_jsonl = repo_layout / "dashboard" / "public" / "responses.jsonl"
     assert public_jsonl.read_text(encoding="utf-8") == jsonl_path.read_text(encoding="utf-8")
+
+
+def test_sync_dashboard_curated_link_copies_high_quality_jsonl(repo_layout: Path) -> None:
+    job_dir = repo_layout / "data" / "curated" / "jobs" / "job-1"
+    job_dir.mkdir(parents=True)
+    source = job_dir / "responses.high_quality.jsonl"
+    source.write_text('{"prompt":"hq","answer":"ok"}\n', encoding="utf-8")
+
+    sync_dashboard_curated_link(repo_layout, source)
+
+    public = repo_layout / "dashboard" / "public" / "responses.high_quality.jsonl"
+    assert public.is_file()
+    assert public.read_text(encoding="utf-8") == source.read_text(encoding="utf-8")
+
+
+def test_sync_dashboard_curated_link_noop_when_source_missing(repo_layout: Path) -> None:
+    sync_dashboard_curated_link(
+        repo_layout,
+        repo_layout / "data" / "curated" / "jobs" / "missing" / "responses.high_quality.jsonl",
+    )
+    public = repo_layout / "dashboard" / "public" / "responses.high_quality.jsonl"
+    assert not public.exists()

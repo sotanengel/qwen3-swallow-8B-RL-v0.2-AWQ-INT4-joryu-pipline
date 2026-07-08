@@ -843,3 +843,13 @@ def sync_dashboard_responses_copy(repo_root: Path) -> None:
         return
     public_jsonl.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(jsonl_path, public_jsonl)
+
+
+def sync_dashboard_curated_link(repo_root: Path, source: Path) -> None:
+    """高品質抽出 JSONL を dashboard/public にリンク/コピーする。"""
+    from joryu.core.paths import HIGH_QUALITY_JSONL_NAME, dashboard_public
+
+    if not source.is_file():
+        return
+    public_path = dashboard_public(repo_root) / HIGH_QUALITY_JSONL_NAME
+    _ensure_dashboard_link(public_path, source.resolve())
