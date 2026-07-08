@@ -853,7 +853,11 @@ def _maybe_purge_rejected_from_source(
     enabled = cfg.curate.purge_rejected_from_src and not args.no_purge_rejected
     if not enabled:
         return {"enabled": False, "purged": 0, "not_found": 0}
-    result = purge_rejected_from_source(src, dst / CurateWriter.REJECTED)
+    result = purge_rejected_from_source(
+        src,
+        dst / CurateWriter.REJECTED,
+        scores_path=dst / CurateWriter.SCORES,
+    )
     if result.purged > 0:
         default_stats_refresher(src)
     if result.purged > 0 or result.not_found > 0:
