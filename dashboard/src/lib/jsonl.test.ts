@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   findRecordById,
   formatRecordMarkdown,
+  inferRecordMode,
   jsonlDataChanged,
   loadCuratedJsonl,
   parseJsonl,
@@ -95,6 +96,38 @@ describe("recordId", () => {
 
   it("returns different ids for different records", () => {
     expect(recordId(THINKING_RECORD)).not.toBe(recordId(NOTHINKING_RECORD));
+  });
+
+  it("matches distilled (mode missing) and curated (mode inferred) records", () => {
+    // 蒸留 JSONL は mode 欠落、curate は thinking_trace から mode=thinking を補完する。
+    const distilled = {
+      prompt: "同一プロンプト",
+      answer: "同一回答",
+      category: "国語",
+      style_id: "prose",
+      created_at: "2026-07-04T01:13:00.454682+00:00",
+      config_hash: "sha256-abc",
+      thinking_trace: "考える",
+    };
+    const curated = { ...distilled, mode: "thinking" as const };
+    expect(recordId(distilled)).toBe(recordId(curated));
+  });
+});
+
+describe("inferRecordMode", () => {
+  it("returns explicit mode when present", () => {
+    expect(inferRecordMode({ prompt: "p", answer: "a", mode: "nothinking" })).toBe("nothinking");
+  });
+
+  it("infers nothinking from no_think_fallback_used", () => {
+    expect(
+      inferRecordMode({ prompt: "p", answer: "a", no_think_fallback_used: true }),
+    ).toBe("nothinking");
+  });
+
+  it("defaults to thinking otherwise", () => {
+    expect(inferRecordMode({ prompt: "p", answer: "a" })).toBe("thinking");
+    expect(inferRecordMode({ prompt: "p", answer: "a", thinking_trace: "x" })).toBe("thinking");
   });
 });
 
