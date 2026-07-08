@@ -61,6 +61,38 @@ def test_create_curate_job_without_vllm(client: TestClient) -> None:
     assert job["spec"]["skip_llm"] is True
 
 
+def test_create_curate_job_enqueues_while_other_profile_starting(client: TestClient) -> None:
+    """別プロファイル (distill) 起動中でも curate ジョブは enqueue される (409 で弾かない)。
+
+    JobRunner が profile を screening に自動切替して実行するため、API 層で
+    profile_starting 409 を返すのは誤り。
+    """
+    from joryu.orchestrator.profile import ModelProfile
+    from joryu.orchestrator.state import OrchestratorState, OrchestratorStatus
+
+    orch = client.app.state.orchestrator
+    orch._save_state(
+        OrchestratorState(status=OrchestratorStatus.STARTING, target=ModelProfile.DISTILL)
+    )
+
+    resp = client.post("/api/curate/jobs", json={"skip_llm": False})
+    assert resp.status_code == 201, resp.text
+
+
+def test_create_curate_job_enqueues_while_profile_switching(client: TestClient) -> None:
+    """profile 切替中でも curate ジョブは enqueue される。"""
+    from joryu.orchestrator.profile import ModelProfile
+    from joryu.orchestrator.state import OrchestratorState, OrchestratorStatus
+
+    orch = client.app.state.orchestrator
+    orch._save_state(
+        OrchestratorState(status=OrchestratorStatus.SWITCHING, target=ModelProfile.DISTILL)
+    )
+
+    resp = client.post("/api/curate/jobs", json={"skip_llm": False})
+    assert resp.status_code == 201, resp.text
+
+
 def test_list_curate_jobs(client: TestClient) -> None:
     created = client.post("/api/curate/jobs", json={"skip_llm": True}).json()
     listed = client.get("/api/curate/jobs").json()

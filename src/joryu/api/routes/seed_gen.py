@@ -7,10 +7,9 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Body, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from joryu.api.deps import assert_profile_enqueueable, get_orchestrator
+from joryu.api.deps import get_orchestrator
 from joryu.core.prompt_bank import load_prompt_bank
 from joryu.jobs.models import JobKind, JobRecord, JobStatus, SeedGenJobSpec
-from joryu.jobs.profile import required_profile_from_spec
 from joryu.jobs.runner import JobRunner
 from joryu.jobs.store import JobStore
 from joryu.jobs.validate import validate_seed_gen_job_spec
@@ -219,11 +218,7 @@ def create_seed_gen_job(request: Request, body: SeedGenRequestBody) -> SeedGenJo
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    assert_profile_enqueueable(
-        get_orchestrator(request),
-        required_profile_from_spec(JobKind.SEED_GEN, spec),
-    )
-
+    # profile 起動/切替中でも enqueue する (JobRunner が profile を自動切替する)。
     record = JobRecord.create(spec, kind=JobKind.SEED_GEN)
     _store(request).save(record)
     _runner(request).enqueue(record)

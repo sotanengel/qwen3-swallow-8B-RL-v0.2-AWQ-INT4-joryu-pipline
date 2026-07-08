@@ -64,28 +64,6 @@ def require_chat_profile(orchestrator: OrchDep) -> None:
         )
 
 
-def assert_profile_enqueueable(orchestrator: ModelOrchestrator, required: ModelProfile) -> None:
-    """ジョブ enqueue 前: profile 切替中でなければ OK (起動は JobRunner が担当)。"""
-    state = orchestrator.get_state()
-    if state.status == OrchestratorStatus.SWITCHING:
-        raise HTTPException(
-            status_code=409,
-            detail={
-                "error": "profile_switching",
-                "target": state.target.value if state.target else None,
-            },
-        )
-    if state.status == OrchestratorStatus.STARTING and state.target != required:
-        raise HTTPException(
-            status_code=409,
-            detail={
-                "error": "profile_starting",
-                "target": state.target.value if state.target else None,
-                "required": required.value,
-            },
-        )
-
-
 def _load_repo_config(request: Request) -> tuple[Path, Any]:
     repo_root = request.app.state.repo_root
     cfg = load_config(repo_root / "config.yaml")
