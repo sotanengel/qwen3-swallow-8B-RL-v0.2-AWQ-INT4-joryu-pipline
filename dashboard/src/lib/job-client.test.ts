@@ -50,6 +50,39 @@ describe("apiFetch", () => {
     await expect(apiFetch("/x")).rejects.toThrow("Bad Gateway");
   });
 
+  it("formats object detail (409 profile_starting) into a readable message", async () => {
+    mockFetch(() =>
+      new Response(
+        JSON.stringify({
+          detail: { error: "profile_starting", target: "screening", required: "screening" },
+        }),
+        { status: 409, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+    const err = await apiFetch("/x").then(
+      () => null,
+      (e: unknown) => (e instanceof Error ? e.message : String(e)),
+    );
+    expect(err).not.toBeNull();
+    expect(err).not.toContain("[object Object]");
+    expect(err).toContain("screening");
+  });
+
+  it("stringifies object detail without an error field", async () => {
+    mockFetch(() =>
+      new Response(JSON.stringify({ detail: { code: 42, note: "oops" } }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    const err = await apiFetch("/x").then(
+      () => null,
+      (e: unknown) => (e instanceof Error ? e.message : String(e)),
+    );
+    expect(err).not.toContain("[object Object]");
+    expect(err).toContain("oops");
+  });
+
   it("returns parsed JSON on success", async () => {
     mockFetch(() =>
       new Response(JSON.stringify({ ok: 1 }), {
