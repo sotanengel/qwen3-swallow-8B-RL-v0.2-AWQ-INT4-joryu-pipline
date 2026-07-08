@@ -475,6 +475,9 @@ def main(
     )
     if dashboard_dst is not None:
         write_curation_json(dst / "scores.jsonl", dashboard_dst)
+        from joryu.infra.preflight import sync_dashboard_curated_link
+
+        sync_dashboard_curated_link(repo_root, dst / CurateWriter.HIGH_QUALITY)
     else:
         # フォールバック: dst 内に curation.json も置く
         write_curation_json(dst / "scores.jsonl", dst / "curation.json")
@@ -736,6 +739,9 @@ def _run_curate_streaming(
     )
     if dashboard_dst is not None:
         write_curation_json(dst / "scores.jsonl", dashboard_dst)
+        from joryu.infra.preflight import sync_dashboard_curated_link
+
+        sync_dashboard_curated_link(repo_root, dst / CurateWriter.HIGH_QUALITY)
     else:
         write_curation_json(dst / "scores.jsonl", dst / "curation.json")
 

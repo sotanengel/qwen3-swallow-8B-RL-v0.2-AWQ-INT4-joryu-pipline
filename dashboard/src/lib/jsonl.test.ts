@@ -4,9 +4,11 @@ import {
   findRecordById,
   formatRecordMarkdown,
   jsonlDataChanged,
+  loadCuratedJsonl,
   parseJsonl,
   recordId,
   recordLooksTruncated,
+  recordsToJsonl,
   searchRecords,
   truncateText,
 } from "./jsonl";
@@ -166,5 +168,36 @@ describe("jsonlDataChanged", () => {
   it("returns false for identical data", () => {
     const rows = parseJsonl(SAMPLE);
     expect(jsonlDataChanged(rows, rows)).toBe(false);
+  });
+});
+
+describe("recordsToJsonl", () => {
+  it("serializes records as newline-delimited json", () => {
+    const recs = parseJsonl(SAMPLE);
+    const text = recordsToJsonl(recs);
+    expect(text.split("\n").filter(Boolean)).toHaveLength(3);
+    expect(text.endsWith("\n")).toBe(true);
+  });
+
+  it("returns empty string for no records", () => {
+    expect(recordsToJsonl([])).toBe("");
+  });
+});
+
+describe("loadCuratedJsonl", () => {
+  it("parses curated responses from live fetch", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () =>
+      new Response(
+        `${JSON.stringify({ prompt: "hq", answer: "ok" })}\n`,
+        { status: 200 },
+      )) as unknown as typeof fetch;
+    try {
+      const rows = await loadCuratedJsonl();
+      expect(rows).toHaveLength(1);
+      expect(rows[0].prompt).toBe("hq");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });

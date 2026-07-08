@@ -110,3 +110,60 @@ def test_dashboard_delete_all_responses(client: TestClient, repo_root: Path) -> 
 
     stats = client.get("/api/dashboard/stats").json()
     assert stats["total"] == 0
+
+
+def _write_curation_with_high_quality(repo_root: Path) -> None:
+    job_dir = repo_root / "data" / "curated" / "jobs" / "job-1"
+    job_dir.mkdir(parents=True)
+    scores = job_dir / "scores.jsonl"
+    scores.write_text('{"record_hash":"h1","accepted":true}\n', encoding="utf-8")
+    (job_dir / "responses.high_quality.jsonl").write_text(
+        '{"prompt":"HQ1","answer":"A1"}\n{"prompt":"HQ2","answer":"A2"}\n',
+        encoding="utf-8",
+    )
+    curation = {
+        "total": 2,
+        "accepted": 2,
+        "rejected": 0,
+        "keep_rate": 1.0,
+        "_meta": {"source_path": str(scores)},
+    }
+    (repo_root / "dashboard" / "public" / "curation.json").write_text(
+        json.dumps(curation),
+        encoding="utf-8",
+    )
+
+
+def test_dashboard_curated_returns_high_quality_jsonl(client: TestClient, repo_root: Path) -> None:
+    _write_curation_with_high_quality(repo_root)
+    res = client.get("/api/dashboard/curated")
+    assert res.status_code == 200
+    assert res.headers.get("cache-control", "").startswith("no-store")
+    assert "HQ1" in res.text
+    assert "HQ2" in res.text
+
+
+def test_dashboard_curated_empty_when_no_curation(client: TestClient) -> None:
+    res = client.get("/api/dashboard/curated")
+    assert res.status_code == 200
+    assert res.text.strip() == ""
+
+
+def test_dashboard_curated_empty_when_high_quality_missing(
+    client: TestClient, repo_root: Path
+) -> None:
+    job_dir = repo_root / "data" / "curated" / "jobs" / "job-1"
+    job_dir.mkdir(parents=True)
+    scores = job_dir / "scores.jsonl"
+    scores.write_text('{"record_hash":"h1"}\n', encoding="utf-8")
+    curation = {
+        "total": 0,
+        "_meta": {"source_path": str(scores)},
+    }
+    (repo_root / "dashboard" / "public" / "curation.json").write_text(
+        json.dumps(curation),
+        encoding="utf-8",
+    )
+    res = client.get("/api/dashboard/curated")
+    assert res.status_code == 200
+    assert res.text.strip() == ""

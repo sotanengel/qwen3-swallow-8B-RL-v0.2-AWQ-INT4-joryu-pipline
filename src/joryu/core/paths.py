@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 
@@ -13,6 +14,8 @@ STATS_JSON_REL = f"{DASHBOARD_PUBLIC_DIR}/stats.json"
 CURATION_JSON_REL = f"{DASHBOARD_PUBLIC_DIR}/curation.json"
 SCREENING_JSON_REL = f"{DASHBOARD_PUBLIC_DIR}/screening.json"
 RESPONSES_JSONL_REL = f"{DASHBOARD_PUBLIC_DIR}/responses.jsonl"
+CURATED_RESPONSES_JSONL_REL = f"{DASHBOARD_PUBLIC_DIR}/responses.high_quality.jsonl"
+HIGH_QUALITY_JSONL_NAME = "responses.high_quality.jsonl"
 
 
 def resolve_optional_config(path: str | Path) -> Config:
@@ -88,3 +91,30 @@ def resolve_stats_output_path(
     if root is None:
         return None
     return root / STATS_JSON_REL
+
+
+def resolve_curated_high_quality_jsonl(repo_root: Path) -> Path | None:
+    """curation.json の ``_meta.source_path`` から high_quality JSONL を解決する。
+
+    ``source_path`` は通常 ``scores.jsonl`` を指す。同ディレクトリの
+    ``responses.high_quality.jsonl`` を返す。解決できなければ
+    ``dashboard/public/responses.high_quality.jsonl`` にフォールバックする。
+    """
+    curation_path = repo_root / CURATION_JSON_REL
+    if curation_path.is_file():
+        try:
+            data = json.loads(curation_path.read_text(encoding="utf-8"))
+            meta = data.get("_meta") if isinstance(data, dict) else None
+            source_raw = meta.get("source_path") if isinstance(meta, dict) else None
+            if isinstance(source_raw, str) and source_raw.strip():
+                scores_path = Path(source_raw)
+                if not scores_path.is_absolute():
+                    scores_path = (repo_root / scores_path).resolve()
+                candidate = scores_path.parent / HIGH_QUALITY_JSONL_NAME
+                if candidate.is_file():
+                    return candidate
+        except (OSError, json.JSONDecodeError, TypeError, ValueError):
+            pass
+
+    public = repo_root / CURATED_RESPONSES_JSONL_REL
+    return public if public.is_file() else None

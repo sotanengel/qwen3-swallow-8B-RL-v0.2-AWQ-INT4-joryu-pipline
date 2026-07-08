@@ -755,12 +755,16 @@ def make_refresh_curation(repo_root: Path) -> Callable[[CurateJobSpec, str], int
     def refresh_curation(_spec: CurateJobSpec, job_id: str) -> int:
         from joryu.core.paths import CURATION_JSON_REL
         from joryu.curate.stats import write_curation_json
+        from joryu.curate.writer import CurateWriter
+        from joryu.infra.preflight import sync_dashboard_curated_link
 
-        scores = curate_job_dst(repo_root, job_id) / "scores.jsonl"
+        job_dst = curate_job_dst(repo_root, job_id)
+        scores = job_dst / "scores.jsonl"
         if not scores.exists():
             return 0
         out = repo_root / CURATION_JSON_REL
         write_curation_json(scores, out)
+        sync_dashboard_curated_link(repo_root, job_dst / CurateWriter.HIGH_QUALITY)
         return 0
 
     return refresh_curation

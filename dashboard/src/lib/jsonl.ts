@@ -82,6 +82,25 @@ export async function loadJsonl(_url = "/responses.jsonl"): Promise<DistilledRec
   }
 }
 
+export async function loadCuratedJsonl(
+  _url = "/responses.high_quality.jsonl",
+): Promise<DistilledRecord[]> {
+  try {
+    const { fetchBestLiveText, curatedResponsesFetchUrls } = await import("./live-data");
+    const text = await fetchBestLiveText(curatedResponsesFetchUrls());
+    if (text === null) return [];
+    return parseJsonl(text);
+  } catch {
+    return [];
+  }
+}
+
+/** レコード配列を JSONL 文字列に変換する。 */
+export function recordsToJsonl(records: DistilledRecord[]): string {
+  if (records.length === 0) return "";
+  return `${records.map((r) => JSON.stringify(r)).join("\n")}\n`;
+}
+
 /** ポーリング時に再描画が必要か (件数または末尾レコードで判定)。 */
 export function jsonlDataChanged(
   prev: DistilledRecord[],

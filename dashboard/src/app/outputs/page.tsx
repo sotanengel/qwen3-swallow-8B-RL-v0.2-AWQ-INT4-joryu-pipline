@@ -4,12 +4,14 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
 import { OutputsHierarchyView } from "@/components/OutputsHierarchyView";
+import { downloadJsonl } from "@/lib/download";
 import { deleteAllOutputs, deleteOutput } from "@/lib/outputs";
 import { useIntervalPoll } from "@/lib/useIntervalPoll";
 import { useDistillJobFastPoll } from "@/lib/useDistillJobFastPoll";
 import {
   DistilledRecord,
   jsonlDataChanged,
+  loadCuratedJsonl,
   loadJsonl,
   recordId,
   recordLooksTruncated,
@@ -20,6 +22,7 @@ import { SearchHit, searchRanked } from "@/lib/search";
 
 const PAGE_SIZE = 25;
 type SearchMode = "keyword" | "ranked";
+type OutputDataset = "distilled" | "extracted";
 
 function formatTokens(r: DistilledRecord): string {
   const p = r.prompt_tokens;
@@ -31,6 +34,10 @@ function formatTokens(r: DistilledRecord): string {
 function formatStatus(r: DistilledRecord): string {
   if (recordLooksTruncated(r)) return "truncated";
   return r.finish_reason ?? "-";
+}
+
+function parseDataset(value: string | null): OutputDataset {
+  return value === "extracted" ? "extracted" : "distilled";
 }
 
 export default function OutputsPage() {
@@ -45,15 +52,26 @@ function OutputsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialCategory = searchParams.get("category") ?? "";
+  const dataset = parseDataset(searchParams.get("dataset"));
   const [loaded, setLoaded] = useState(false);
+  const [curatedLoaded, setCuratedLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deletingAll, setDeletingAll] = useState(false);
   const fastPoll = useDistillJobFastPoll();
-  const records = useIntervalPoll(
+  const distilledRecords = useIntervalPoll(
     async () => {
       const rows = await loadJsonl();
       setLoaded(true);
+      return rows;
+    },
+    [] as DistilledRecord[],
+    { shouldUpdate: jsonlDataChanged, intervalMs: 3000, fastPoll },
+  );
+  const curatedRecords = useIntervalPoll(
+    async () => {
+      const rows = await loadCuratedJsonl();
+      setCuratedLoaded(true);
       return rows;
     },
     [] as DistilledRecord[],
@@ -69,7 +87,36 @@ function OutputsPageContent() {
   const [rankedLoading, setRankedLoading] = useState(false);
   const [rankedUnavailable, setRankedUnavailable] = useState(false);
 
+  const extractedIdSet = useMemo(
+    () => new Set(curatedRecords.map((record) => recordId(record))),
+    [curatedRecords],
+  );
+  const distilledVisible = useMemo(
+    () => distilledRecords.filter((record) => !extractedIdSet.has(recordId(record))),
+    [distilledRecords, extractedIdSet],
+  );
+  const records = dataset === "extracted" ? curatedRecords : distilledVisible;
+  const isDistilledView = dataset === "distilled";
   const isSearchActive = query.trim().length > 0;
+  const rankedSearchEnabled = isDistilledView && searchMode === "ranked";
+
+  const setDatasetAndUrl = useCallback(
+    (next: OutputDataset) => {
+      setPage(0);
+      if (next === "extracted" && searchMode === "ranked") {
+        setSearchMode("keyword");
+      }
+      const params = new URLSearchParams(searchParams.toString());
+      if (next === "distilled") {
+        params.delete("dataset");
+      } else {
+        params.set("dataset", "extracted");
+      }
+      const qs = params.toString();
+      router.replace(qs ? `/outputs?${qs}` : "/outputs");
+    },
+    [router, searchMode, searchParams],
+  );
 
   const modeFiltered = useMemo(
     () => searchRecords(records, { query: "", mode, category: undefined }),
@@ -95,7 +142,7 @@ function OutputsPageContent() {
   );
 
   const runRankedSearch = useCallback(async () => {
-    if (searchMode !== "ranked") return;
+    if (!rankedSearchEnabled) return;
     setRankedLoading(true);
     const result = await searchRanked({
       query,
@@ -114,29 +161,41 @@ function OutputsPageContent() {
     setRankedUnavailable(false);
     setRankedHits(result.hits);
     setRankedTotal(result.total);
-  }, [searchMode, query, mode, category, page]);
+  }, [rankedSearchEnabled, query, mode, category, page]);
 
   useEffect(() => {
-    if (searchMode !== "ranked") return;
+    if (!rankedSearchEnabled) return;
     const timer = setTimeout(() => {
       void runRankedSearch();
     }, 300);
     return () => clearTimeout(timer);
-  }, [searchMode, runRankedSearch]);
+  }, [rankedSearchEnabled, runRankedSearch]);
 
   useEffect(() => {
-    if (rankedUnavailable && searchMode === "ranked") {
+    if (rankedUnavailable && rankedSearchEnabled) {
       setSearchMode("keyword");
     }
-  }, [rankedUnavailable, searchMode]);
+  }, [rankedUnavailable, rankedSearchEnabled]);
 
-  const isRanked = isSearchActive && searchMode === "ranked";
+  const isRanked = isSearchActive && rankedSearchEnabled;
   const totalCount = isRanked ? rankedTotal : keywordFiltered.length;
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
   const keywordPageRows = keywordFiltered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
   const displayRows: { record: DistilledRecord; hit?: SearchHit }[] = isRanked
     ? rankedHits.map((hit) => ({ record: hit.record, hit }))
     : keywordPageRows.map((record) => ({ record }));
+  const exportRecords = isSearchActive
+    ? isRanked
+      ? rankedHits.map((hit) => hit.record)
+      : keywordFiltered
+    : modeFiltered;
+  const exportFilename =
+    dataset === "extracted" ? "responses.high_quality.jsonl" : "responses.distilled.jsonl";
+  const viewLoaded = dataset === "extracted" ? curatedLoaded : loaded;
+
+  const onExport = () => {
+    downloadJsonl(exportRecords, exportFilename);
+  };
 
   const onDeleteOne = async (record: DistilledRecord) => {
     const id = recordId(record);
@@ -165,7 +224,7 @@ function OutputsPageContent() {
   };
 
   const onDeleteAll = async () => {
-    if (records.length === 0) return;
+    if (distilledRecords.length === 0) return;
     if (
       typeof window !== "undefined" &&
       !window.confirm("すべての出力を削除しますか？この操作は取り消せません。")
@@ -193,14 +252,54 @@ function OutputsPageContent() {
       <section className="section">
         <div className="page-toolbar">
           <h2>出力一覧</h2>
-          <button
-            type="button"
-            className="danger-btn"
-            disabled={!loaded || records.length === 0 || deletingAll}
-            onClick={() => void onDeleteAll()}
-          >
-            {deletingAll ? "削除中…" : "全削除"}
-          </button>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", alignItems: "center" }}>
+            <nav
+              role="tablist"
+              aria-label="出力データセット"
+              data-testid="outputs-dataset-tabs"
+              style={{ display: "flex", gap: "0.25rem" }}
+            >
+              <button
+                type="button"
+                role="tab"
+                aria-selected={dataset === "distilled"}
+                className={`nav-link${dataset === "distilled" ? " nav-link-active" : ""}`}
+                data-testid="outputs-dataset-distilled"
+                onClick={() => setDatasetAndUrl("distilled")}
+              >
+                蒸留後
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={dataset === "extracted"}
+                className={`nav-link${dataset === "extracted" ? " nav-link-active" : ""}`}
+                data-testid="outputs-dataset-extracted"
+                onClick={() => setDatasetAndUrl("extracted")}
+              >
+                抽出後
+              </button>
+            </nav>
+            <button
+              type="button"
+              className="secondary-btn"
+              data-testid="outputs-export-jsonl"
+              disabled={!viewLoaded || exportRecords.length === 0}
+              onClick={onExport}
+            >
+              JSONL出力
+            </button>
+            {isDistilledView ? (
+              <button
+                type="button"
+                className="danger-btn"
+                disabled={!loaded || distilledRecords.length === 0 || deletingAll}
+                onClick={() => void onDeleteAll()}
+              >
+                {deletingAll ? "削除中…" : "全削除"}
+              </button>
+            ) : null}
+          </div>
         </div>
       </section>
 
@@ -223,8 +322,14 @@ function OutputsPageContent() {
             setPage(0);
           }}
           aria-label="検索モード"
-          disabled={!isSearchActive}
-          title={!isSearchActive ? "検索クエリ入力時のみ利用可能" : undefined}
+          disabled={!isSearchActive || !isDistilledView}
+          title={
+            !isSearchActive
+              ? "検索クエリ入力時のみ利用可能"
+              : !isDistilledView
+                ? "BM25 検索は蒸留後ビューのみ利用可能"
+                : undefined
+          }
         >
           <option value="keyword">keyword</option>
           <option value="ranked">ranked (BM25)</option>
@@ -264,11 +369,13 @@ function OutputsPageContent() {
         </p>
       ) : null}
 
-      {!loaded ? (
+      {!viewLoaded ? (
         <p className="muted">
-          responses.jsonl を読み込み中…
+          {dataset === "extracted"
+            ? "responses.high_quality.jsonl を読み込み中…"
+            : "responses.jsonl を読み込み中…"}
           <br />
-          (dashboard/public/responses.jsonl にシンボリックリンクまたはコピーを置いてください)
+          (dashboard/public/ にシンボリックリンクまたはコピーを置いてください)
         </p>
       ) : isSearchActive ? (
         <p className="muted page-subtitle">
@@ -279,10 +386,13 @@ function OutputsPageContent() {
       ) : (
         <p className="muted page-subtitle">
           全 {modeFiltered.length.toLocaleString()} 件 — フォルダを開いて閲覧
+          {isDistilledView && curatedRecords.length > 0
+            ? `（抽出済み ${curatedRecords.length.toLocaleString()} 件を除外）`
+            : null}
         </p>
       )}
 
-      {loaded && !isSearchActive ? (
+      {viewLoaded && !isSearchActive ? (
         <Suspense
           fallback={<p className="muted page-subtitle">フォルダ階層を読み込み中…</p>}
         >
@@ -290,11 +400,12 @@ function OutputsPageContent() {
             records={modeFiltered}
             deletingId={deletingId}
             onDeleteRecord={(record) => void onDeleteOne(record)}
+            allowDelete={isDistilledView}
           />
         </Suspense>
       ) : null}
 
-      {loaded && isSearchActive ? (
+      {viewLoaded && isSearchActive ? (
         <>
           <div className="outputs-table-wrap">
             <table className="data-table">
@@ -315,7 +426,7 @@ function OutputsPageContent() {
                       <th>snippet</th>
                     </>
                   ) : null}
-                  <th>操作</th>
+                  {isDistilledView ? <th>操作</th> : null}
                 </tr>
               </thead>
               <tbody>
@@ -356,19 +467,21 @@ function OutputsPageContent() {
                           </td>
                         </>
                       ) : null}
-                      <td style={{ verticalAlign: "top" }}>
-                        <button
-                          type="button"
-                          className="danger-btn"
-                          disabled={deletingId === id}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            void onDeleteOne(r);
-                          }}
-                        >
-                          {deletingId === id ? "削除中…" : "削除"}
-                        </button>
-                      </td>
+                      {isDistilledView ? (
+                        <td style={{ verticalAlign: "top" }}>
+                          <button
+                            type="button"
+                            className="danger-btn"
+                            disabled={deletingId === id}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void onDeleteOne(r);
+                            }}
+                          >
+                            {deletingId === id ? "削除中…" : "削除"}
+                          </button>
+                        </td>
+                      ) : null}
                     </tr>
                   );
                 })}
