@@ -101,15 +101,17 @@ class ModelOrchestrator:
 
     def profile_ready(self, profile: ModelProfile) -> bool:
         state = self.get_state()
-        if state.status == OrchestratorStatus.ACTIVE and state.active == profile:
-            return True
-        if isinstance(self.backend, FakeBackend):
-            return profile in self.backend.healthy or profile in self.backend.running
         spec = self.profiles.get(profile)
         if spec is None:
             return False
         assert self.backend is not None
-        return self.backend.is_healthy(profile, spec=spec)
+        if not self.backend.is_healthy(profile, spec=spec):
+            return False
+        if state.status == OrchestratorStatus.ACTIVE and state.active == profile:
+            return True
+        if isinstance(self.backend, FakeBackend):
+            return profile in self.backend.healthy or profile in self.backend.running
+        return False
 
     def _mark_compose_failed(
         self,
@@ -193,7 +195,17 @@ class ModelOrchestrator:
         with self._thread_lock:
             state = self._load_state()
             if state.status == OrchestratorStatus.ACTIVE and state.active == target:
-                emit(f"[orchestrator] profile already active: {target.value}")
+                assert self.backend is not None
+                backend = self.backend
+                spec = self.profiles[target]
+                if backend.is_healthy(target, spec=spec):
+                    emit(f"[orchestrator] profile already active: {target.value}")
+                    return
+                emit(f"[orchestrator] profile active but not healthy, waiting: {target.value}")
+                if not backend.is_profile_container_running(target, spec=spec):
+                    emit(f"[orchestrator] container not running, restarting {target.value}")
+                    self._start_profile_or_fail(target, spec, state, backend, emit)
+                self._wait_for_profile_health(target, spec, state, backend, emit)
                 return
 
             assert self.backend is not None

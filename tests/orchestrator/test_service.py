@@ -52,6 +52,45 @@ def test_ensure_profile_idempotent(orch: ModelOrchestrator) -> None:
     assert orch.get_state().active == ModelProfile.DISTILL
 
 
+def test_ensure_profile_waits_when_active_but_unhealthy(orch: ModelOrchestrator) -> None:
+    """ACTIVE 状態でも vLLM が未 ready なら待機する (コンテナ再起動直後の回帰)。"""
+    backend = orch.backend
+    assert isinstance(backend, FakeBackend)
+    backend.running.add(ModelProfile.DISTILL)
+    orch._save_state(
+        OrchestratorState(
+            status=OrchestratorStatus.ACTIVE,
+            active=ModelProfile.DISTILL,
+        )
+    )
+    backend.calls.clear()
+    logs: list[str] = []
+    checks = iter([False, False, True])
+
+    def _healthy(*_a: object, **_k: object) -> bool:
+        return next(checks, True)
+
+    backend.is_healthy = _healthy  # type: ignore[method-assign]
+    orch.ensure_profile(ModelProfile.DISTILL, log=logs.append)
+    assert ("start", ModelProfile.DISTILL) not in backend.calls
+    assert any("not healthy" in line for line in logs)
+    assert orch.get_state().active == ModelProfile.DISTILL
+
+
+def test_profile_ready_false_when_active_but_unhealthy(orch: ModelOrchestrator) -> None:
+    backend = orch.backend
+    assert isinstance(backend, FakeBackend)
+    backend.running.add(ModelProfile.DISTILL)
+    orch._save_state(
+        OrchestratorState(
+            status=OrchestratorStatus.ACTIVE,
+            active=ModelProfile.DISTILL,
+        )
+    )
+    backend.is_healthy = lambda *_a, **_k: False  # type: ignore[method-assign]
+    assert not orch.profile_ready(ModelProfile.DISTILL)
+
+
 def test_ensure_profile_switches(orch: ModelOrchestrator) -> None:
     orch.ensure_profile(ModelProfile.DISTILL)
     orch.ensure_profile(ModelProfile.SEED_GEN)
