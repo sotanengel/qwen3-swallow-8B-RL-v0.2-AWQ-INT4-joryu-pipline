@@ -37,6 +37,7 @@ from joryu.curate.minhash_index import (
 )
 from joryu.curate.progress import clear_existing_outputs, load_resume_state
 from joryu.curate.progress_reporter import CurateProgressReporter
+from joryu.curate.purge import purge_rejected_from_source
 from joryu.curate.record_hash import compute_record_hash
 from joryu.curate.scoring import build_composite, select_by_threshold
 from joryu.curate.signals.llm_judge import LLMRubricSignal
@@ -61,6 +62,7 @@ from joryu.curate.streaming import (
 )
 from joryu.curate.style_presets import load_style_rules
 from joryu.curate.writer import CurateWriter
+from joryu.distill.stats import default_stats_refresher
 from joryu.infra.git import git_head_at
 
 
@@ -137,6 +139,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--rescore-only",
         action="store_true",
         help="LLM 呼び出しはせず、合成スコアと採否判定だけやり直す (閾値チューニング用, R-23)。",
+    )
+    p.add_argument(
+        "--no-purge-rejected",
+        action="store_true",
+        help="棄却レコードを蒸留元 JSONL から削除しない (R-26)。",
     )
     p.add_argument("--judge-provider", default=None, help="curate judge provider")
     p.add_argument("--judge-base-url", default=None, help="curate judge base URL")
@@ -434,6 +441,13 @@ def main(
         "rescore_only_misses": counters.rescore_only_misses,
         "resume_skipped": skipped_resume,
     }
+    incremental["purge"] = _maybe_purge_rejected_from_source(
+        cfg=cfg,
+        args=args,
+        src=src,
+        dst=dst,
+        log=log,
+    )
     write_curation_meta(
         dst,
         src_path=src,
@@ -690,6 +704,13 @@ def _run_curate_streaming(
         "rescore_only_misses": counters.rescore_only_misses,
         "resume_skipped": skipped_resume,
     }
+    incremental["purge"] = _maybe_purge_rejected_from_source(
+        cfg=cfg,
+        args=args,
+        src=src,
+        dst=dst,
+        log=log,
+    )
     write_curation_meta(
         dst,
         src_path=src,
@@ -818,6 +839,36 @@ def _collect_signal_versions(
     if llm_signal is not None:
         versions[llm_signal.code] = llm_signal.version
     return versions
+
+
+def _maybe_purge_rejected_from_source(
+    *,
+    cfg: Config,
+    args: argparse.Namespace,
+    src: Path,
+    dst: Path,
+    log: Any,
+) -> dict[str, Any]:
+    """棄却レコードを蒸留元 JSONL から削除し、差分サマリ用 dict を返す (R-26)。"""
+    enabled = cfg.curate.purge_rejected_from_src and not args.no_purge_rejected
+    if not enabled:
+        return {"enabled": False, "purged": 0, "not_found": 0}
+    result = purge_rejected_from_source(src, dst / CurateWriter.REJECTED)
+    if result.purged > 0:
+        default_stats_refresher(src)
+    if result.purged > 0 or result.not_found > 0:
+        suffix = f" (未検出 {result.not_found})" if result.not_found else ""
+        log(
+            f"[joryu-curate] 蒸留元から棄却レコードを削除: {result.purged} 件{suffix}",
+            file=sys.stderr,
+        )
+    return {
+        "enabled": True,
+        "purged": result.purged,
+        "not_found": result.not_found,
+        "src_before": result.src_before,
+        "src_after": result.src_after,
+    }
 
 
 if __name__ == "__main__":  # pragma: no cover
