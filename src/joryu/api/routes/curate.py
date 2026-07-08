@@ -7,7 +7,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Body, HTTPException, Request
 from pydantic import BaseModel
 
-from joryu.api.deps import assert_profile_enqueueable, get_orchestrator
+from joryu.api.deps import get_orchestrator
 from joryu.core.paths import DEFAULT_CONFIG
 from joryu.infra.preflight import jsonl_has_content, resolve_distill_jsonl
 from joryu.jobs.models import CurateJobSpec, JobKind, JobRecord
@@ -91,12 +91,8 @@ def create_curate_job(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    if not spec.skip_llm:
-        assert_profile_enqueueable(
-            get_orchestrator(request),
-            required_profile_from_spec(JobKind.CURATE, spec),
-        )
-
+    # profile 起動/切替中でも enqueue する。JobRunner が必要な profile へ
+    # 自動切替してから実行するため、API 層で 409 を返して弾かない。
     record = JobRecord.create(spec)
     _store(request).save(record)
     _runner(request).enqueue(record)
