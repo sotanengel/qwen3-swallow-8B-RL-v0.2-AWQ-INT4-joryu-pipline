@@ -121,12 +121,22 @@ def test_curate_cli_resume_skips_evaluated_records(tmp_path: Path) -> None:
     """同じ --dst で 2 回実行し、2 回目は --resume で 0 件再評価になる。"""
     src = _make_input(tmp_path)
     dst = tmp_path / "out"
-    rc1 = cli.main(["--src", str(src), "--dst", str(dst), "--threshold", "0.0", "--skip-llm"])
+    common = [
+        "--src",
+        str(src),
+        "--dst",
+        str(dst),
+        "--threshold",
+        "0.0",
+        "--skip-llm",
+        "--no-purge-rejected",
+    ]
+    rc1 = cli.main(common)
     assert rc1 == 0
     first_meta = json.loads((dst / "curation_meta.json").read_text(encoding="utf-8"))
     first_scores = (dst / "scores.jsonl").read_text(encoding="utf-8")
 
-    rc2 = cli.main(["--src", str(src), "--dst", str(dst), "--threshold", "0.0", "--skip-llm"])
+    rc2 = cli.main(common)
     assert rc2 == 0
     second_scores = (dst / "scores.jsonl").read_text(encoding="utf-8")
     # 全件 resume スキップなので scores.jsonl は変わらない

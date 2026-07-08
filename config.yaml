@@ -104,6 +104,9 @@ curate:
   # 出力先 (子ディレクトリ <YYYYMMDD_HHMMSS>/ が自動付与される)
   out_dir: "data/curated"
 
+  # 抽出完了後、棄却レコードを蒸留元 JSONL から削除して再蒸留可能にする (R-26)
+  purge_rejected_from_src: true
+
   # 統計シグナルのハード棄却閾値 (要件 6.1)
   thresholds:
     len_a_min: 30

@@ -100,6 +100,15 @@ def format_incremental_summary(incremental: dict[str, Any]) -> str:
         lines.append(f"  rescore-only 未ヒット  : {incremental['rescore_only_misses']}")
     if incremental.get("resume_skipped"):
         lines.append(f"  resume スキップ        : {incremental['resume_skipped']}")
+    purge = incremental.get("purge")
+    if isinstance(purge, dict):
+        if purge.get("enabled"):
+            lines.append(
+                f"蒸留元削除              : {purge.get('purged', 0)} 件"
+                f" (未検出 {purge.get('not_found', 0)})"
+            )
+        else:
+            lines.append("蒸留元削除              : 無効")
     sources = incremental.get("cache_sources") or []
     if sources:
         lines.append("キャッシュソース:")

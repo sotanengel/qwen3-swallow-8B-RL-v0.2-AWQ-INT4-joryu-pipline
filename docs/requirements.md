@@ -35,6 +35,7 @@ SFT 教師データとして再利用可能な形で配布する。
 | R-17 | `curation_meta.json` に入力 SHA256 / 設定ハッシュ 3 層 / コミット SHA を記録 | [src/joryu/curate/meta.py](../src/joryu/curate/meta.py) |
 | R-18 | ダッシュボードに採用率・スコア分布・棄却理由 Top-N を表示 | [dashboard/src/components/stats/CurationQualityPanel.tsx](../dashboard/src/components/stats/CurationQualityPanel.tsx) (`/stats?tab=curation`) + [src/joryu/curate/stats.py](../src/joryu/curate/stats.py) |
 | R-19 | Fake judge クライアントで CPU CI が回ること | [tests/curate/](../tests/curate/) |
+| R-26 | 抽出完了後、棄却レコードを蒸留元 JSONL から削除して再蒸留可能にする | [src/joryu/curate/purge.py](../src/joryu/curate/purge.py), [src/joryu/cli/curate.py](../src/joryu/cli/curate.py) |
 
 > R-12 (best-of-N), R-16 (resume 細部), R-20〜R-25 (差分実行キャッシュ / signal バージョニング / MinHash 永続化) は follow-up PR で対応。本 PR には scaffold (`record_hash`, `signal_versions` フィールド) のみ含む。
 

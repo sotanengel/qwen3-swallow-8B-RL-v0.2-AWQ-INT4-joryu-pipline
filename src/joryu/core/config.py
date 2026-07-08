@@ -169,6 +169,7 @@ class CurateConfig:
     thresholds: CurateSignalThresholds = field(default_factory=CurateSignalThresholds)
     judge: CurateJudgeConfig = field(default_factory=CurateJudgeConfig)
     out_dir: str = "data/curated"
+    purge_rejected_from_src: bool = True
 
     def __post_init__(self) -> None:
         if self.judge_mode not in ("thinking", "nothinking"):
