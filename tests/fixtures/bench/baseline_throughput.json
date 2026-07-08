@@ -1,0 +1,7 @@
+{
+  "records": 50,
+  "truncated_rate": 0.0,
+  "total_prompt_tokens": 500,
+  "total_completion_tokens": 250,
+  "total_generation_attempts": 50
+}

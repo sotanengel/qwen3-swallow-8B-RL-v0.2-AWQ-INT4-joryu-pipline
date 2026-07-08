@@ -17,6 +17,7 @@ dependencies = [
 
 [project.scripts]
 joryu-distill = "joryu.cli.distill:main"
+joryu-bench = "joryu.cli.bench:main"
 joryu-export = "joryu.cli.export:main"
 joryu-stats = "joryu.cli.stats:main"
 joryu-curate = "joryu.cli.curate:main"
