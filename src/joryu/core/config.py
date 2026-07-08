@@ -85,7 +85,7 @@ class DistillConfig:
     prompt_bank_seed: str = ""
     out_dir: str = "data/distilled"
     out_file: str = "responses.jsonl"
-    min_interval_sec: float = 0.5
+    min_interval_sec: float = 0.0
     system_prompt: str = _DEFAULT_SYSTEM_PROMPT
     styles_file: str = "styles.yaml"
     tools_file: str = "tools.yaml"

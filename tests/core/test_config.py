@@ -27,6 +27,7 @@ def test_default_config_round_trips_known_values() -> None:
     assert cfg.distill.prompt_csv == ""
     assert cfg.export.compression == "zstd"
     assert cfg.export.level == 19
+    assert cfg.distill.min_interval_sec == pytest.approx(0.0)
 
 
 def test_model_config_has_no_mode_field() -> None:
