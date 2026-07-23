@@ -14,7 +14,7 @@
     "gen:types:check": "node scripts/gen-types.mjs --check"
   },
   "dependencies": {
-    "next": "15.5.18",
+    "next": "15.5.21",
     "react": "19.1.1",
     "react-dom": "19.1.1",
     "react-markdown": "^10.1.0",
@@ -31,8 +31,8 @@
     "@types/react": "19.1.13",
     "@types/react-dom": "19.1.10",
     "@vitejs/plugin-react": "^6.0.3",
-    "eslint": "9.36.0",
-    "eslint-config-next": "15.5.4",
+    "eslint": "10.7.0",
+    "eslint-config-next": "16.2.11",
     "jsdom": "^26.1.0",
     "knip": "^5.88.1",
     "typescript": "5.9.3",
